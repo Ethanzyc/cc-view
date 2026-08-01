@@ -78,13 +78,17 @@ pub fn collect_sessions() -> Vec<Session> {
                 s.alive = is_claude_alive(pid);
                 // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
                 // 任一环节失败（无 settings / 无 JSONL / 无 pending）静默跳过，保留原 status。
-                if let (Some(pc), Some(p)) = (&pc, read_pending_tool_use(&s.id, &s.cwd)) {
-                    if pc.needs_permission(&p.name, p.bash_command.as_deref()) {
-                        // pending_permission 优先级最高，raw_status 留空（decide 会 short-circuit）
-                        s.status = decide(&DecideInput {
-                            raw_status: "",
-                            pending_permission: true,
-                        });
+                // 死进程（mid-tool-call 退出）的 JSONL 末尾 tool_use 永远无 tool_result，
+                // 不应判定为 pending permission——仅活进程做此检查。
+                if s.alive {
+                    if let (Some(pc), Some(p)) = (&pc, read_pending_tool_use(&s.id, &s.cwd)) {
+                        if pc.needs_permission(&p.name, p.bash_command.as_deref()) {
+                            // pending_permission 优先级最高，raw_status 留空（decide 会 short-circuit）
+                            s.status = decide(&DecideInput {
+                                raw_status: "",
+                                pending_permission: true,
+                            });
+                        }
                     }
                 }
                 out.push(s);
