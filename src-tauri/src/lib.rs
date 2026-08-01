@@ -2,6 +2,7 @@
 mod collector;
 mod liveness;
 mod models;
+mod reducer;
 mod statemachine;
 
 use tauri::menu::{Menu, MenuItem};
