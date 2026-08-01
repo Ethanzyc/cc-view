@@ -118,6 +118,9 @@ pub fn collect_sessions() -> Vec<Session> {
         }
         out.push(w);
     }
+    // agents --json 最后 push：reducer last-wins，agents 的准确 status 覆盖
+    // roster 默认 Working。agents 只列活进程，不重复 liveness/host 检测。
+    out.extend(read_agents());
     out
 }
 
@@ -307,6 +310,141 @@ pub fn read_roster() -> Vec<Session> {
     parse_roster(&json)
 }
 
+// ---- claude agents --json 解析 ----
+// CC≥2.1.145 官方命令，输出当前所有 agent（interactive + background）的实时状态。
+// 用其准确 status 覆盖 roster 默认 Working。agents 最后 push → reducer last-wins。
+
+/// 实测 schema（CC 2.1.201）：
+/// ```json
+/// [
+///   {
+///     "id": "04bb90a4",            // sessionId 的 8 字符短前缀
+///     "pid": 63586,                // background blocked agent 可能缺
+///     "cwd": "/Users/x/proj",
+///     "kind": "interactive",       // "background" | "interactive"
+///     "startedAt": 1784706530163,  // epoch 毫秒
+///     "sessionId": "04bb90a4-...", // 完整 UUID
+///     "name": "proj-ab",
+///     "status": "busy",            // interactive: "busy" | "idle"
+///     "state": "blocked"           // background: "blocked"
+///   }
+/// ]
+/// ```
+#[derive(serde::Deserialize)]
+struct AgentsEntry {
+    #[serde(default)]
+    pid: Option<u32>,
+    cwd: String,
+    kind: Option<String>,
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    name: Option<String>,
+    #[serde(rename = "startedAt")]
+    started_at: Option<i64>,
+    status: Option<String>,
+    state: Option<String>,
+}
+
+/// 解析 `claude agents --json` 的 stdout。
+/// status 映射：busy→Working，idle→WaitingForInput，state:blocked→NeedsPermission。
+/// 解析失败返回空 vec（fail fast：坏数据不拖垮 collect）。
+pub fn parse_agents(json: &str) -> Vec<Session> {
+    let Ok(entries) = serde_json::from_str::<Vec<AgentsEntry>>(json) else {
+        eprintln!("parse_agents: invalid agents json, skipping");
+        return vec![];
+    };
+    entries.into_iter().map(|a| {
+        // interactive: status busy|idle；background: state blocked
+        let status = if let Some(st) = a.status.as_deref() {
+            match st {
+                "busy" => Status::Working,
+                "idle" => Status::WaitingForInput,
+                _ => Status::Working,
+            }
+        } else if let Some(state) = a.state.as_deref() {
+            match state {
+                "blocked" => Status::NeedsPermission,
+                _ => Status::Working,
+            }
+        } else {
+            Status::Working
+        };
+        let source = match a.kind.as_deref() {
+            Some("background") => Source::Fleet,
+            _ => Source::Interactive,
+        };
+        let project = Path::new(&a.cwd)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let name = a.name.unwrap_or_else(|| a.session_id.chars().take(8).collect());
+        Session {
+            id: a.session_id,
+            source,
+            pid: a.pid.unwrap_or(0),
+            project,
+            cwd: a.cwd,
+            name,
+            status,
+            started_at: a.started_at.unwrap_or(0),
+            status_updated_at: a.started_at.unwrap_or(0),
+            alive: true, // agents --json 只列活进程
+            focus_hint: FocusHint::default(),
+        }
+    }).collect()
+}
+
+/// 跑 `claude agents --json`，10s 超时兜底。
+/// 命令失败/超时/无输出返回空 vec（fail fast：不崩 collect）。
+pub fn read_agents() -> Vec<Session> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    let mut child = match Command::new("claude")
+        .args(["agents", "--json"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("read_agents: failed to spawn claude: {}", e);
+            return vec![];
+        }
+    };
+
+    // 10s 超时兜底：polling try_wait，到期 kill + reap 防 zombie
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait(); // reap zombie
+                eprintln!("read_agents: claude agents --json timed out after 10s");
+                return vec![];
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(e) => {
+                eprintln!("read_agents: wait error: {}", e);
+                return vec![];
+            }
+        }
+    }
+
+    // 子进程已退出，从 pipe 读 stdout
+    let mut stdout = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        let _ = out.read_to_string(&mut stdout);
+    }
+    if stdout.trim().is_empty() {
+        return vec![];
+    }
+    parse_agents(&stdout)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,5 +528,77 @@ mod tests {
         // 裸字符串 "compact_boundary"（对话中提到此词）不命中——收紧避免误报
         assert!(!super::detect_compacting(r#"{"type":"user","message":"compact_boundary is a marker"}"#));
         assert!(!super::detect_compacting(r#"{"type":"user","message":"hello"}"#));
+    }
+
+    // ---- parse_agents 测试（基于实测 claude agents --json schema） ----
+
+    #[test]
+    fn parse_agents_maps_busy_idle_blocked() {
+        let json = std::fs::read_to_string("tests/fixtures/agents.json").unwrap();
+        let v = super::parse_agents(&json);
+        assert_eq!(v.len(), 3);
+
+        // interactive busy → Working
+        let busy = v.iter().find(|s| s.id == "04bb90a4-c80d-47ef-98ea-c040df5da3d7").unwrap();
+        assert_eq!(busy.status, Status::Working);
+        assert_eq!(busy.source, crate::models::Source::Interactive);
+        assert_eq!(busy.pid, 63586);
+        assert_eq!(busy.project, "fang");
+        assert_eq!(busy.name, "fang-dd");
+        assert!(busy.alive);
+
+        // interactive idle → WaitingForInput
+        let idle = v.iter().find(|s| s.id == "21eb6f0e-8687-479e-9e04-6599d98bce43").unwrap();
+        assert_eq!(idle.status, Status::WaitingForInput);
+        assert_eq!(idle.project, "cc-job");
+
+        // background blocked → NeedsPermission，pid 缺省为 0
+        let blocked = v.iter().find(|s| s.id == "13ce4523-bd41-49b7-8b90-8f8d739d62b6").unwrap();
+        assert_eq!(blocked.status, Status::NeedsPermission);
+        assert_eq!(blocked.source, crate::models::Source::Fleet);
+        assert_eq!(blocked.pid, 0); // background blocked agent 无 pid
+        assert_eq!(blocked.project, "agu");
+    }
+
+    #[test]
+    fn parse_agents_bad_json_returns_empty() {
+        assert!(super::parse_agents("not json").is_empty());
+        assert!(super::parse_agents("{}").is_empty()); // 不是数组
+    }
+
+    #[test]
+    fn parse_agents_empty_array() {
+        assert!(super::parse_agents("[]").is_empty());
+    }
+
+    #[test]
+    fn parse_agents_missing_status_defaults_working() {
+        // kind=interactive 但无 status 也无 state → 默认 Working
+        let json = r#"[{"sessionId":"s1","cwd":"/x/p","kind":"interactive"}]"#;
+        let v = super::parse_agents(json);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].status, Status::Working);
+    }
+
+    #[test]
+    fn agents_overrides_roster_in_reducer() {
+        // 验证合并顺序：roster(Working) → agents(idle)，reducer last-wins → WaitingForInput
+        use crate::models::{FocusHint, Source};
+        let roster_session = Session {
+            id: "abc123".into(), source: Source::Fleet, pid: 100,
+            project: "p".into(), cwd: "/c".into(), name: "test".into(),
+            status: Status::Working, started_at: 0, status_updated_at: 0,
+            alive: true, focus_hint: FocusHint::default(),
+        };
+        let agents_json = r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","status":"idle"}]"#;
+        let agents_sessions = super::parse_agents(agents_json);
+        // 模拟 collect_sessions 的 push 顺序
+        let merged = crate::reducer::reduce({
+            let mut v = vec![roster_session];
+            v.extend(agents_sessions);
+            v
+        });
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].status, Status::WaitingForInput); // agents 覆盖了 roster 的 Working
     }
 }

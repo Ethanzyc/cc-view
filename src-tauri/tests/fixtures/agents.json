@@ -1,0 +1,31 @@
+[
+  {
+    "id": "04bb90a4",
+    "pid": 63586,
+    "cwd": "/Users/zhuyuchen/ai/fang",
+    "kind": "interactive",
+    "startedAt": 1784706530163,
+    "sessionId": "04bb90a4-c80d-47ef-98ea-c040df5da3d7",
+    "name": "fang-dd",
+    "status": "busy"
+  },
+  {
+    "id": "21eb6f0e",
+    "pid": 41995,
+    "cwd": "/Users/zhuyuchen/ai/cc-job",
+    "kind": "interactive",
+    "startedAt": 1784857045849,
+    "sessionId": "21eb6f0e-8687-479e-9e04-6599d98bce43",
+    "name": "cc-job-dc",
+    "status": "idle"
+  },
+  {
+    "id": "13ce4523",
+    "cwd": "/Users/zhuyuchen/ai/agu",
+    "kind": "background",
+    "startedAt": 1780021722451,
+    "sessionId": "13ce4523-bd41-49b7-8b90-8f8d739d62b6",
+    "name": "撰写事件分析系统社交分享文案",
+    "state": "blocked"
+  }
+]
