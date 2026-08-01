@@ -3,9 +3,10 @@ use std::collections::HashMap;
 
 /// 按 id 去重：同 id 取 alive=true 的那条，否则 last-wins（后者覆盖前者）。
 ///
-/// 已知风险（Plan 4 解决）：collect_sessions 把 roster workers 放在末尾，
-/// 同 sessionId 时 Fleet(默认 Working) 会覆盖 Interactive 的 NeedsPermission/
-/// WaitingForInput。Plan 4 接入 claude agents --json 时设计"字段取最丰富"合并。
+/// 现状（Plan 4 后）：collect_sessions 顺序 sessions → roster → agents(仅 Fleet)，
+/// agents 最后 push 覆盖 roster 默认 Working。同 sessionId 两个活跃会话时仍 last-wins，
+/// 但实际风险低（interactive 前台与 fleet 后台 worker 的 pid/sessionId 几乎不重叠）。
+/// 若未来需要字段级合并（取最丰富），在此扩展。
 pub fn reduce(sessions: Vec<Session>) -> Vec<Session> {
     let mut map: HashMap<String, Session> = HashMap::new();
     for s in sessions {
