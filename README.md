@@ -18,9 +18,8 @@ npm run tauri dev
 
 当前仅覆盖核心数据链路与最小可用 UI，以下能力尚未实现，将在后续 Plan 中补齐：
 
-- **数据源单一**：仅消费前台 `~/.claude/sessions/<pid>.json`；尚未接入 `claude agents --json`、`roster.json`、JSONL 尾部等来源。
-- **无 focus 跳转**：点击会话行不会唤起对应终端窗口（Plan 3 的 C 项）。
-- **无隐藏 / 归档**：不能把噪音会话从列表里隐藏或归档（Plan 3 的 E 项）。
+- **数据源**：已接入前台 `~/.claude/sessions/<pid>.json` 与后台 roster 源；尚未接入 `claude agents --json`、JSONL 尾部等来源。
+- **无 focus 跳转**：点击会话行不会唤起对应终端窗口（Plan 4 的 C 项）。
 - **Compacting 状态未实现**：状态机第四态 `Compacting` 暂未接入。
 - **GUI 精修**：popover（NSPanel 形态）的尺寸、动画、脱离菜单栏等细节尚待精修。
 
