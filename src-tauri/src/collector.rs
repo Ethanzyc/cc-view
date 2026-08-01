@@ -1,5 +1,6 @@
 // 解析 ~/.claude/sessions/<pid>.json，将原始 JSON 转换为 Session 模型。
 // 依赖 models + statemachine::decide 决定最终 Status。
+use crate::liveness::is_claude_alive;
 use crate::models::{FocusHint, Session, Source, Status};
 use crate::statemachine::{decide, DecideInput};
 use std::path::Path;
@@ -56,6 +57,27 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
     })
 }
 
+/// 扫 ~/.claude/sessions/*.json，每个文件名是 pid；解析 + 校验存活。
+/// 单文件解析失败隔离（log + skip），不拖垮整体。
+pub fn collect_sessions() -> Vec<Session> {
+    let Some(home) = dirs::home_dir() else { return vec![] };
+    let dir = home.join(".claude/sessions");
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else { return vec![] };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        let Some(pid_str) = name.strip_suffix(".json") else { continue };
+        let Ok(pid) = pid_str.parse::<u32>() else { continue };
+        let Ok(json) = std::fs::read_to_string(&path) else { continue }; // fail fast: 跳过坏文件
+        match parse_session_file(pid, &json) {
+            Ok(mut s) => { s.alive = is_claude_alive(pid); out.push(s); }
+            Err(_) => continue, // 隔离坏解析
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,5 +99,15 @@ mod tests {
         let s = parse_session_file(1, json).unwrap();
         assert_eq!(s.status, Status::WaitingForInput);
         assert_eq!(s.project, "y");
+    }
+
+    #[test]
+    fn collect_sessions_runs_against_real_dir() {
+        // 集成测试：调用不 panic、返回 Vec（可能为空若本机无运行会话）
+        let sessions = super::collect_sessions();
+        // 当前 cc-view 自身会话通常存在；只校验结构不校验数量
+        for s in &sessions {
+            assert!(!s.id.is_empty());
+        }
     }
 }
