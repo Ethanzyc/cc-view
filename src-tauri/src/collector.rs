@@ -96,6 +96,11 @@ pub fn collect_sessions() -> Vec<Session> {
             Err(_) => continue, // 隔离坏解析
         }
     }
+    // 合并后台 fleet agent（roster.json），pid 存活校验
+    for mut w in read_roster() {
+        w.alive = is_claude_alive(w.pid);
+        out.push(w);
+    }
     out
 }
 
