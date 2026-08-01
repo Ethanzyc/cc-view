@@ -14,17 +14,15 @@ npm install
 npm run tauri dev
 ```
 
-## 已知限制（Plan 1）
+## 已知限制
 
-当前为 Plan 1 阶段，仅覆盖核心数据链路与最小可用 UI，以下能力明确不在本阶段范围内，将在 Plan 2 及之后补齐：
+当前仅覆盖核心数据链路与最小可用 UI，以下能力尚未实现，将在后续 Plan 中补齐：
 
 - **数据源单一**：仅消费前台 `~/.claude/sessions/<pid>.json`；尚未接入 `claude agents --json`、`roster.json`、JSONL 尾部等来源。
-- **无通知**：状态变化不推送系统通知（Plan 2 的 A 项）。
-- **无 focus 跳转**：点击会话行不会唤起对应终端窗口（Plan 2 的 C 项）。
-- **无隐藏 / 归档**：不能把噪音会话从列表里隐藏或归档（Plan 2 的 E 项）。
-- **NeedsPermission 暂不区分**：`PermissionChecker` 在 Plan 2 落地，当前 status 直接透出后端字段，不区分等待权限的具体类型。
-- **Compacting 状态未实现**：状态机第四态 `Compacting` 暂未接入，Plan 2 补。
-- **GUI 形态为 popover**：使用 NSPanel 形态的 popover，NSPanel 的精修（尺寸、动画、脱离菜单栏等）在 Plan 2。
+- **无 focus 跳转**：点击会话行不会唤起对应终端窗口（Plan 3 的 C 项）。
+- **无隐藏 / 归档**：不能把噪音会话从列表里隐藏或归档（Plan 3 的 E 项）。
+- **Compacting 状态未实现**：状态机第四态 `Compacting` 暂未接入。
+- **GUI 精修**：popover（NSPanel 形态）的尺寸、动画、脱离菜单栏等细节尚待精修。
 
 ## Recommended IDE Setup
 
