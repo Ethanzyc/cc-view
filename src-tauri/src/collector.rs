@@ -36,6 +36,7 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
     let status = decide(&DecideInput {
         raw_status: status_str,
         pending_permission: false,
+        is_compacting: false,
     });
     let project = Path::new(&raw.cwd)
         .file_name()
@@ -90,14 +91,21 @@ pub fn collect_sessions() -> Vec<Session> {
                 // 死进程（mid-tool-call 退出）的 JSONL 末尾 tool_use 永远无 tool_result，
                 // 不应判定为 pending permission——仅活进程做此检查。
                 if s.alive {
-                    if let (Some(pc), Some(p)) = (&pc, read_pending_tool_use(&s.id, &s.cwd)) {
-                        if pc.needs_permission(&p.name, p.bash_command.as_deref()) {
-                            // pending_permission 优先级最高，raw_status 留空（decide 会 short-circuit）
-                            s.status = decide(&DecideInput {
-                                raw_status: "",
-                                pending_permission: true,
-                            });
-                        }
+                    // 末尾文本一次读出，供 pending tool_use + compact 检测共用（避免两次 seek）
+                    let tail_text = read_jsonl_tail_text(&s.id, &s.cwd);
+                    // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
+                    // 任一环节失败（无 settings / 无 JSONL / 无 pending）静默跳过，保留原 status。
+                    // 死进程（mid-tool-call 退出）的 JSONL 末尾 tool_use 永远无 tool_result，
+                    // 不应判定为 pending permission——仅活进程做此检查。
+                    let pending = tail_text.as_deref().and_then(parse_pending_from_str);
+                    let is_compacting = tail_text.as_deref().map(detect_compacting).unwrap_or(false);
+                    let needs_perm = matches!(&pc, Some(pc) if matches!(&pending, Some(p) if pc.needs_permission(&p.name, p.bash_command.as_deref())));
+                    // 优先级：permission > compact > 原 status（parse_session_file 已得的 Working/Shell/Waiting）
+                    // 注：compact 与 permission 实际互斥（compact 是阻塞操作），此处冗余 guard 保 safety net
+                    if needs_perm {
+                        s.status = Status::NeedsPermission;
+                    } else if is_compacting {
+                        s.status = Status::Compacting;
                     }
                     // host 探测仅对活进程有意义（死进程的父进程链可能已失效）
                     s.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, pid);
@@ -189,8 +197,9 @@ pub fn parse_pending_from_str(text: &str) -> Option<PendingToolUse> {
         })
 }
 
-/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 末尾 ~8KB，返回 pending tool_use。
-pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolUse> {
+/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 末尾 ~8KB 文本。
+/// pending tool_use 解析与 compact 检测共用同一份读取，避免双次 seek。
+pub fn read_jsonl_tail_text(session_id: &str, cwd: &str) -> Option<String> {
     use std::io::{Read, Seek, SeekFrom};
     let home = dirs::home_dir()?;
     let encoded = cwd.replace('/', "-"); // /Users/x -> -Users-x
@@ -214,7 +223,21 @@ pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolU
         &bytes[..]
     };
     let text = std::str::from_utf8(slice).ok()?;
-    parse_pending_from_str(text)
+    Some(text.to_string())
+}
+
+/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 末尾 ~8KB，返回 pending tool use。
+pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolUse> {
+    let text = read_jsonl_tail_text(session_id, cwd)?;
+    parse_pending_from_str(&text)
+}
+
+/// 扫 JSONL 末尾文本：若任行含 compact_boundary 标志 → true（autocompact 刚结束/进行中）。
+/// 实测格式：`{"type":"system","subtype":"compact_boundary",...}` —— 行内 substring 即可命中。
+/// 注：compact 是阻塞操作，boundary 在 compact 结束时写入；此判据实际捕捉"刚 compact 完、
+/// agent 尚未 resume"的窗口（3s 轮询间隔内常见）。
+pub fn detect_compacting(text: &str) -> bool {
+    text.contains("compact_boundary")
 }
 
 // ---- roster.json 解析 ----
@@ -353,5 +376,26 @@ mod tests {
         assert_eq!(s.pid, 1958);
         assert_eq!(s.project, "ai");
         assert_eq!(s.status, crate::models::Status::Working); // roster 无 status，默认 Working
+    }
+
+    #[test]
+    fn detect_compacting_finds_boundary() {
+        // fixture 末尾含 compact_boundary 行 → true
+        let jsonl = std::fs::read_to_string("tests/fixtures/compacting.jsonl").unwrap();
+        assert!(super::detect_compacting(&jsonl));
+    }
+
+    #[test]
+    fn detect_compacting_misses_when_absent() {
+        // 普通 pending.jsonl 无 compact_boundary → false
+        let jsonl = std::fs::read_to_string("tests/fixtures/pending.jsonl").unwrap();
+        assert!(!super::detect_compacting(&jsonl));
+    }
+
+    #[test]
+    fn detect_compacting_boundary_inline() {
+        // 直接构造含 compact_boundary 的字符串
+        assert!(super::detect_compacting(r#"{"type":"system","subtype":"compact_boundary"}"#));
+        assert!(!super::detect_compacting(r#"{"type":"user","message":"hello"}"#));
     }
 }

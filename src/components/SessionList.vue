@@ -12,7 +12,7 @@ withDefaults(defineProps<{ sessions: Session[]; hidden?: string[] }>(), {
 const emit = defineEmits<{ (e: 'hide', id: string): void; (e: 'unhide', id: string): void }>();
 
 const icon: Record<Status, string> = {
-  working: '⚡', waitingForInput: '💤', needsPermission: '⏳', shell: '🖥️',
+  working: '⚡', waitingForInput: '💤', needsPermission: '⏳', shell: '🖥️', compacting: '🧹',
 };
 function ago(ts: number) {
   const s = Math.floor((Date.now() - ts) / 1000);

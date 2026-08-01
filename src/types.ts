@@ -1,4 +1,4 @@
-export type Status = 'working' | 'waitingForInput' | 'needsPermission' | 'shell';
+export type Status = 'working' | 'waitingForInput' | 'needsPermission' | 'shell' | 'compacting';
 export interface Session {
   id: string;
   source: string;
