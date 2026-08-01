@@ -2,6 +2,7 @@
 mod collector;
 mod liveness;
 mod models;
+mod notify;
 mod permission;
 mod reducer;
 mod statemachine;
