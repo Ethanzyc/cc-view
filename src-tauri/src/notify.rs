@@ -3,22 +3,32 @@ use std::collections::HashMap;
 
 pub struct Notifier {
     last: HashMap<String, Status>,
+    bootstrapped: bool,
 }
 
 impl Notifier {
     pub fn new() -> Self {
         Self {
             last: HashMap::new(),
+            bootstrapped: false,
         }
     }
 
     /// 返回本次新迁移到 NeedsPermission/WaitingInput 的 (name, status)。纯逻辑。
+    /// 首轮 observe 只初始化 `last` 不发通知——避免启动时多个 idle session 触发通知轰炸。
     pub fn observe(&mut self, sessions: &[Session]) -> Vec<(String, Status)> {
-        let mut to_notify = Vec::new();
         let mut cur = HashMap::new();
         for s in sessions {
             // cur 记录所有 session（含死的），避免 session 复活时漏迁移
             cur.insert(s.id.clone(), s.status.clone());
+        }
+        if !self.bootstrapped {
+            self.last = cur;
+            self.bootstrapped = true;
+            return Vec::new(); // 首轮只初始化，不通知
+        }
+        let mut to_notify = Vec::new();
+        for s in sessions {
             // 仅活 session 且状态为 NeedsPermission/WaitingInput 时判定通知
             if s.alive && matches!(s.status, Status::NeedsPermission | Status::WaitingForInput) {
                 if self.last.get(&s.id) != Some(&s.status) {
@@ -63,8 +73,22 @@ mod tests {
     }
 
     #[test]
-    fn first_permission_triggers() {
+    fn first_round_silent() {
+        // 首轮 observe 即使有 NeedsPermission/WaitingForInput 也不通知
         let mut n = Notifier::new();
+        let r = n.observe(&[
+            sess("a", Status::NeedsPermission),
+            sess("b", Status::WaitingForInput),
+        ]);
+        assert!(r.is_empty(), "bootstrap round must not notify");
+    }
+
+    #[test]
+    fn bootstrap_then_transition_triggers() {
+        let mut n = Notifier::new();
+        // 首轮 bootstrap：不通知
+        assert!(n.observe(&[sess("a", Status::Working)]).is_empty());
+        // 第二轮 a 从 Working 迁移到 NeedsPermission → 通知
         let r = n.observe(&[sess("a", Status::NeedsPermission)]);
         assert_eq!(r.len(), 1);
     }
@@ -72,14 +96,19 @@ mod tests {
     #[test]
     fn same_status_no_renotify() {
         let mut n = Notifier::new();
+        // 先 bootstrap（Working 不通知，仅初始化 last）
+        n.observe(&[sess("a", Status::Working)]);
+        // 迁移到 NeedsPermission → 通知一次
         n.observe(&[sess("a", Status::NeedsPermission)]);
+        // 同状态再 observe → 不通知（防抖）
         let r = n.observe(&[sess("a", Status::NeedsPermission)]);
-        assert!(r.is_empty()); // 防抖
+        assert!(r.is_empty());
     }
 
     #[test]
     fn working_not_notified() {
         let mut n = Notifier::new();
+        n.observe(&[sess("a", Status::Working)]); // bootstrap
         let r = n.observe(&[sess("a", Status::Working)]);
         assert!(r.is_empty());
     }
@@ -88,6 +117,7 @@ mod tests {
     #[test]
     fn dead_session_not_notified() {
         let mut n = Notifier::new();
+        n.observe(&[sess("a", Status::Working)]); // bootstrap
         let mut s = sess("a", Status::NeedsPermission);
         s.alive = false;
         let r = n.observe(&[s]);
