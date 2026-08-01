@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod collector;
 mod discovery;
+mod focus;
 mod hidden;
 mod liveness;
 mod models;
@@ -52,6 +53,15 @@ fn start_poll_loop(handle: tauri::AppHandle) {
             let h = hash_sessions(&merged);
             if h != last_hash {
                 last_hash = h;
+                // emit 前刷新 sessions 缓存，供 focus_session command 查询 host。
+                // 用 app handle 取 state（与 hidden 的 Mutex 并列管理）。
+                if let Some(cache) = handle.try_state::<Mutex<Vec<models::Session>>>() {
+                    if let Ok(mut c) = cache.lock() {
+                        *c = merged.clone();
+                    } else {
+                        eprintln!("poll_loop: sessions cache lock poisoned");
+                    }
+                }
                 let _ = handle.emit("sessions", &merged);
             }
             std::thread::sleep(Duration::from_secs(3));
@@ -98,15 +108,33 @@ fn list_hidden(state: tauri::State<'_, Mutex<hidden::HiddenList>>) -> Vec<String
         })
 }
 
+/// 按 session id 激活对应终端 app（MVP：只 activate，不精确定位 tab/pane）。
+/// 从最近 emit 的 sessions 缓存中查 host；找不到 id 时 eprintln 提示。
+#[tauri::command]
+fn focus_session(id: String, cache: tauri::State<'_, Mutex<Vec<models::Session>>>) {
+    match cache.lock() {
+        Ok(sessions) => {
+            if let Some(s) = sessions.iter().find(|s| s.id == id) {
+                focus::activate_host(&s.focus_hint.host);
+            } else {
+                eprintln!("focus_session: session {} not in cache", id);
+            }
+        }
+        Err(_) => eprintln!("focus_session: sessions cache lock poisoned"),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(hidden::HiddenList::load()))
+        .manage(Mutex::new(Vec::<models::Session>::new()))
         .invoke_handler(tauri::generate_handler![
             hide_session,
             unhide_session,
-            list_hidden
+            list_hidden,
+            focus_session
         ])
         .setup(|app| {
             // 构建 menubar 托盘菜单（当前仅 Quit；后续任务按需扩展）
