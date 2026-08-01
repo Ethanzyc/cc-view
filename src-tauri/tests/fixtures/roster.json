@@ -1,0 +1,1 @@
+{"proto":1,"supervisorPid":68572,"updatedAt":1785574698212,"workers":{"f0d42050":{"pid":1958,"sessionId":"f0d42050-7b39-46e3-996a-1c5829f55ffe","cwd":"/Users/zhuyuchen/ai","cliVersion":"2.1.201","startedAt":1785574478098,"dispatch":{"proto":1,"short":"f0d42050","source":"fleet","cwd":"/Users/zhuyuchen/ai","seed":{"intent":""}}}}}

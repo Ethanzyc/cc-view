@@ -1,7 +1,7 @@
 // 解析 ~/.claude/sessions/<pid>.json，将原始 JSON 转换为 Session 模型。
 // 依赖 models + statemachine::decide 决定最终 Status。
 use crate::liveness::is_claude_alive;
-use crate::models::{FocusHint, Session, Source};
+use crate::models::{FocusHint, Session, Source, Status};
 use crate::statemachine::{decide, DecideInput};
 use std::path::Path;
 
@@ -198,6 +198,81 @@ pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolU
     parse_pending_from_str(text)
 }
 
+// ---- roster.json 解析 ----
+// Claude Code daemon 的 fleet/slash worker 注册表。每个 worker → 一个 Session。
+
+#[derive(serde::Deserialize)]
+struct RosterFile {
+    #[serde(default)]
+    workers: std::collections::HashMap<String, RosterWorker>,
+}
+#[derive(serde::Deserialize)]
+struct RosterWorker {
+    pid: u32,
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    cwd: String,
+    #[serde(rename = "startedAt")]
+    started_at: Option<i64>,
+    dispatch: Option<RosterDispatch>,
+}
+#[derive(serde::Deserialize)]
+struct RosterDispatch {
+    source: Option<String>,
+    #[serde(default)]
+    seed: RosterSeed,
+}
+#[derive(Default, serde::Deserialize)]
+struct RosterSeed {
+    intent: String,
+}
+
+/// 解析 roster.json，每个 worker → Session（source 由 dispatch.source 决定，status 默认 Working）。
+/// 解析失败返回空 vec，不崩溃（fail fast：坏数据不拖垮 collect）。
+pub fn parse_roster(json: &str) -> Vec<Session> {
+    let Ok(f) = serde_json::from_str::<RosterFile>(json) else {
+        return vec![]
+    };
+    f.workers.into_values().map(|w| {
+        let source = match w.dispatch.as_ref().and_then(|d| d.source.as_deref()) {
+            Some("slash") => Source::Slash,
+            _ => Source::Fleet,
+        };
+        let name = w
+            .dispatch
+            .as_ref()
+            .map(|d| d.seed.intent.clone())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| w.session_id.chars().take(8).collect());
+        let project = std::path::Path::new(&w.cwd)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        Session {
+            id: w.session_id,
+            source,
+            pid: w.pid,
+            project,
+            cwd: w.cwd,
+            name,
+            status: Status::Working,
+            started_at: w.started_at.unwrap_or(0),
+            status_updated_at: w.started_at.unwrap_or(0),
+            alive: true, // collect_sessions 会用 pid 校验覆盖
+            focus_hint: FocusHint::default(),
+        }
+    }).collect()
+}
+
+/// 读 ~/.claude/daemon/roster.json。
+pub fn read_roster() -> Vec<Session> {
+    let Some(home) = dirs::home_dir() else { return vec![] };
+    let path = home.join(".claude/daemon/roster.json");
+    let Ok(json) = std::fs::read_to_string(&path) else { return vec![] };
+    parse_roster(&json)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +320,18 @@ mod tests {
     fn no_pending_when_completed() {
         let jsonl = std::fs::read_to_string("tests/fixtures/completed.jsonl").unwrap();
         assert!(super::parse_pending_from_str(&jsonl).is_none());
+    }
+
+    #[test]
+    fn parses_roster_workers() {
+        let json = std::fs::read_to_string("tests/fixtures/roster.json").unwrap();
+        let v = super::parse_roster(&json);
+        assert_eq!(v.len(), 1);
+        let s = &v[0];
+        assert_eq!(s.id, "f0d42050-7b39-46e3-996a-1c5829f55ffe");
+        assert_eq!(s.source, crate::models::Source::Fleet);
+        assert_eq!(s.pid, 1958);
+        assert_eq!(s.project, "ai");
+        assert_eq!(s.status, crate::models::Status::Working); // roster 无 status，默认 Working
     }
 }
