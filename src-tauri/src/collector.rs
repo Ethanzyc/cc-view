@@ -85,10 +85,6 @@ pub fn collect_sessions() -> Vec<Session> {
         match parse_session_file(pid, &json) {
             Ok(mut s) => {
                 s.alive = is_claude_alive(pid);
-                // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
-                // 任一环节失败（无 settings / 无 JSONL / 无 pending）静默跳过，保留原 status。
-                // 死进程（mid-tool-call 退出）的 JSONL 末尾 tool_use 永远无 tool_result，
-                // 不应判定为 pending permission——仅活进程做此检查。
                 if s.alive {
                     // 末尾文本一次读出，供 pending tool_use + compact 检测共用（避免两次 seek）
                     // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
