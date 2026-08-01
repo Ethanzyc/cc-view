@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod models;
+mod statemachine;
 
 use tauri::menu::{Menu, MenuItem};
 
