@@ -9,7 +9,7 @@ pub enum Status {
     WaitingForInput,
     NeedsPermission,
     Shell,
-    Compacting, // autocompact 进行中（JSONL 末尾检出 compact_boundary）
+    Compacting, // post-compact 窗口（刚 compact 完、agent 未 resume）；进行中无法从 JSONL 检测
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

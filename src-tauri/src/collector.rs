@@ -36,7 +36,6 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
     let status = decide(&DecideInput {
         raw_status: status_str,
         pending_permission: false,
-        is_compacting: false,
     });
     let project = Path::new(&raw.cwd)
         .file_name()
@@ -92,11 +91,11 @@ pub fn collect_sessions() -> Vec<Session> {
                 // 不应判定为 pending permission——仅活进程做此检查。
                 if s.alive {
                     // 末尾文本一次读出，供 pending tool_use + compact 检测共用（避免两次 seek）
-                    let tail_text = read_jsonl_tail_text(&s.id, &s.cwd);
                     // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
                     // 任一环节失败（无 settings / 无 JSONL / 无 pending）静默跳过，保留原 status。
                     // 死进程（mid-tool-call 退出）的 JSONL 末尾 tool_use 永远无 tool_result，
                     // 不应判定为 pending permission——仅活进程做此检查。
+                    let tail_text = read_jsonl_tail_text(&s.id, &s.cwd);
                     let pending = tail_text.as_deref().and_then(parse_pending_from_str);
                     let is_compacting = tail_text.as_deref().map(detect_compacting).unwrap_or(false);
                     let needs_perm = matches!(&pc, Some(pc) if matches!(&pending, Some(p) if pc.needs_permission(&p.name, p.bash_command.as_deref())));
@@ -226,18 +225,14 @@ pub fn read_jsonl_tail_text(session_id: &str, cwd: &str) -> Option<String> {
     Some(text.to_string())
 }
 
-/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 末尾 ~8KB，返回 pending tool use。
-pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolUse> {
-    let text = read_jsonl_tail_text(session_id, cwd)?;
-    parse_pending_from_str(&text)
-}
-
-/// 扫 JSONL 末尾文本：若任行含 compact_boundary 标志 → true（autocompact 刚结束/进行中）。
-/// 实测格式：`{"type":"system","subtype":"compact_boundary",...}` —— 行内 substring 即可命中。
-/// 注：compact 是阻塞操作，boundary 在 compact 结束时写入；此判据实际捕捉"刚 compact 完、
-/// agent 尚未 resume"的窗口（3s 轮询间隔内常见）。
+/// 扫 JSONL 末尾文本：若任行含 compact_boundary 标志 → true。
+/// 实测格式：`{"type":"system","subtype":"compact_boundary",...}` —— 用 `"subtype":"compact_boundary"`
+/// 而非裸 `compact_boundary` 收紧匹配，避免对话中提到此词（如本仓库自身 JSONL）造成误报。
+/// 语义注意：compact 是阻塞操作，boundary 行在 compact **结束时**写入——此判据实际捕捉
+/// "post-compact 窗口"（刚 compact 完、agent 尚未 resume）；真正的 in-progress 期间 JSONL 无写入，
+/// 无法从 JSONL 检测。
 pub fn detect_compacting(text: &str) -> bool {
-    text.contains("compact_boundary")
+    text.contains("\"subtype\":\"compact_boundary\"")
 }
 
 // ---- roster.json 解析 ----
@@ -394,8 +389,10 @@ mod tests {
 
     #[test]
     fn detect_compacting_boundary_inline() {
-        // 直接构造含 compact_boundary 的字符串
+        // 真实 JSONL 行结构 → 命中
         assert!(super::detect_compacting(r#"{"type":"system","subtype":"compact_boundary"}"#));
+        // 裸字符串 "compact_boundary"（对话中提到此词）不命中——收紧避免误报
+        assert!(!super::detect_compacting(r#"{"type":"user","message":"compact_boundary is a marker"}"#));
         assert!(!super::detect_compacting(r#"{"type":"user","message":"hello"}"#));
     }
 }
