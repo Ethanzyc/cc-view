@@ -90,6 +90,8 @@ pub fn collect_sessions() -> Vec<Session> {
                             });
                         }
                     }
+                    // host 探测仅对活进程有意义（死进程的父进程链可能已失效）
+                    s.focus_hint.host = crate::discovery::detect_host(pid);
                 }
                 out.push(s);
             }
@@ -99,6 +101,9 @@ pub fn collect_sessions() -> Vec<Session> {
     // 合并后台 fleet agent（roster.json），pid 存活校验
     for mut w in read_roster() {
         w.alive = is_claude_alive(w.pid);
+        if w.alive {
+            w.focus_hint.host = crate::discovery::detect_host(w.pid);
+        }
         out.push(w);
     }
     out
