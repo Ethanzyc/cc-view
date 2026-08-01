@@ -118,9 +118,15 @@ pub fn collect_sessions() -> Vec<Session> {
         }
         out.push(w);
     }
-    // agents --json 最后 push：reducer last-wins，agents 的准确 status 覆盖
-    // roster 默认 Working。agents 只列活进程，不重复 liveness/host 检测。
-    out.extend(read_agents());
+    // agents --json 最后 push：reducer last-wins。
+    // 只合并 Source::Fleet（background）条目——它们覆盖/补充 roster 默认 Working。
+    // interactive 条目不合并：它们的 busy/idle 会覆盖 JSONL 精确状态
+    // （NeedsPermission / Compacting），造成静默降级为 Working。
+    out.extend(
+        read_agents()
+            .into_iter()
+            .filter(|s| s.source == crate::models::Source::Fleet),
+    );
     out
 }
 
@@ -405,7 +411,7 @@ pub fn read_agents() -> Vec<Session> {
     let mut child = match Command::new("claude")
         .args(["agents", "--json"])
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
     {
         Ok(c) => c,
@@ -581,8 +587,10 @@ mod tests {
     }
 
     #[test]
-    fn agents_overrides_roster_in_reducer() {
-        // 验证合并顺序：roster(Working) → agents(idle)，reducer last-wins → WaitingForInput
+    fn agents_fleet_overrides_roster_in_reducer() {
+        // 验证合并顺序：roster(Working) → agents(Fleet, blocked)，reducer last-wins → NeedsPermission。
+        // 仅 Source::Fleet 条目会进入 collect_sessions 输出（interactive 被 filter 掉，
+        // 避免覆盖 JSONL 精确状态）。background 真实 schema 用 state 而非 status。
         use crate::models::{FocusHint, Source};
         let roster_session = Session {
             id: "abc123".into(), source: Source::Fleet, pid: 100,
@@ -590,8 +598,11 @@ mod tests {
             status: Status::Working, started_at: 0, status_updated_at: 0,
             alive: true, focus_hint: FocusHint::default(),
         };
-        let agents_json = r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","status":"idle"}]"#;
-        let agents_sessions = super::parse_agents(agents_json);
+        let agents_json = r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","state":"blocked"}]"#;
+        let agents_sessions: Vec<Session> = super::parse_agents(agents_json)
+            .into_iter()
+            .filter(|s| s.source == Source::Fleet)
+            .collect();
         // 模拟 collect_sessions 的 push 顺序
         let merged = crate::reducer::reduce({
             let mut v = vec![roster_session];
@@ -599,6 +610,6 @@ mod tests {
             v
         });
         assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].status, Status::WaitingForInput); // agents 覆盖了 roster 的 Working
+        assert_eq!(merged[0].status, Status::NeedsPermission); // Fleet agents 覆盖了 roster 的 Working
     }
 }
