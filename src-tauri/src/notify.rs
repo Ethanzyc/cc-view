@@ -31,6 +31,16 @@ impl Notifier {
     }
 }
 
+/// 发 macOS 通知（osascript）。msg/title 不含双引号（调用方确保）。
+/// spawn 不 wait——避免阻塞轮询线程。
+pub fn send_notification(title: &str, msg: &str) {
+    let script = format!("display notification \"{}\" with title \"{}\"", msg, title);
+    let _ = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .spawn();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

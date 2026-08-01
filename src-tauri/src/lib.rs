@@ -26,14 +26,26 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
     h.finish()
 }
 
-/// 后台线程：每 3s collect → reduce → hash 去重 → 仅变化时 emit("sessions")。
+/// 后台线程：每 3s collect → reduce → notify → hash 去重 → 仅变化时 emit("sessions")。
 /// Task 9 的前端监听此事件刷新 popover。
 fn start_poll_loop(handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut last_hash = 0u64;
+        // 线程私有 notifier——observe 每轮调用以维护状态迁移
+        let mut notifier = notify::Notifier::new();
         loop {
             let sessions = collector::collect_sessions();
             let merged = reducer::reduce(sessions);
+            // reduce 之后、hash 之前：每轮都 observe，让 notifier 维护状态机
+            let to_notify = notifier.observe(&merged);
+            for (name, status) in to_notify {
+                let status_zh = match status {
+                    models::Status::NeedsPermission => "等待权限确认",
+                    models::Status::WaitingForInput => "等待输入",
+                    _ => "需要关注",
+                };
+                notify::send_notification("cc-view", &format!("{}：{}", name, status_zh));
+            }
             let h = hash_sessions(&merged);
             if h != last_hash {
                 last_hash = h;
