@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- 隐藏 Dock 图标：作为 menubar 常驻应用运行 -->
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>
