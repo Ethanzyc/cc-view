@@ -17,10 +17,14 @@ impl HiddenList {
         };
         let path = home.join(".claude/cc-view/hidden.json");
         let Ok(json) = std::fs::read_to_string(&path) else {
+            eprintln!("hidden load: failed to read ~/.claude/cc-view/hidden.json");
             return Self::empty();
         };
         Self {
-            ids: serde_json::from_str(&json).unwrap_or_default(),
+            ids: serde_json::from_str(&json).unwrap_or_else(|e| {
+                eprintln!("hidden load: invalid hidden json, ignoring: {}", e);
+                vec![]
+            }),
         }
     }
     pub fn save(&self) {

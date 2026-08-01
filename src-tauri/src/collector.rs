@@ -236,6 +236,7 @@ struct RosterSeed {
 /// 解析失败返回空 vec，不崩溃（fail fast：坏数据不拖垮 collect）。
 pub fn parse_roster(json: &str) -> Vec<Session> {
     let Ok(f) = serde_json::from_str::<RosterFile>(json) else {
+        eprintln!("parse_roster: invalid roster json, skipping");
         return vec![]
     };
     f.workers.into_values().map(|w| {

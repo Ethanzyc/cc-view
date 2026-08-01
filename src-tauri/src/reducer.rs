@@ -1,7 +1,11 @@
 use crate::models::Session;
 use std::collections::HashMap;
 
-/// 按 id 去重：同 id 取 alive=true 的那条，否则保留最后一条。
+/// 按 id 去重：同 id 取 alive=true 的那条，否则 last-wins（后者覆盖前者）。
+///
+/// 已知风险（Plan 4 解决）：collect_sessions 把 roster workers 放在末尾，
+/// 同 sessionId 时 Fleet(默认 Working) 会覆盖 Interactive 的 NeedsPermission/
+/// WaitingForInput。Plan 4 接入 claude agents --json 时设计"字段取最丰富"合并。
 pub fn reduce(sessions: Vec<Session>) -> Vec<Session> {
     let mut map: HashMap<String, Session> = HashMap::new();
     for s in sessions {
