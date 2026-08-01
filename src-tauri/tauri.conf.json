@@ -10,7 +10,18 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [],
+    "windows": [
+      {
+        "label": "main",
+        "title": "cc-view",
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "width": 380,
+        "height": 480,
+        "skipTaskbar": true
+      }
+    ],
     "trayIcon": {
       "id": "main",
       "iconPath": "icons/icon.png",

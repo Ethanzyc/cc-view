@@ -10,12 +10,7 @@ use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use tauri::menu::{Menu, MenuItem};
-use tauri::Emitter;
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+use tauri::{Emitter, Manager};
 
 /// 对会话列表做内容 hash，仅按 (id, status, alive) 维度。
 /// 只要这三项不变就不 emit，避免每 3s 给前端刷一屏。
@@ -51,7 +46,6 @@ fn start_poll_loop(handle: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
         .setup(|app| {
             // 构建 menubar 托盘菜单（当前仅 Quit；后续任务按需扩展）
             let quit_item =
@@ -60,14 +54,27 @@ pub fn run() {
 
             // tray icon 已在 tauri.conf.json 的 app.trayIcon 声明（id="main"），
             // 这里取出已存在的实例并附加菜单与点击事件。
-            // Task 9 将把点击事件接入 popover 显示/隐藏；此处先占位打印。
+            // 左键点击 toggle popover 窗口（label "main"，与 capabilities 对齐）。
             let tray = app.tray_by_id("main").ok_or_else(|| {
                 tauri::Error::AssetNotFound("tray icon 'main'".to_string())
             })?;
             tray.set_menu(Some(menu))?;
-            tray.on_tray_icon_event(|_tray, event| {
-                if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                    println!("tray clicked");
+            tray.on_tray_icon_event(|tray, event| {
+                if let tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    button_state: tauri::tray::MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    let app = tray.app_handle();
+                    if let Some(w) = app.get_webview_window("main") {
+                        if w.is_visible().unwrap_or(false) {
+                            let _ = w.hide();
+                        } else {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
                 }
             });
 
