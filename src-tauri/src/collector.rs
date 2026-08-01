@@ -78,6 +78,101 @@ pub fn collect_sessions() -> Vec<Session> {
     out
 }
 
+/// 从 JSONL 末尾解析出的未完成 tool_use（无对应 tool_result）。
+pub struct PendingToolUse {
+    pub name: String,
+    pub bash_command: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct JsonlRow {
+    message: Option<JsonlMessage>,
+}
+
+#[derive(serde::Deserialize)]
+struct JsonlMessage {
+    content: Option<Vec<ContentItem>>,
+}
+
+#[derive(serde::Deserialize)]
+struct ContentItem {
+    #[serde(rename = "type")]
+    item_type: Option<String>,
+    id: Option<String>,
+    name: Option<String>,
+    input: Option<serde_json::Value>,
+    tool_use_id: Option<String>,
+}
+
+/// 从 JSONL 文本解析最后一个未完成（无 tool_result）的 tool_use。纯函数，便于测试。
+pub fn parse_pending_from_str(text: &str) -> Option<PendingToolUse> {
+    let mut tool_uses: Vec<(String, String, Option<String>)> = Vec::new(); // (id, name, bash_cmd)
+    let mut completed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for line in text.lines() {
+        let Ok(row) = serde_json::from_str::<JsonlRow>(line) else { continue };
+        let Some(msg) = row.message else { continue };
+        let Some(items) = msg.content else { continue };
+        for it in items {
+            match it.item_type.as_deref() {
+                Some("tool_use") => {
+                    if let (Some(id), Some(name)) = (it.id.clone(), it.name.clone()) {
+                        // 仅 Bash 工具抽取 command 字段
+                        let bash_cmd = if name == "Bash" {
+                            it.input
+                                .as_ref()
+                                .and_then(|v| v.get("command"))
+                                .and_then(|c| c.as_str())
+                                .map(|s| s.to_string())
+                        } else {
+                            None
+                        };
+                        tool_uses.push((id, name, bash_cmd));
+                    }
+                }
+                Some("tool_result") => {
+                    if let Some(tuid) = it.tool_use_id {
+                        completed.insert(tuid);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    // 从末尾找第一个未完成的 tool_use
+    tool_uses
+        .iter()
+        .rev()
+        .find(|(id, _, _)| !completed.contains(id))
+        .map(|(_, name, cmd)| PendingToolUse {
+            name: name.clone(),
+            bash_command: cmd.clone(),
+        })
+}
+
+/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 末尾 ~8KB，返回 pending tool_use。
+pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolUse> {
+    use std::io::{Read, Seek, SeekFrom};
+    let home = dirs::home_dir()?;
+    let encoded = cwd.replace('/', "-"); // /Users/x -> -Users-x
+    let path = home
+        .join(".claude/projects")
+        .join(&encoded)
+        .join(format!("{}.jsonl", session_id));
+    let mut f = std::fs::File::open(&path).ok()?;
+    let size = f.metadata().ok()?.len();
+    let start = size.saturating_sub(8192);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = String::new();
+    f.read_to_string(&mut buf).ok()?;
+    // 若 seek 到非 0，首行可能截断，跳过
+    let text = if start > 0 {
+        buf.lines().skip(1).collect::<Vec<_>>().join("\n")
+    } else {
+        buf
+    };
+    parse_pending_from_str(&text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,5 +205,20 @@ mod tests {
         for s in &sessions {
             assert!(!s.id.is_empty());
         }
+    }
+
+    #[test]
+    fn pending_tool_use_detected() {
+        // 用 fixture 内容直接喂解析函数（不读磁盘，测纯解析）
+        let jsonl = std::fs::read_to_string("tests/fixtures/pending.jsonl").unwrap();
+        let p = super::parse_pending_from_str(&jsonl).unwrap();
+        assert_eq!(p.name, "Bash");
+        assert_eq!(p.bash_command.as_deref(), Some("kill 1"));
+    }
+
+    #[test]
+    fn no_pending_when_completed() {
+        let jsonl = std::fs::read_to_string("tests/fixtures/completed.jsonl").unwrap();
+        assert!(super::parse_pending_from_str(&jsonl).is_none());
     }
 }

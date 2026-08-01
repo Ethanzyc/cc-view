@@ -1,0 +1,3 @@
+{"message":{"role":"assistant","content":[{"type":"tool_use","id":"call_a","name":"Read","input":{"file_path":"/x"}}]}}
+{"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_a","content":"ok"}]}}
+{"message":{"role":"assistant","content":[{"type":"tool_use","id":"call_b","name":"Bash","input":{"command":"kill 1"}}]}}

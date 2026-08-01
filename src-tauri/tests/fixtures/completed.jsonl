@@ -1,0 +1,2 @@
+{"message":{"role":"assistant","content":[{"type":"tool_use","id":"call_a","name":"Read","input":{}}]}}
+{"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_a","content":"ok"}]}}
