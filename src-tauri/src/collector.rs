@@ -59,11 +59,14 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
 
 /// 扫 ~/.claude/sessions/*.json，每个文件名是 pid；解析 + 校验存活。
 /// 单文件解析失败隔离（skip），不拖垮整体。
+/// 每 3s 调用一次：PermissionChecker::from_settings 在循环外创建，复用一次磁盘读 settings.json。
 pub fn collect_sessions() -> Vec<Session> {
     let Some(home) = dirs::home_dir() else { return vec![] };
     let dir = home.join(".claude/sessions");
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(&dir) else { return vec![] };
+    // 循环外读一次 settings.json：单次 collect_sessions 内所有 session 复用同一份 permission 配置
+    let pc = crate::permission::PermissionChecker::from_settings();
     for entry in entries.flatten() {
         let path = entry.path();
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
@@ -71,7 +74,21 @@ pub fn collect_sessions() -> Vec<Session> {
         let Ok(pid) = pid_str.parse::<u32>() else { continue };
         let Ok(json) = std::fs::read_to_string(&path) else { continue }; // fail fast: 跳过坏文件
         match parse_session_file(pid, &json) {
-            Ok(mut s) => { s.alive = is_claude_alive(pid); out.push(s); }
+            Ok(mut s) => {
+                s.alive = is_claude_alive(pid);
+                // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
+                // 任一环节失败（无 settings / 无 JSONL / 无 pending）静默跳过，保留原 status。
+                if let (Some(pc), Some(p)) = (&pc, read_pending_tool_use(&s.id, &s.cwd)) {
+                    if pc.needs_permission(&p.name, p.bash_command.as_deref()) {
+                        // pending_permission 优先级最高，raw_status 留空（decide 会 short-circuit）
+                        s.status = decide(&DecideInput {
+                            raw_status: "",
+                            pending_permission: true,
+                        });
+                    }
+                }
+                out.push(s);
+            }
             Err(_) => continue, // 隔离坏解析
         }
     }
