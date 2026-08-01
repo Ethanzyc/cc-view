@@ -162,15 +162,19 @@ pub fn read_pending_tool_use(session_id: &str, cwd: &str) -> Option<PendingToolU
     let size = f.metadata().ok()?.len();
     let start = size.saturating_sub(8192);
     f.seek(SeekFrom::Start(start)).ok()?;
-    let mut buf = String::new();
-    f.read_to_string(&mut buf).ok()?;
-    // 若 seek 到非 0，首行可能截断，跳过
-    let text = if start > 0 {
-        buf.lines().skip(1).collect::<Vec<_>>().join("\n")
+    let mut bytes = Vec::new();
+    f.read_to_end(&mut bytes).ok()?;
+    // 若 seek 到非 0，首字节可能落在多字节 UTF-8 序列中间，跳到下一个 \n 边界
+    let slice: &[u8] = if start > 0 {
+        match bytes.iter().position(|&b| b == b'\n') {
+            Some(idx) => &bytes[idx + 1..],
+            None => return None,
+        }
     } else {
-        buf
+        &bytes[..]
     };
-    parse_pending_from_str(&text)
+    let text = std::str::from_utf8(slice).ok()?;
+    parse_pending_from_str(text)
 }
 
 #[cfg(test)]
