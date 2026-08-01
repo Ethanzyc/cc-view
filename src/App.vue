@@ -31,7 +31,7 @@ onMounted(async () => {
       <button @click="refreshHidden" title="刷新隐藏列表">↻</button>
       <label class="toggle"><input type="checkbox" v-model="showHidden" /> 显示已隐藏</label>
     </h3>
-    <SessionList :sessions="visible" @hide="refreshHidden" />
+    <SessionList :sessions="visible" :hidden="hidden" @hide="refreshHidden" @unhide="refreshHidden" />
   </div>
 </template>
 <style>
