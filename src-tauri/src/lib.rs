@@ -10,6 +10,7 @@ mod statemachine;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::menu::{Menu, MenuItem};
@@ -57,10 +58,43 @@ fn start_poll_loop(handle: tauri::AppHandle) {
     });
 }
 
+// --- Tauri commands：隐藏/取消隐藏/查询隐藏列表 ---
+// lock 失败（poisoned）时静默跳过——不崩溃前端调用。
+
+/// 把会话加入隐藏列表并持久化。
+#[tauri::command]
+fn hide_session(state: tauri::State<'_, Mutex<hidden::HiddenList>>, id: String) {
+    if let Ok(mut h) = state.lock() {
+        h.add(&id);
+        h.save();
+    }
+}
+
+/// 从隐藏列表移除会话并持久化。
+#[tauri::command]
+fn unhide_session(state: tauri::State<'_, Mutex<hidden::HiddenList>>, id: String) {
+    if let Ok(mut h) = state.lock() {
+        h.remove(&id);
+        h.save();
+    }
+}
+
+/// 返回当前隐藏会话 id 列表（前端据此 filter）。
+#[tauri::command]
+fn list_hidden(state: tauri::State<'_, Mutex<hidden::HiddenList>>) -> Vec<String> {
+    state.lock().map(|h| h.ids.clone()).unwrap_or_default()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(Mutex::new(hidden::HiddenList::load()))
+        .invoke_handler(tauri::generate_handler![
+            hide_session,
+            unhide_session,
+            list_hidden
+        ])
         .setup(|app| {
             // 构建 menubar 托盘菜单（当前仅 Quit；后续任务按需扩展）
             let quit_item =

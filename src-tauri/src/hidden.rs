@@ -3,7 +3,7 @@
 use crate::models::Session;
 
 pub struct HiddenList {
-    ids: Vec<String>,
+    pub ids: Vec<String>,
 }
 
 impl HiddenList {
