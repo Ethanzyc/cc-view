@@ -1,7 +1,7 @@
 // 解析 ~/.claude/sessions/<pid>.json，将原始 JSON 转换为 Session 模型。
 // 依赖 models + statemachine::decide 决定最终 Status。
 use crate::liveness::is_claude_alive;
-use crate::models::{FocusHint, Session, Source, Status};
+use crate::models::{FocusHint, Session, Source};
 use crate::statemachine::{decide, DecideInput};
 use std::path::Path;
 
@@ -58,7 +58,7 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
 }
 
 /// 扫 ~/.claude/sessions/*.json，每个文件名是 pid；解析 + 校验存活。
-/// 单文件解析失败隔离（log + skip），不拖垮整体。
+/// 单文件解析失败隔离（skip），不拖垮整体。
 pub fn collect_sessions() -> Vec<Session> {
     let Some(home) = dirs::home_dir() else { return vec![] };
     let dir = home.join(".claude/sessions");
@@ -81,6 +81,7 @@ pub fn collect_sessions() -> Vec<Session> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Status;
     use std::fs;
 
     #[test]

@@ -22,6 +22,6 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sysinfo = "0.32"
+sysinfo = "0.32"  # Plan 2 §7/§8 discovery 将用于进程 env 扫描；Plan 1 暂未使用
 libc = "0.2"
 dirs = "5"
