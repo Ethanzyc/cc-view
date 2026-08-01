@@ -4,7 +4,9 @@ use crate::models::Host;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 /// 从 pid 爬父进程链（最多 8 层），按进程名/exe 匹配终端 app。
-/// 每次调用都会 refresh 全量进程（with_exe），调用方按需批处理以减少开销。
+/// 每次调用都会 refresh 全量进程（with_exe）——独立调用场景的便捷入口。
+/// 批处理场景（如 collect_sessions 对 N 个 session）应改用 detect_host_with_sys 复用 System，
+/// 避免 N 次全量刷新（N=5 时实测 8-17% CPU 纯冗余）。
 pub fn detect_host(pid: u32) -> Host {
     let mut sys = System::new();
     // 0.32 API：三参数（ProcessesToUpdate, remove_dead, ProcessRefreshKind）。
@@ -14,15 +16,22 @@ pub fn detect_host(pid: u32) -> Host {
         true,
         ProcessRefreshKind::new().with_exe(UpdateKind::Always),
     );
+    detect_host_with_sys(&sys, pid)
+}
+
+/// 复用调用方已刷新的 System，避免 N session × N 次全量刷新。
+/// 调用方需先 `sys.refresh_processes_specifics(.., with_exe(Always))`，否则 exe() 恒为 None。
+/// name/exe 不预规范化——match_host 内部统一 to_lowercase，避免忘记 lower 导致静默失配。
+pub fn detect_host_with_sys(sys: &System, pid: u32) -> Host {
     let mut current = Pid::from_u32(pid);
     for _ in 0..8 {
         let Some(p) = sys.process(current) else {
             return Host::Unknown;
         };
-        let name = p.name().to_string_lossy().to_lowercase();
+        let name = p.name().to_string_lossy().to_string();
         let exe = p
             .exe()
-            .map(|e| e.to_string_lossy().to_lowercase())
+            .map(|e| e.to_string_lossy().to_string())
             .unwrap_or_default();
         if let Some(host) = match_host(&name, &exe) {
             return host;

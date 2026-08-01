@@ -67,6 +67,15 @@ pub fn collect_sessions() -> Vec<Session> {
     let Ok(entries) = std::fs::read_dir(&dir) else { return vec![] };
     // 循环外读一次 settings.json：单次 collect_sessions 内所有 session 复用同一份 permission 配置
     let pc = crate::permission::PermissionChecker::from_settings();
+    // 循环外刷新一次 System：避免每个活 session 各触发一次全量 refresh（N=5 时 8-17% CPU 纯冗余）
+    // with_exe(Always) 确保父进程链爬到的 p.exe() 可用
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::new().with_exe(UpdateKind::Always),
+    );
     for entry in entries.flatten() {
         let path = entry.path();
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
@@ -91,7 +100,7 @@ pub fn collect_sessions() -> Vec<Session> {
                         }
                     }
                     // host 探测仅对活进程有意义（死进程的父进程链可能已失效）
-                    s.focus_hint.host = crate::discovery::detect_host(pid);
+                    s.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, pid);
                 }
                 out.push(s);
             }
@@ -102,7 +111,7 @@ pub fn collect_sessions() -> Vec<Session> {
     for mut w in read_roster() {
         w.alive = is_claude_alive(w.pid);
         if w.alive {
-            w.focus_hint.host = crate::discovery::detect_host(w.pid);
+            w.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, w.pid);
         }
         out.push(w);
     }
