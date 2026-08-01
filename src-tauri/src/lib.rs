@@ -59,30 +59,42 @@ fn start_poll_loop(handle: tauri::AppHandle) {
 }
 
 // --- Tauri commands：隐藏/取消隐藏/查询隐藏列表 ---
-// lock 失败（poisoned）时静默跳过——不崩溃前端调用。
+// lock 失败（poisoned）时 eprintln 提示 + 静默跳过——不崩溃前端调用（fail fast 可见性）。
 
 /// 把会话加入隐藏列表并持久化。
 #[tauri::command]
 fn hide_session(state: tauri::State<'_, Mutex<hidden::HiddenList>>, id: String) {
-    if let Ok(mut h) = state.lock() {
-        h.add(&id);
-        h.save();
+    match state.lock() {
+        Ok(mut h) => {
+            h.add(&id);
+            h.save();
+        }
+        Err(_) => eprintln!("hide_session: hidden state lock poisoned"),
     }
 }
 
 /// 从隐藏列表移除会话并持久化。
 #[tauri::command]
 fn unhide_session(state: tauri::State<'_, Mutex<hidden::HiddenList>>, id: String) {
-    if let Ok(mut h) = state.lock() {
-        h.remove(&id);
-        h.save();
+    match state.lock() {
+        Ok(mut h) => {
+            h.remove(&id);
+            h.save();
+        }
+        Err(_) => eprintln!("unhide_session: hidden state lock poisoned"),
     }
 }
 
 /// 返回当前隐藏会话 id 列表（前端据此 filter）。
 #[tauri::command]
 fn list_hidden(state: tauri::State<'_, Mutex<hidden::HiddenList>>) -> Vec<String> {
-    state.lock().map(|h| h.ids.clone()).unwrap_or_default()
+    state
+        .lock()
+        .map(|h| h.to_vec())
+        .unwrap_or_else(|_| {
+            eprintln!("list_hidden: hidden state lock poisoned");
+            vec![]
+        })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

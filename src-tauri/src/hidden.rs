@@ -3,7 +3,7 @@
 use crate::models::Session;
 
 pub struct HiddenList {
-    pub ids: Vec<String>,
+    ids: Vec<String>,
 }
 
 impl HiddenList {
@@ -47,6 +47,12 @@ impl HiddenList {
     pub fn remove(&mut self, id: &str) {
         self.ids.retain(|x| x != id);
     }
+    /// 暴露隐藏 id 列表副本（外部只读访问，保护 add() 的去重不变量）
+    pub fn to_vec(&self) -> Vec<String> {
+        self.ids.clone()
+    }
+    /// 过滤掉已隐藏的 session（保留备用：当前前端按 list_hidden 过滤）
+    #[allow(dead_code)]
     pub fn filter<'a>(&self, sessions: &'a [Session]) -> Vec<&'a Session> {
         sessions.iter().filter(|s| !self.is_hidden(&s.id)).collect()
     }
