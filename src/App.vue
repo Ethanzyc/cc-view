@@ -1,13 +1,21 @@
 <script setup lang="ts">
-// App 维护两份状态：all（后端 emit 的全量 merged）+ hidden（list_hidden 拉到的隐藏 id 集）。
-// visible computed 按 showHidden toggle 决定是否过滤。SessionList hide 成功后 emit 'hide'
-// 触发 refreshHidden 重新拉列表，让 visible 立即反映新状态（无需等 3s 轮询）。
+// 按 window label 区分渲染：label === "overlay" → Overlay 命令面板；else（main）→ 现有 HUD。
+// 两个窗口加载同一 index.html，靠 getCurrentWebviewWindow().label 分流（同步，无 IO）。
+// Overlay 自管 sessions 监听 + 排序，不依赖 HUD 状态——MVP 不抽 composable。
 import { ref, onMounted, computed } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import SessionList from './components/SessionList.vue';
+import Overlay from './components/Overlay.vue';
 import type { Session } from './types';
 
+const isOverlay = getCurrentWebviewWindow().label === 'overlay';
+
+// --- HUD（main 窗口）状态：all + hidden + showHidden ---
+// App 维护两份状态：all（后端 emit 的全量 merged）+ hidden（list_hidden 拉到的隐藏 id 集）。
+// visible computed 按 showHidden toggle 决定是否过滤。SessionList hide 成功后 emit 'hide'
+// 触发 refreshHidden 重新拉列表，让 visible 立即反映新状态（无需等 3s 轮询）。
 const all = ref<Session[]>([]);
 const hidden = ref<string[]>([]);
 const showHidden = ref(false);
@@ -25,7 +33,9 @@ async function refreshHidden() {
   hidden.value = await invoke<string[]>('list_hidden');
 }
 
+// overlay 自管 sessions 监听，HUD 才需要 hidden/listen 逻辑。
 onMounted(async () => {
+  if (isOverlay) return; // Overlay 组件自己 listen
   try {
     await refreshHidden();
   } catch (e) {
@@ -36,7 +46,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app">
+  <!-- overlay 分支：渲染命令面板 -->
+  <Overlay v-if="isOverlay" />
+  <!-- HUD 分支：现有 main 窗口 UI -->
+  <div v-else class="app">
     <header class="title-bar">
       <span class="title">Claude Code 会话</span>
       <span class="count">{{ activeCount }} 个活跃</span>
