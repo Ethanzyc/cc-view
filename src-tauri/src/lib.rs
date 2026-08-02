@@ -31,13 +31,44 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
     h.finish()
 }
 
+/// 把默认图标非透明像素染成 macOS system orange（RGB 255,149,0），保留 alpha 通道
+/// 维持抗锯齿边缘。采用方式 (b) 代码着色而非预制 PNG——无需维护第二份资源。
+fn tint_orange(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
+    let w = src.width();
+    let h = src.height();
+    let mut out = src.rgba().to_vec();
+    // RGBA row-major，每 4 字节一像素；alpha>0 视为前景，硬置 RGB=橙。
+    for px in out.chunks_exact_mut(4) {
+        if px[3] > 0 {
+            px[0] = 255;
+            px[1] = 149;
+            px[2] = 0;
+            // alpha 保留
+        }
+    }
+    tauri::image::Image::new_owned(out, w, h)
+}
+
 /// 后台线程：每 3s collect → reduce → notify → hash 去重 → 仅变化时 emit("sessions")。
-/// Task 9 的前端监听此事件刷新 popover。
+/// 同时每轮聚合 need_attention/working 计数 → tray.set_tooltip + set_icon。
 fn start_poll_loop(handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut last_hash = 0u64;
         // 线程私有 notifier——observe 每轮调用以维护状态迁移
         let mut notifier = notify::Notifier::new();
+        // 预计算两份图标：默认（活→无 attention 时）+ 橙（有 attention 时）。
+        // default_window_icon 返回 &Image<'a>（借 handle），先 cloned 再 to_owned 拿到
+        // Image<'static>（rgba owned）——后续循环里不再借 handle。参考 tauri app/plugin.rs。
+        let default_icon: Option<tauri::image::Image<'static>> = handle
+            .default_window_icon()
+            .cloned()
+            .map(tauri::image::Image::to_owned);
+        let orange_icon = default_icon.as_ref().map(tint_orange);
+        if default_icon.is_none() {
+            eprintln!("poll_loop: default_window_icon missing, set_icon disabled");
+        }
+        // 跟踪 attention 状态，仅在 0↔>0 跳变时 set_icon（避免每轮 main-thread IPC 重绘）
+        let mut last_attention = false;
         loop {
             let sessions = collector::collect_sessions();
             let merged = reducer::reduce(sessions);
@@ -51,6 +82,49 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 };
                 notify::send_notification("cc-view", &format!("{}：{}", name, status_zh));
             }
+
+            // 聚合：need_attention = alive && (NeedsPermission|WaitingForInput)；
+            //       working       = alive && Working
+            let need_attention = merged
+                .iter()
+                .filter(|s| {
+                    s.alive
+                        && matches!(
+                            s.status,
+                            models::Status::NeedsPermission | models::Status::WaitingForInput
+                        )
+                })
+                .count();
+            let working = merged
+                .iter()
+                .filter(|s| s.alive && matches!(s.status, models::Status::Working))
+                .count();
+
+            // tooltip：need>0 时双段"N 等我 · M 工作"，否则只显示"M 工作"
+            let tip = if need_attention > 0 {
+                format!("{} 等我 · {} 工作", need_attention, working)
+            } else {
+                format!("{} 工作", working)
+            };
+
+            if let Some(tray) = handle.tray_by_id("main") {
+                // set_tooltip 走 main-thread IPC 但开销极小，每轮更新无妨
+                let _ = tray.set_tooltip(Some(tip));
+                // set_icon 仅在 attention 状态跳变时调用（0↔>0），避免无谓重绘
+                let has_attention = need_attention > 0;
+                if has_attention != last_attention {
+                    last_attention = has_attention;
+                    let img = if has_attention {
+                        orange_icon.clone()
+                    } else {
+                        default_icon.clone()
+                    };
+                    if let Some(img) = img {
+                        let _ = tray.set_icon(Some(img));
+                    }
+                }
+            }
+
             let h = hash_sessions(&merged);
             if h != last_hash {
                 last_hash = h;
