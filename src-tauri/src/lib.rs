@@ -153,6 +153,7 @@ pub fn run() {
                 if let tauri::tray::TrayIconEvent::Click {
                     button: tauri::tray::MouseButton::Left,
                     button_state: tauri::tray::MouseButtonState::Up,
+                    position,
                     ..
                 } = event
                 {
@@ -161,22 +162,23 @@ pub fn run() {
                         if w.is_visible().unwrap_or(false) {
                             let _ = w.hide();
                         } else {
-                            // 贴 tray 定位：show 前先 set_position 到屏幕右上角 menubar 下方。
-                            // 用 primary_monitor 拿屏幕尺寸 + scale，按逻辑坐标算偏移。
-                            // Tauri 2 API：monitor.size()/position() 返回物理像素，
-                            // WebviewWindow::set_position 接受 Into<Position>（LogicalPosition 即可）。
-                            if let Ok(Some(monitor)) = w.primary_monitor() {
-                                let scale = monitor.scale_factor();
-                                let mon_w_log =
-                                    monitor.size().width as f64 / scale;
-                                let popover_w_log = 340.0;
-                                let margin_log = 8.0;
-                                let menubar_h_log = 28.0; // macOS menubar ~24pt + 少量间距
-                                let x = mon_w_log - popover_w_log - margin_log;
-                                let y = menubar_h_log;
-                                let _ = w
-                                    .set_position(tauri::LogicalPosition::new(x, y));
-                            }
+                            // 贴 tray 定位：show 前先用点击事件的屏幕坐标算 popover
+                            // 右上角对齐点击点下方。
+                            // Click.position 是 PhysicalPosition<f64>（屏幕物理像素，
+                            // ≈ tray 图标位置）；window.scale_factor() 返回 Result<f64>。
+                            // popover_physical_width = 逻辑宽(340) × scale。
+                            // 失败时 scale 兜底 1.0 仍能弹出，只是位置略有偏差。
+                            let scale = w.scale_factor().unwrap_or_else(|e| {
+                                eprintln!("tray click: scale_factor failed: {e}");
+                                1.0
+                            });
+                            let popover_w_phys = 340.0 * scale;
+                            let x = position.x - popover_w_phys;
+                            let y = position.y + 4.0;
+                            let _ = w.set_position(tauri::PhysicalPosition::new(
+                                x as i32,
+                                y as i32,
+                            ));
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
