@@ -161,6 +161,22 @@ pub fn run() {
                         if w.is_visible().unwrap_or(false) {
                             let _ = w.hide();
                         } else {
+                            // 贴 tray 定位：show 前先 set_position 到屏幕右上角 menubar 下方。
+                            // 用 primary_monitor 拿屏幕尺寸 + scale，按逻辑坐标算偏移。
+                            // Tauri 2 API：monitor.size()/position() 返回物理像素，
+                            // WebviewWindow::set_position 接受 Into<Position>（LogicalPosition 即可）。
+                            if let Ok(Some(monitor)) = w.primary_monitor() {
+                                let scale = monitor.scale_factor();
+                                let mon_w_log =
+                                    monitor.size().width as f64 / scale;
+                                let popover_w_log = 340.0;
+                                let margin_log = 8.0;
+                                let menubar_h_log = 28.0; // macOS menubar ~24pt + 少量间距
+                                let x = mon_w_log - popover_w_log - margin_log;
+                                let y = menubar_h_log;
+                                let _ = w
+                                    .set_position(tauri::LogicalPosition::new(x, y));
+                            }
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
