@@ -272,6 +272,39 @@ pub fn run() {
                 }
             });
 
+            // 注册 ⌥Space 全局快捷键 → toggle overlay 窗口。
+            // 2.x API（v2.3.2 实测）：没有 init() 工厂函数，须用 Builder 模式在 setup 内
+            // 通过 app.handle().plugin(...) 动态注册。brief 提到的 register(s).on_shortcut(...)
+            // 链式调用也无效（register 返回 Result<()>）。正确路径是 with_shortcuts +
+            // with_handler 一步到位（参考 v2 README）。
+            // Builder / shortcut 注册失败时 ? 向上传播（setup 返回 Box<dyn Error>）——fail fast。
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_global_shortcut::{
+                    Builder, Code, Modifiers, ShortcutState,
+                };
+                app.handle().plugin(
+                    Builder::new()
+                        .with_shortcuts(["alt+space"])?
+                        .with_handler(|app, shortcut, event| {
+                            if event.state == ShortcutState::Pressed
+                                && shortcut.matches(Modifiers::ALT, Code::Space)
+                            {
+                                if let Some(w) = app.get_webview_window("overlay") {
+                                    if w.is_visible().unwrap_or(false) {
+                                        let _ = w.hide();
+                                    } else {
+                                        // 呼出时抢焦点（overlay 用于搜索输入，区别于 HUD 不抢焦点）
+                                        let _ = w.show();
+                                        let _ = w.set_focus();
+                                    }
+                                }
+                            }
+                        })
+                        .build(),
+                )?;
+            }
+
             // 启动后台轮询：每 3s 收集 sessions → reduce → hash 去重 → emit
             start_poll_loop(app.handle().clone());
 

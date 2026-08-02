@@ -24,6 +24,20 @@
         "skipTaskbar": true,
         "alwaysOnTop": true,
         "shadow": true
+      },
+      {
+        "label": "overlay",
+        "url": "index.html?window=overlay",
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "width": 560,
+        "height": 420,
+        "center": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "shadow": true
       }
     ],
     "trayIcon": {
