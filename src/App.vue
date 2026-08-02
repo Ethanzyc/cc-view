@@ -37,7 +37,7 @@ onMounted(async () => {
 
 <template>
   <div class="app">
-    <header class="header">
+    <header class="title-bar">
       <span class="title">Claude Code 会话</span>
       <span class="count">{{ activeCount }} 个活跃</span>
       <span class="spacer" />
@@ -106,12 +106,18 @@ html, body {
   min-height: 100vh;
 }
 
-/* header */
-.header {
+/* title-bar：整条可拖动 HUD（-webkit-app-region: drag），
+   内部按钮/checkbox 标 no-drag 以保留点击。 */
+.title-bar {
+  -webkit-app-region: drag;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 12px 8px;
+}
+.title-bar .toggle,
+.title-bar .refresh-btn {
+  -webkit-app-region: no-drag;
 }
 .title {
   font-size: 13px;
