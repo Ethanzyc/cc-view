@@ -130,33 +130,28 @@ async function focus(id: string) {
   padding: 0;
 }
 
-/* 紧凑行：36px 高 */
+/* 紧凑行：var(--row-hud) 高 */
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 10px;
+  gap: var(--gap);
+  height: var(--row-hud);
+  padding: 0 var(--pad-x);
   cursor: pointer;
   border-left: 2px solid transparent;
-  transition: background 0.12s ease;
+  transition: background var(--motion-duration) var(--motion-easing);
 }
 .row:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-@media (prefers-color-scheme: light) {
-  .row:hover {
-    background: rgba(0, 0, 0, 0.05);
-  }
+  background: var(--color-hover);
 }
 
-/* NeedsPermission 行：左侧 2px 橙边框 + 浅橙背景 */
+/* NeedsPermission 行：左侧 2px 橙边框 + 浅橙背景（color-mix 派生自状态色 token） */
 .row.perm-row {
-  border-left-color: #FF9F0A;
-  background: rgba(255, 159, 10, 0.10);
+  border-left-color: var(--status-permission);
+  background: color-mix(in srgb, var(--status-permission) 10%, transparent);
 }
 .row.perm-row:hover {
-  background: rgba(255, 159, 10, 0.16);
+  background: color-mix(in srgb, var(--status-permission) 16%, transparent);
 }
 
 /* dead 行半透明 */
@@ -175,7 +170,7 @@ async function focus(id: string) {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  line-height: 1.2;
+  line-height: var(--lh-body);
 }
 .line1 {
   display: flex;
@@ -183,57 +178,46 @@ async function focus(id: string) {
   gap: 6px;
 }
 .name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #E5E5E7;
+  font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+  color: var(--color-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .status-zh {
-  font-size: 10px;
-  font-weight: 400;
-  color: #8E8E93;
+  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
+  color: var(--color-muted);
   flex-shrink: 0;
 }
 .line2 {
-  font-size: 11px;
-  color: #8E8E93;
+  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
+  color: var(--color-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 1px;
 }
 
-@media (prefers-color-scheme: light) {
-  .name { color: #1D1D1F; }
-  .status-zh { color: #8E8E93; }
-  .line2 { color: #8E8E93; }
-}
-
-/* ago 时间 */
+/* ago 时间：等宽数据列 */
 .ago {
-  font-size: 11px;
-  color: #6E6E73;
+  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility);
+  color: var(--color-tertiary);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 3px;
   font-variant-numeric: tabular-nums;
 }
-@media (prefers-color-scheme: light) {
-  .ago { color: #6E6E73; }
-}
 
-/* "刚完成"高亮：蓝色 + 小圆点 */
+/* "刚完成"高亮：主色蓝 + 小圆点 */
 .ago.fresh {
-  color: #0A84FF;
+  color: var(--color-primary);
 }
 .fresh-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #0A84FF;
+  background: var(--color-primary);
   display: inline-block;
 }
 
@@ -242,23 +226,21 @@ async function focus(id: string) {
   flex-shrink: 0;
   background: none;
   border: none;
-  color: #6E6E73;
+  color: var(--color-tertiary);
   cursor: pointer;
   font-size: 15px;
   line-height: 1;
   padding: 2px 4px;
   border-radius: 4px;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition: color var(--motion-duration) var(--motion-easing),
+              background var(--motion-duration) var(--motion-easing);
 }
 .hide-btn:hover {
-  color: #E5E5E7;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-fg);
+  background: var(--color-hover);
 }
-@media (prefers-color-scheme: light) {
-  .hide-btn { color: #6E6E73; }
-  .hide-btn:hover {
-    color: #1D1D1F;
-    background: rgba(0, 0, 0, 0.08);
-  }
+.hide-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 </style>

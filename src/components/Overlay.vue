@@ -150,8 +150,8 @@ onMounted(async () => {
 
 <style scoped>
 .overlay {
-  background: transparent;
-  color: var(--text-primary);
+  background: var(--color-bg);
+  color: var(--color-fg);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -162,11 +162,11 @@ onMounted(async () => {
   -webkit-app-region: drag;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 14px 10px;
+  gap: var(--gap);
+  padding: var(--pad-y) var(--pad-x);
 }
 .search-icon {
-  color: var(--text-tertiary);
+  color: var(--color-tertiary);
   flex-shrink: 0;
 }
 .search {
@@ -175,34 +175,35 @@ onMounted(async () => {
   background: transparent;
   border: none;
   outline: none;
-  font-size: 15px;
-  color: var(--text-primary);
+  font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+  color: var(--color-fg);
   font-family: inherit;
   -webkit-font-smoothing: antialiased;
 }
 .search::placeholder {
-  color: var(--text-tertiary);
+  color: var(--color-tertiary);
+}
+.search:focus-visible {
+  outline: none;
+  /* 搜索框常驻焦点，不画 outline；focus 边框由容器承担 */
 }
 
 .divider {
   height: 1px;
-  background: var(--divider);
-  margin: 0 8px;
+  background: var(--color-border);
+  margin: 0 var(--gap);
 }
 
 .list-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0 8px;
+  padding: 4px 0 var(--pad-y);
 }
 .list-scroll::-webkit-scrollbar { width: 6px; }
 .list-scroll::-webkit-scrollbar-track { background: transparent; }
 .list-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--color-border);
   border-radius: 3px;
-}
-@media (prefers-color-scheme: light) {
-  .list-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); }
 }
 
 .list {
@@ -211,21 +212,18 @@ onMounted(async () => {
   padding: 0;
 }
 
-/* 行：44px 高（比 HUD 的 36 大些，命令面板风格） */
+/* 行：var(--row-overlay) 高（命令面板紧凑行） */
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 44px;
-  padding: 0 14px;
+  gap: var(--gap);
+  height: var(--row-overlay);
+  padding: 0 var(--pad-x);
   cursor: pointer;
-  transition: background 0.1s ease;
+  transition: background var(--motion-duration) var(--motion-easing);
 }
 .row:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-@media (prefers-color-scheme: light) {
-  .row:hover { background: rgba(0, 0, 0, 0.05); }
+  background: var(--color-hover);
 }
 .row.dead { opacity: 0.45; }
 
@@ -237,20 +235,19 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  line-height: 1.2;
+  line-height: var(--lh-body);
 }
 .line1 { display: flex; align-items: baseline; gap: 6px; }
 .name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+  color: var(--color-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .line2 {
-  font-size: 11px;
-  color: var(--text-secondary);
+  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
+  color: var(--color-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -263,47 +260,42 @@ onMounted(async () => {
   gap: 4px;
   flex-shrink: 0;
   opacity: 0.6;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--motion-duration) var(--motion-easing);
 }
 .row:hover .actions { opacity: 1; }
 
 .act-btn {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-border);
   border: none;
-  color: var(--text-secondary);
-  font-size: 11px;
+  color: var(--color-muted);
+  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   font-family: inherit;
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--motion-duration) var(--motion-easing),
+              color var(--motion-duration) var(--motion-easing);
   -webkit-font-smoothing: antialiased;
 }
 .act-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--text-primary);
+  background: var(--color-hover);
+  color: var(--color-fg);
 }
-@media (prefers-color-scheme: light) {
-  .act-btn {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--text-secondary);
-  }
-  .act-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: var(--text-primary);
-  }
+.act-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
-/* 复制成功状态：蓝色 */
+/* 复制成功状态：主色蓝 */
 .act-btn.copy.done {
-  color: #0A84FF;
-  background: rgba(10, 132, 255, 0.12);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .empty {
   padding: 40px 16px;
   text-align: center;
-  font-size: 13px;
-  color: var(--text-tertiary);
+  font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+  color: var(--color-tertiary);
 }
 </style>

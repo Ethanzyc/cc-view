@@ -78,22 +78,56 @@ onMounted(async () => {
 </template>
 
 <style>
-/* 深色（默认） */
+/* 设计 token（dark 默认 + light 覆盖） */
 :root {
-  --text-primary: #E5E5E7;
-  --text-secondary: #8E8E93;
-  --text-tertiary: #6E6E73;
-  --divider: rgba(255, 255, 255, 0.08);
-  --header-bg: transparent;
+  /* color（dark 默认） */
+  --color-bg: transparent;
+  --color-fg: #E5E5E7;
+  --color-muted: #8E8E93;
+  --color-tertiary: #6E6E73;
+  --color-primary: #0A84FF;
+  --color-accent: #0A84FF;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-hover: rgba(255, 255, 255, 0.08);
+  /* 状态语义色（StatusIcon） */
+  --status-working: #30D158;
+  --status-waiting: #0A84FF;
+  --status-permission: #FF9F0A;
+  --status-shell: #BF5AF2;
+  --status-compacting: #64D2FF;
+  /* 字体 */
+  --font-body: -apple-system, "PingFang SC", "SF Pro Text", sans-serif;
+  --font-utility: "SF Mono", ui-monospace, "Menlo", monospace;
+  /* 字号标度（compact） */
+  --fs-display: 13px; --fw-display: 700; --lh-display: 1.3;
+  --fs-body: 13px;    --fw-body: 600;    --lh-body: 1.25;
+  --fs-caption: 11px; --fw-caption: 400; --lh-caption: 1.3;
+  --fs-utility: 10px; --fw-utility: 400; --lh-utility: 1.3;
+  /* 布局 */
+  --radius-hud: 10px; --radius-overlay: 12px;
+  --row-hud: 36px; --row-overlay: 34px;
+  --pad-x: 12px; --pad-y: 8px; --gap: 8px;
+  /* 动效 */
+  --motion-duration: 160ms;
+  --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --text-primary: #1D1D1F;
-    --text-secondary: #8E8E93;
-    --text-tertiary: #6E6E73;
-    --divider: rgba(0, 0, 0, 0.08);
+    --color-fg: #1D1D1F;
+    --color-border: rgba(0, 0, 0, 0.08);
+    --color-hover: rgba(0, 0, 0, 0.06);
+    /* muted/tertiary/primary/状态色 = macOS 系统色，明暗一致，不覆盖 */
   }
+}
+
+/* signature：Working 状态指示灯呼吸 */
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-icon--working { animation: none !important; }
 }
 
 * { box-sizing: border-box; }
@@ -101,8 +135,8 @@ onMounted(async () => {
 html, body {
   margin: 0;
   padding: 0;
-  background: transparent;
-  font-family: -apple-system, "PingFang SC", "SF Pro Text", sans-serif;
+  background: var(--color-bg);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* 防止用户选中 popover 中的文字（原生 popover 体验） */
@@ -112,10 +146,10 @@ html, body {
 
 /* popover 容器：背景透明，由后端 NSVisualEffectView vibrancy 提供毛玻璃 */
 .app {
-  background: transparent;
-  border-radius: 8px;
+  background: var(--color-bg);
+  border-radius: var(--radius-hud);
   overflow: hidden;
-  color: var(--text-primary);
+  color: var(--color-fg);
   min-height: 100vh;
 }
 
@@ -125,23 +159,23 @@ html, body {
   -webkit-app-region: drag;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px 8px;
+  gap: var(--gap);
+  padding: var(--pad-y) var(--pad-x);
 }
 .title-bar .toggle,
 .title-bar .refresh-btn {
   -webkit-app-region: no-drag;
 }
 .title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font: var(--fw-display) var(--fs-display)/var(--lh-display) var(--font-body);
+  color: var(--color-fg);
   letter-spacing: -0.01em;
 }
+/* count 走等宽：仪表质感的数据列 */
 .count {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-weight: 400;
+  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility);
+  color: var(--color-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 .spacer { flex: 1; }
 
@@ -149,45 +183,44 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
-  color: var(--text-secondary);
+  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
+  color: var(--color-muted);
   cursor: pointer;
-  font-weight: 400;
 }
 .toggle input {
   margin: 0;
   width: 12px;
   height: 12px;
-  accent-color: #0A84FF;
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
 .refresh-btn {
   background: none;
   border: none;
-  color: var(--text-tertiary);
+  color: var(--color-tertiary);
   cursor: pointer;
   padding: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition: color var(--motion-duration) var(--motion-easing),
+              background var(--motion-duration) var(--motion-easing);
 }
 .refresh-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-fg);
+  background: var(--color-hover);
 }
-@media (prefers-color-scheme: light) {
-  .refresh-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
-  }
+.refresh-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 .divider {
   height: 1px;
-  background: var(--divider);
-  margin: 0 8px;
+  background: var(--color-border);
+  margin: 0 var(--gap);
 }
 
 /* 列表区可滚动 */
@@ -205,12 +238,7 @@ html, body {
   background: transparent;
 }
 .list-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--color-border);
   border-radius: 3px;
-}
-@media (prefers-color-scheme: light) {
-  .list-scroll::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.15);
-  }
 }
 </style>

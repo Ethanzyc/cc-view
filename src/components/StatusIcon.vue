@@ -5,13 +5,13 @@ import type { Status } from '../types';
 
 const props = defineProps<{ status: Status }>();
 
-// 状态色板（macOS system colors 风格）
+// 状态色板（读 :root token，macOS system colors 风格）
 const COLOR: Record<Status, string> = {
-  working: '#30D158',        // 绿
-  waitingForInput: '#0A84FF', // 蓝
-  needsPermission: '#FF9F0A', // 橙
-  shell: '#BF5AF2',          // 紫
-  compacting: '#64D2FF',     // 青
+  working:         'var(--status-working)',
+  waitingForInput: 'var(--status-waiting)',
+  needsPermission: 'var(--status-permission)',
+  shell:           'var(--status-shell)',
+  compacting:      'var(--status-compacting)',
 };
 </script>
 
@@ -19,6 +19,7 @@ const COLOR: Record<Status, string> = {
   <svg
     :width="16" :height="16" viewBox="0 0 16 16"
     :style="{ color: COLOR[props.status] }"
+    :class="{ 'status-icon--working': status === 'working' }"
     fill="none"
     stroke="currentColor"
     stroke-width="1.5"
@@ -69,5 +70,9 @@ const COLOR: Record<Status, string> = {
 .status-icon {
   flex-shrink: 0;
   display: block;
+}
+/* signature：Working 呼吸（其余状态静止）；reduced-motion 由 App.vue 全局降级 */
+.status-icon.status-icon--working {
+  animation: breathe 2400ms ease-in-out infinite;
 }
 </style>
