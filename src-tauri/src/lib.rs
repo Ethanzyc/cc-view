@@ -16,6 +16,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::menu::{Menu, MenuItem};
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{Emitter, Manager};
 
 /// 对会话列表做内容 hash，仅按 (id, status, alive) 维度。
@@ -137,6 +138,19 @@ pub fn run() {
             focus_session
         ])
         .setup(|app| {
+            // 给 popover 窗口设原生 vibrancy（NSVisualEffectView，系统渲染）。
+            // 替代 CSS backdrop-filter：桌面变化时背景稳定，且自适应明暗主题。
+            // Popover material 语义匹配 menubar popover；radius 8 与 .app CSS border-radius 对齐。
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_effects(
+                    EffectsBuilder::new()
+                        .effect(Effect::Popover)
+                        .state(EffectState::Active)
+                        .radius(8.)
+                        .build(),
+                );
+            }
+
             // 构建 menubar 托盘菜单（当前仅 Quit；后续任务按需扩展）
             let quit_item =
                 MenuItem::with_id(app.handle(), "quit", "Quit", true, None::<&str>)?;

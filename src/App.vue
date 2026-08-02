@@ -67,7 +67,6 @@ onMounted(async () => {
 <style>
 /* 深色（默认） */
 :root {
-  --bg-glass: rgba(28, 28, 30, 0.75);
   --text-primary: #E5E5E7;
   --text-secondary: #8E8E93;
   --text-tertiary: #6E6E73;
@@ -77,7 +76,6 @@ onMounted(async () => {
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg-glass: rgba(255, 255, 255, 0.75);
     --text-primary: #1D1D1F;
     --text-secondary: #8E8E93;
     --text-tertiary: #6E6E73;
@@ -99,12 +97,9 @@ html, body {
   -webkit-user-select: none;
 }
 
-/* 毛玻璃容器：popover 整体 */
+/* popover 容器：背景透明，由后端 NSVisualEffectView vibrancy 提供毛玻璃 */
 .app {
-  /* 毛玻璃：blur 穿透到桌面（需 tauri 窗口 transparent + macOSPrivateApi） */
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: var(--bg-glass);
+  background: transparent;
   border-radius: 8px;
   overflow: hidden;
   color: var(--text-primary);
