@@ -18,7 +18,7 @@
     "light": {
       "bg": "transparent",
       "fg": "#1D1D1F",
-      "muted": "#8E8E93",
+      "muted": "#6E6E73",
       "tertiary": "#6E6E73",
       "primary": "#0A84FF",
       "accent": "#0A84FF",
@@ -56,7 +56,7 @@
   "layout": {
     "density": "compact",
     "hud": { "width": "340px", "radius": "10px", "rowHeight": "36px" },
-    "overlay": { "width": "560px", "radius": "12px", "rowHeight": "34px" },
+    "overlay": { "width": "560px", "radius": "12px", "rowHeight": "36px" },
     "padding": { "x": "12px", "y": "8px" },
     "gap": "8px",
     "divider": "1px"

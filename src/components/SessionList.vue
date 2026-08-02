@@ -100,7 +100,11 @@ async function focus(id: string) {
         dead: !s.alive,
         'perm-row': s.status === 'needsPermission',
       }"
+      role="button"
+      tabindex="0"
       @click="focus(s.id)"
+      @keydown.enter.prevent="focus(s.id)"
+      @keydown.space.prevent="focus(s.id)"
     >
       <StatusIcon :status="s.status" class="icon" />
       <div class="info">
@@ -143,6 +147,10 @@ async function focus(id: string) {
 }
 .row:hover {
   background: var(--color-hover);
+}
+.row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 /* NeedsPermission 行：左侧 2px 橙边框 + 浅橙背景（color-mix 派生自状态色 token） */

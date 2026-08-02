@@ -7,8 +7,17 @@ import { ref, computed, onMounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { Session } from '../types';
+import type { Session, Status } from '../types';
 import StatusIcon from './StatusIcon.vue';
+
+// 状态中文名（供 aria-label，与 SessionList 保持一致；不渲染可见文本）
+const STATUS_ZH: Record<Status, string> = {
+  working: '工作中',
+  waitingForInput: '等输入',
+  needsPermission: '等权限',
+  shell: 'Shell',
+  compacting: '压缩中',
+};
 
 const all = ref<Session[]>([]);
 const q = ref('');
@@ -122,7 +131,12 @@ onMounted(async () => {
           :key="s.id"
           class="row"
           :class="{ dead: !s.alive }"
+          role="button"
+          tabindex="0"
+          :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
           @click="focusSession(s.id)"
+          @keydown.enter.prevent="focusSession(s.id)"
+          @keydown.space.prevent="focusSession(s.id)"
         >
           <StatusIcon :status="s.status" class="icon" />
           <div class="info">
@@ -164,6 +178,11 @@ onMounted(async () => {
   align-items: center;
   gap: var(--gap);
   padding: var(--pad-y) var(--pad-x);
+  /* 键盘 focus 搜索框时容器显示 primary 下边框（search input 自身 outline:none） */
+  transition: box-shadow var(--motion-duration) var(--motion-easing);
+}
+.search-bar:focus-within {
+  box-shadow: inset 0 -1.5px 0 var(--color-primary);
 }
 .search-icon {
   color: var(--color-tertiary);
@@ -224,6 +243,10 @@ onMounted(async () => {
 }
 .row:hover {
   background: var(--color-hover);
+}
+.row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 .row.dead { opacity: 0.45; }
 

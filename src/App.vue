@@ -105,7 +105,7 @@ onMounted(async () => {
   --fs-utility: 10px; --fw-utility: 400; --lh-utility: 1.3;
   /* 布局 */
   --radius-hud: 10px; --radius-overlay: 12px;
-  --row-hud: 36px; --row-overlay: 34px;
+  --row-hud: 36px; --row-overlay: 36px;
   --pad-x: 12px; --pad-y: 8px; --gap: 8px;
   /* 动效 */
   --motion-duration: 160ms;
@@ -117,7 +117,8 @@ onMounted(async () => {
     --color-fg: #1D1D1F;
     --color-border: rgba(0, 0, 0, 0.08);
     --color-hover: rgba(0, 0, 0, 0.06);
-    /* muted/tertiary/primary/状态色 = macOS 系统色，明暗一致，不覆盖 */
+    /* muted 提暗达标 AA（light 毛玻璃上原 #8E8E93 ~3.3:1 < 4.5）；其余系统色明暗一致，不覆盖 */
+    --color-muted: #6E6E73;
   }
 }
 
