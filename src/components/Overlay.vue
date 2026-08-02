@@ -14,6 +14,7 @@ const all = ref<Session[]>([]);
 const q = ref('');
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
 const copiedId = ref<string | null>(null);
+const searchRef = ref<HTMLInputElement>();
 
 // 状态排序优先级：等权限 > 等输入 > 工作 > Shell > 压缩 > 死亡
 function statusRank(s: Session): number {
@@ -93,6 +94,15 @@ onMounted(async () => {
   } catch (e) {
     console.error('overlay listen sessions failed', e);
   }
+
+  // 窗口获焦时 focus + select 搜索框（overlay show/hide 复用，autofocus 仅首次生效）
+  const win = getCurrentWebviewWindow();
+  await win.onFocusChanged(({ payload: focused }) => {
+    if (focused && searchRef.value) {
+      searchRef.value.focus();
+      searchRef.value.select();
+    }
+  });
 });
 </script>
 
@@ -104,6 +114,7 @@ onMounted(async () => {
         <path d="M10.5 10.5 L14 14" />
       </svg>
       <input
+        ref="searchRef"
         class="search"
         v-model="q"
         placeholder="搜索会话（名称 / 项目）..."
