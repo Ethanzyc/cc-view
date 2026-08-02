@@ -27,7 +27,7 @@
       },
       {
         "label": "overlay",
-        "url": "index.html?window=overlay",
+        "url": "index.html",
         "visible": false,
         "decorations": false,
         "resizable": false,

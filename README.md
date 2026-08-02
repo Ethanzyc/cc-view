@@ -12,7 +12,7 @@ cc-view 在桌面常驻一个 always-on-top 的悬浮 HUD（可拖动、位置�
 - **menubar 聚合图标**：菜单栏图标动态聚合全部会话状态——tooltip 显示「N 等我 · M 工作」；只要存在 NeedsPermission / WaitingForInput 会话，图标立即染成 macOS system orange（RGB 255,149,0），状态清零后自动还原。左键点击 menubar 图标 toggle HUD 显示 / 隐藏。
 - **会话总览**：HUD 内实时展示全部活跃 Claude Code 会话，状态变化 3 秒内刷新（内容 hash 去重，状态不变不刷屏）。
 - **状态通知**：会话进入「等待权限确认 / 等待输入 / 需要关注」等需要人工介入的状态时弹 macOS 系统通知，按会话名区分。
-- **⌥Space 命令面板 overlay**：任意位置按 **⌥Space（Option+Space）** 全局快捷键呼出居中浮层（Alfred / uTools 风格）。支持搜索过滤会话、点选/回车 focus 跳转终端、右键菜单隐藏会话、复制会话 ID；点击外部或 Esc 失焦自动收起，再按 ⌥Space 切换显示。
+- **⌥Space 命令面板 overlay**：任意位置按 **⌥Space（Option+Space）** 全局快捷键呼出居中浮层（Alfred / uTools 风格）。支持搜索过滤会话、点选会话行 focus 跳转终端、复制会话 ID；点击外部自动收起，再按 ⌥Space 切换显示。
 - **点击 Focus**：在 HUD 或命令面板中点击任意会话行，自动 activate 该会话所在终端 app（基于 sysinfo 进程树回溯 + osascript），无需手动切窗口。
 - **隐藏 / 归档**：右键会话行可隐藏（持久化到 `~/.claude/cc-view/hidden.json`），已退出会话自动置灰，列表保持干净。
 

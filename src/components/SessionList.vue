@@ -34,6 +34,7 @@ function statusRank(s: Session): number {
     case 'working': return 3;
     case 'shell': return 4;
     case 'compacting': return 5;
+    default: return 99;
   }
 }
 

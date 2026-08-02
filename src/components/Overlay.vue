@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Overlay 命令面板：搜索框 + 会话列表 + 每行操作（focus/隐藏/复制 ID）。
+// Overlay 命令面板：搜索框 + 会话列表 + 每行操作（focus/复制 ID）。
 // 数据自管——直接 listen "sessions" event（与 HUD 同事件，互不干扰）。
 // 排序逻辑与 SessionList 一致（statusRank + ago 升序）；MVP 重复可接受。
 // 隐藏列表不做过滤——overlay 是"快速启动器"，隐藏项仍可搜索到（恢复走 HUD）。
@@ -25,6 +25,7 @@ function statusRank(s: Session): number {
     case 'working': return 3;
     case 'shell': return 4;
     case 'compacting': return 5;
+    default: return 99;
   }
 }
 
@@ -50,15 +51,6 @@ async function focusSession(id: string) {
     await getCurrentWebviewWindow().hide();
   } catch (e) {
     console.error('focus_session failed', e);
-  }
-}
-
-// 隐藏会话：失败 console.error，UI 不崩。
-async function hideSession(id: string) {
-  try {
-    await invoke('hide_session', { id });
-  } catch (e) {
-    console.error('hide_session failed', e);
   }
 }
 
@@ -140,11 +132,6 @@ onMounted(async () => {
             <div class="line2">{{ s.project }}</div>
           </div>
           <div class="actions">
-            <button
-              class="act-btn"
-              title="隐藏"
-              @click.stop="hideSession(s.id)"
-            >隐藏</button>
             <button
               class="act-btn copy"
               :class="{ done: copiedId === s.id }"
