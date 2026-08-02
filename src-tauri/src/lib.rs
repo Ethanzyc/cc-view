@@ -241,6 +241,19 @@ pub fn run() {
                 });
             }
 
+            // overlay 窗口：失焦自动 hide（Alfred/uTools 行为——点别处就收起）。
+            // on_window_event 闭包签名是 Fn(&WindowEvent)（单参），拿不到 window 引用——
+            // 外层 clone WebviewWindow（Tauri 2 派生 Clone，是廉价 handle 非拥有资源）
+            // 再 move 进闭包，失焦时调 hide()。仅 overlay 有此行为；HUD（main）常驻不 hide。
+            if let Some(overlay) = app.get_webview_window("overlay") {
+                let w = overlay.clone();
+                overlay.on_window_event(move |e| {
+                    if let tauri::WindowEvent::Focused(false) = e {
+                        let _ = w.hide();
+                    }
+                });
+            }
+
             // 构建 menubar 托盘菜单（当前仅 Quit；后续任务按需扩展）
             let quit_item =
                 MenuItem::with_id(app.handle(), "quit", "Quit", true, None::<&str>)?;
@@ -295,6 +308,8 @@ pub fn run() {
                                         let _ = w.hide();
                                     } else {
                                         // 呼出时抢焦点（overlay 用于搜索输入，区别于 HUD 不抢焦点）
+                                        // 每次 show 前居中——即使上次拖动过，呼出总在屏幕中心
+                                        let _ = w.center();
                                         let _ = w.show();
                                         let _ = w.set_focus();
                                     }
