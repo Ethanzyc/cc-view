@@ -32,7 +32,7 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
     h.finish()
 }
 
-/// 把默认图标非透明像素染成 macOS system orange（RGB 255,149,0），保留 alpha 通道
+/// 把默认图标非透明像素染成 macOS system orange（RGB 255,159,10 = #FF9F0A），保留 alpha 通道
 /// 维持抗锯齿边缘。采用方式 (b) 代码着色而非预制 PNG——无需维护第二份资源。
 fn tint_orange(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
     let w = src.width();
@@ -42,8 +42,8 @@ fn tint_orange(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
     for px in out.chunks_exact_mut(4) {
         if px[3] > 0 {
             px[0] = 255;
-            px[1] = 149;
-            px[2] = 0;
+            px[1] = 159;
+            px[2] = 10;
             // alpha 保留
         }
     }
