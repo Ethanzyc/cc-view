@@ -312,7 +312,11 @@ fn make_key(w: &tauri::WebviewWindow) {
     };
     let obj = ptr as *mut AnyObject;
     unsafe {
-        let _: () = msg_send![obj, makeKey];
+        // NSWindow 没有 makeKey 方法（之前误用 → selector 无效 → objc2 panic →
+        // extern "C" 回调不能 unwind → abort 闪退）。正确的是 makeKeyAndOrderFront:，
+        // 同时 orderFront + makeKey；对 nonActivatingPanel 不激活 app，不牵连 HUD。
+        let nil: *mut AnyObject = std::ptr::null_mut();
+        let _: () = msg_send![obj, makeKeyAndOrderFront: nil];
     }
 }
 
