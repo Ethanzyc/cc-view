@@ -292,9 +292,10 @@ fn make_panel(w: &tauri::WebviewWindow) {
         // NSWindowStyleMaskNonactivatingPanel = 1 << 7 (128) —— 加到现有 mask
         let mask: objc2::ffi::NSUInteger = msg_send![obj, styleMask];
         let _: () = msg_send![obj, setStyleMask: mask | (1 << 7)];
-        // 只在需要时 become key（不主动 activate app）
-        let _: () = msg_send![obj, setBecomesKeyOnlyIfNeeded: true];
-        eprintln!("overlay swizzled to NSPanel (nonActivatingPanel + becomesKeyOnlyIfNeeded)");
+        // 不设 becomesKeyOnlyIfNeeded：它让窗口"只在需要时才 key"，导致点别处时没有
+        // resign key 事件、失焦 hide 不触发（Alfred "点外面消失"需要正常 become/resign key）。
+        // nonActivatingPanel 已保证 become key 不激活 app，跨全屏 Space 不受影响。
+        eprintln!("overlay swizzled to NSPanel (nonActivatingPanel)");
     }
 }
 
@@ -364,7 +365,7 @@ pub fn run() {
                 join_all_spaces(&overlay);
 
                 // isa swizzle NSWindow → NSPanel（一次性）：
-                // nonActivatingPanel + becomesKeyOnlyIfNeeded 才能真正跨全屏 Space。
+                // nonActivatingPanel 才能真正跨全屏 Space（become key 不激活 app → 不切 Space）。
                 // 必须在 vibriosity set_effects 之后、窗口 show 之前调。
                 #[cfg(target_os = "macos")]
                 make_panel(&overlay);
