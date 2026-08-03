@@ -29,7 +29,7 @@ impl Notifier {
         }
         let mut to_notify = Vec::new();
         for s in sessions {
-            // 仅活 session 且状态为 NeedsPermission/WaitingInput 时判定通知
+            // 仅活 session 且状态为 NeedsPermission/WaitingInput 且未搁置(!snoozed) 时判定通知
             if s.alive && !s.snoozed && matches!(s.status, Status::NeedsPermission | Status::WaitingForInput) {
                 if self.last.get(&s.id) != Some(&s.status) {
                     to_notify.push((s.name.clone(), s.status.clone()));
@@ -126,6 +126,17 @@ mod tests {
         n.observe(&[sess("a", Status::Working)]); // bootstrap
         let mut s = sess("a", Status::NeedsPermission);
         s.alive = false;
+        let r = n.observe(&[s]);
+        assert!(r.is_empty());
+    }
+
+    /// 搁置 session（snoozed=true）即使 alive 且 status 是 NeedsPermission 也不应触发通知。
+    #[test]
+    fn snoozed_session_not_notified() {
+        let mut n = Notifier::new();
+        n.observe(&[sess("a", Status::Working)]); // bootstrap
+        let mut s = sess("a", Status::NeedsPermission);
+        s.snoozed = true;
         let r = n.observe(&[s]);
         assert!(r.is_empty());
     }

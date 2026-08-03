@@ -21,6 +21,27 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{Emitter, Manager};
 
+/// 基于 SnoozeMap 给 merged 的每个 session 算 derived snoozed 字段。
+/// map 为 None 或 lock 失败时静默（视为无搁置）——不阻塞调用方。
+/// 锁一次 guard，遍历所有 session 共用（避免每 session 各 lock 一次）。
+fn apply_snoozed(
+    merged: &[models::Session],
+    map: Option<&Mutex<snoozed::SnoozeMap>>,
+) -> Vec<models::Session> {
+    let guard = map.and_then(|m| m.lock().ok());
+    merged
+        .iter()
+        .map(|s| {
+            let mut s = s.clone();
+            s.snoozed = guard
+                .as_ref()
+                .map(|g| g.is_effectively_snoozed(&s))
+                .unwrap_or(false);
+            s
+        })
+        .collect()
+}
+
 /// 对会话列表做内容 hash，仅按 (id, status, alive) 维度。
 /// 只要这三项不变就不 emit，避免每 3s 给前端刷一屏。
 fn hash_sessions(s: &[models::Session]) -> u64 {
@@ -75,20 +96,9 @@ fn start_poll_loop(handle: tauri::AppHandle) {
             let merged = reducer::reduce(sessions);
 
             // derived snoozed：每轮基于 SnoozeMap 算，随 Session emit。
-            // lock 失败静默（视为无搁置）——不阻塞 poll。
+            // apply_snoozed 内部锁一次 guard 共用（避免每 session 各 lock 一次）。
             let snoozed_map = handle.try_state::<Mutex<snoozed::SnoozeMap>>();
-            let derived: Vec<models::Session> = merged
-                .iter()
-                .map(|s| {
-                    let mut s = s.clone();
-                    s.snoozed = snoozed_map
-                        .as_ref()
-                        .and_then(|m| m.lock().ok())
-                        .map(|m| m.is_effectively_snoozed(&s))
-                        .unwrap_or(false);
-                    s
-                })
-                .collect();
+            let derived: Vec<models::Session> = apply_snoozed(&merged, snoozed_map.as_deref());
 
             // reduce 之后、hash 之前：每轮都 observe，让 notifier 维护状态机
             let to_notify = notifier.observe(&derived);
@@ -251,15 +261,20 @@ fn list_snoozed(
 
 /// 立即采集并返回当前所有会话（供前端打开时拉初始数据 / 手动刷新）。
 /// 不依赖 poll loop 的 3s 节拍与 hash 去重——调用即拿实时结果。
+/// 同时算 derived snoozed，避免首次打开到 poll_loop emit 之间显示不准。
 /// 同时刷新 cache，让 focus_session 也能用到最新 host。
 #[tauri::command]
-fn get_sessions(cache: tauri::State<'_, Mutex<Vec<models::Session>>>) -> Vec<models::Session> {
+fn get_sessions(
+    cache: tauri::State<'_, Mutex<Vec<models::Session>>>,
+    snoozed: tauri::State<'_, Mutex<snoozed::SnoozeMap>>,
+) -> Vec<models::Session> {
     let merged = reducer::reduce(collector::collect_sessions());
+    let derived = apply_snoozed(&merged, Some(snoozed.inner()));
     match cache.lock() {
-        Ok(mut c) => *c = merged.clone(),
+        Ok(mut c) => *c = derived.clone(),
         Err(_) => eprintln!("get_sessions: cache lock poisoned"),
     }
-    merged
+    derived
 }
 
 /// 按 session id 激活对应终端 app（MVP：只 activate，不精确定位 tab/pane）。
