@@ -30,7 +30,7 @@ impl Notifier {
         let mut to_notify = Vec::new();
         for s in sessions {
             // 仅活 session 且状态为 NeedsPermission/WaitingInput 时判定通知
-            if s.alive && matches!(s.status, Status::NeedsPermission | Status::WaitingForInput) {
+            if s.alive && !s.snoozed && matches!(s.status, Status::NeedsPermission | Status::WaitingForInput) {
                 if self.last.get(&s.id) != Some(&s.status) {
                     to_notify.push((s.name.clone(), s.status.clone()));
                 }

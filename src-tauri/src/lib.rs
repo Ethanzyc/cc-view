@@ -73,8 +73,25 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         loop {
             let sessions = collector::collect_sessions();
             let merged = reducer::reduce(sessions);
+
+            // derived snoozed：每轮基于 SnoozeMap 算，随 Session emit。
+            // lock 失败静默（视为无搁置）——不阻塞 poll。
+            let snoozed_map = handle.try_state::<Mutex<snoozed::SnoozeMap>>();
+            let derived: Vec<models::Session> = merged
+                .iter()
+                .map(|s| {
+                    let mut s = s.clone();
+                    s.snoozed = snoozed_map
+                        .as_ref()
+                        .and_then(|m| m.lock().ok())
+                        .map(|m| m.is_effectively_snoozed(&s))
+                        .unwrap_or(false);
+                    s
+                })
+                .collect();
+
             // reduce 之后、hash 之前：每轮都 observe，让 notifier 维护状态机
-            let to_notify = notifier.observe(&merged);
+            let to_notify = notifier.observe(&derived);
             for (name, status) in to_notify {
                 let status_zh = match status {
                     models::Status::NeedsPermission => "等待权限确认",
@@ -86,7 +103,7 @@ fn start_poll_loop(handle: tauri::AppHandle) {
 
             // 聚合：need_attention = alive && (NeedsPermission|WaitingForInput)；
             //       working       = alive && Working
-            let need_attention = merged
+            let need_attention = derived
                 .iter()
                 .filter(|s| {
                     s.alive
@@ -96,7 +113,7 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                         )
                 })
                 .count();
-            let working = merged
+            let working = derived
                 .iter()
                 .filter(|s| s.alive && matches!(s.status, models::Status::Working))
                 .count();
@@ -132,16 +149,16 @@ fn start_poll_loop(handle: tauri::AppHandle) {
             // cache 每轮更新，但 emit 仍受 hash 去重控制——稳定期也拿到最新 host。
             if let Some(cache) = handle.try_state::<Mutex<Vec<models::Session>>>() {
                 if let Ok(mut c) = cache.lock() {
-                    *c = merged.clone();
+                    *c = derived.clone();
                 } else {
                     eprintln!("poll_loop: sessions cache lock poisoned");
                 }
             }
 
-            let h = hash_sessions(&merged);
+            let h = hash_sessions(&derived);
             if h != last_hash {
                 last_hash = h;
-                let _ = handle.emit("sessions", &merged);
+                let _ = handle.emit("sessions", &derived);
             }
             std::thread::sleep(Duration::from_secs(3));
         }
@@ -184,6 +201,51 @@ fn list_hidden(state: tauri::State<'_, Mutex<hidden::HiddenList>>) -> Vec<String
         .unwrap_or_else(|_| {
             eprintln!("list_hidden: hidden state lock poisoned");
             vec![]
+        })
+}
+
+// --- Tauri commands：搁置/取消搁置/查询搁置表 ---
+// 镜像 hide_session/unhide_session/list_hidden，但存时间戳（is_effectively_snoozed 需要）。
+
+/// 标记会话搁置（记当前时间戳），持久化。前端乐观更新后由 poll_loop 对齐。
+#[tauri::command]
+fn snooze_session(state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>, id: String) {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    match state.lock() {
+        Ok(mut m) => {
+            m.add(&id, now_ms);
+            m.save();
+        }
+        Err(_) => eprintln!("snooze_session: snoozed state lock poisoned"),
+    }
+}
+
+/// 取消搁置（手动恢复），持久化。
+#[tauri::command]
+fn unsnooze_session(state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>, id: String) {
+    match state.lock() {
+        Ok(mut m) => {
+            m.remove(&id);
+            m.save();
+        }
+        Err(_) => eprintln!("unsnooze_session: snoozed state lock poisoned"),
+    }
+}
+
+/// 返回搁置表 {id: snoozedAt}（前端用于乐观更新/调试）。
+#[tauri::command]
+fn list_snoozed(
+    state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>,
+) -> std::collections::HashMap<String, i64> {
+    state
+        .lock()
+        .map(|m| m.to_map())
+        .unwrap_or_else(|_| {
+            eprintln!("list_snoozed: snoozed state lock poisoned");
+            std::collections::HashMap::new()
         })
 }
 
@@ -357,6 +419,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .manage(Mutex::new(hidden::HiddenList::load()))
+        .manage(Mutex::new(snoozed::SnoozeMap::load()))
         .manage(Mutex::new(Vec::<models::Session>::new()))
         .invoke_handler(tauri::generate_handler![
             hide_session,
@@ -365,7 +428,10 @@ pub fn run() {
             focus_session,
             get_sessions,
             get_hud_pinned,
-            set_hud_pinned
+            set_hud_pinned,
+            snooze_session,
+            unsnooze_session,
+            list_snoozed
         ])
         .setup(|app| {
             // 通知权限请求块——保留以兼容未来插件版本。
