@@ -257,12 +257,15 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
     let obj = ptr as *mut AnyObject;
     // CanJoinAllSpaces (1<<0) | FullScreenAuxiliary (1<<8)
     let behavior: objc2::ffi::NSUInteger = (1 << 0) | (1 << 8);
+    // NSPopUpMenuWindowLevel = 101（Spotlight/Raycast 同款层级）。
+    // 高 level 让 macOS 把窗口当系统级浮层，配合 canJoinAllSpaces 才能真正跨 Space（含全屏）。
+    let level: objc2::ffi::NSInteger = 101;
     unsafe {
         let _: () = msg_send![obj, setCollectionBehavior: behavior];
-        // 读回 collectionBehavior 确认是否真设上（诊断用：重启后看终端日志）。
-        // 怀疑 Tauri show()/set_focus() 会重置 collectionBehavior——此日志用于比对。
+        let _: () = msg_send![obj, setLevel: level];
+        // 读回确认（诊断用）。
         let val: objc2::ffi::NSUInteger = msg_send![obj, collectionBehavior];
-        eprintln!("overlay collectionBehavior = {} (expect 257)", val);
+        eprintln!("overlay collectionBehavior = {} (expect 257), level = 101", val);
     }
 }
 
@@ -393,12 +396,15 @@ pub fn run() {
                                         let _ = w.hide();
                                     } else {
                                         // 呼出时抢焦点（overlay 用于搜索输入，区别于 HUD 不抢焦点）
+                                        // 关键：show() 之前先设 collectionBehavior + level——
+                                        // 否则 show 那刻窗口被 macOS 钉在桌面 Space（事后设也来不及）。
+                                        #[cfg(target_os = "macos")]
+                                        join_all_spaces(&w);
                                         // 每次 show 前居中——即使上次拖动过，呼出总在屏幕中心
                                         let _ = w.center();
                                         let _ = w.show();
                                         let _ = w.set_focus();
-                                        // Tauri show()/set_focus() 可能重置 collectionBehavior，
-                                        // 每次弹出都重设，保证全屏 app 下 overlay 跨 Space 可见。
+                                        // show/set_focus 后再设一次，防 Tauri 内部重置。
                                         #[cfg(target_os = "macos")]
                                         join_all_spaces(&w);
                                     }
