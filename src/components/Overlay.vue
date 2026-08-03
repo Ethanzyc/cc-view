@@ -90,6 +90,12 @@ async function copyId(id: string) {
 }
 
 onMounted(async () => {
+  // 打开即拉当前会话，不等 3s 轮询/hash 变化——避免空列表。
+  try {
+    all.value = await invoke<Session[]>('get_sessions');
+  } catch (e) {
+    console.error('get_sessions on mount failed', e);
+  }
   try {
     await listen<Session[]>('sessions', e => { all.value = e.payload; });
   } catch (e) {

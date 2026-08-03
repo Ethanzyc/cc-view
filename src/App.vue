@@ -33,6 +33,20 @@ async function refreshHidden() {
   hidden.value = await invoke<string[]>('list_hidden');
 }
 
+// 真刷新：同时拉 sessions + hidden（refresh-btn 调它，不再只刷 hidden）。
+async function refreshAll() {
+  try {
+    const [sessions, hiddenIds] = await Promise.all([
+      invoke<Session[]>('get_sessions'),
+      invoke<string[]>('list_hidden'),
+    ]);
+    all.value = sessions;
+    hidden.value = hiddenIds;
+  } catch (e) {
+    console.error('refreshAll failed', e);
+  }
+}
+
 // overlay 自管 sessions 监听，HUD 才需要 hidden/listen 逻辑。
 onMounted(async () => {
   if (isOverlay) return; // Overlay 组件自己 listen
@@ -40,6 +54,12 @@ onMounted(async () => {
     await refreshHidden();
   } catch (e) {
     console.error('refreshHidden on mount failed', e);
+  }
+  // 打开即拉当前会话，不等 3s 轮询/hash 变化——避免空列表。
+  try {
+    all.value = await invoke<Session[]>('get_sessions');
+  } catch (e) {
+    console.error('get_sessions on mount failed', e);
   }
   await listen<Session[]>('sessions', e => { all.value = e.payload; });
 });
@@ -58,7 +78,7 @@ onMounted(async () => {
         <input type="checkbox" v-model="showHidden" />
         <span>显示已隐藏</span>
       </label>
-      <button class="refresh-btn" title="刷新" @click="refreshHidden">
+      <button class="refresh-btn" title="刷新" @click="refreshAll">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M13.5 8 A5.5 5.5 0 1 1 11 3.6" />
           <path d="M13.5 2.5 V5 H11" />

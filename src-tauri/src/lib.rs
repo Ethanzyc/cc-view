@@ -126,18 +126,19 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 }
             }
 
+            // 每轮刷新 sessions 缓存，供 focus_session command 查询 host。
+            // cache 每轮更新，但 emit 仍受 hash 去重控制——稳定期也拿到最新 host。
+            if let Some(cache) = handle.try_state::<Mutex<Vec<models::Session>>>() {
+                if let Ok(mut c) = cache.lock() {
+                    *c = merged.clone();
+                } else {
+                    eprintln!("poll_loop: sessions cache lock poisoned");
+                }
+            }
+
             let h = hash_sessions(&merged);
             if h != last_hash {
                 last_hash = h;
-                // emit 前刷新 sessions 缓存，供 focus_session command 查询 host。
-                // 用 app handle 取 state（与 hidden 的 Mutex 并列管理）。
-                if let Some(cache) = handle.try_state::<Mutex<Vec<models::Session>>>() {
-                    if let Ok(mut c) = cache.lock() {
-                        *c = merged.clone();
-                    } else {
-                        eprintln!("poll_loop: sessions cache lock poisoned");
-                    }
-                }
                 let _ = handle.emit("sessions", &merged);
             }
             std::thread::sleep(Duration::from_secs(3));
@@ -184,6 +185,19 @@ fn list_hidden(state: tauri::State<'_, Mutex<hidden::HiddenList>>) -> Vec<String
         })
 }
 
+/// 立即采集并返回当前所有会话（供前端打开时拉初始数据 / 手动刷新）。
+/// 不依赖 poll loop 的 3s 节拍与 hash 去重——调用即拿实时结果。
+/// 同时刷新 cache，让 focus_session 也能用到最新 host。
+#[tauri::command]
+fn get_sessions(cache: tauri::State<'_, Mutex<Vec<models::Session>>>) -> Vec<models::Session> {
+    let merged = reducer::reduce(collector::collect_sessions());
+    match cache.lock() {
+        Ok(mut c) => *c = merged.clone(),
+        Err(_) => eprintln!("get_sessions: cache lock poisoned"),
+    }
+    merged
+}
+
 /// 按 session id 激活对应终端 app（MVP：只 activate，不精确定位 tab/pane）。
 /// 从最近 emit 的 sessions 缓存中查 host；找不到 id 时 eprintln 提示。
 #[tauri::command]
@@ -210,7 +224,8 @@ pub fn run() {
             hide_session,
             unhide_session,
             list_hidden,
-            focus_session
+            focus_session,
+            get_sessions
         ])
         .setup(|app| {
             // 给 popover 窗口设原生 vibrancy（NSVisualEffectView，系统渲染）。
