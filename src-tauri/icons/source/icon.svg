@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 300 300">
+  <defs>
+    <radialGradient id="centerGlow" cx="150" cy="150" r="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sweepGrad" cx="150" cy="150" r="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="300" height="300" rx="68" fill="#0A84FF"/>
+  <circle cx="150" cy="150" r="78" fill="url(#centerGlow)"/>
+  <circle cx="150" cy="150" r="104" fill="none" stroke="#FFFFFF" stroke-width="5" opacity="0.16"/>
+  <circle cx="150" cy="150" r="70" fill="none" stroke="#FFFFFF" stroke-width="6" opacity="0.42"/>
+  <path d="M150,150 L150,46 A104,104 0 0 1 244,106 Z" fill="url(#sweepGrad)"/>
+  <line x1="150" y1="150" x2="244" y2="106" stroke="#64D2FF" stroke-width="12" stroke-linecap="round" opacity="0.22"/>
+  <line x1="150" y1="150" x2="244" y2="106" stroke="#64D2FF" stroke-width="6" stroke-linecap="round" opacity="0.95"/>
+  <circle cx="150" cy="150" r="29" fill="none" stroke="#FFFFFF" stroke-width="3.5" opacity="0.5"/>
+  <circle cx="150" cy="150" r="20" fill="#FFFFFF"/>
+</svg>
