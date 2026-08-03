@@ -234,6 +234,10 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
     let behavior: objc2::ffi::NSUInteger = (1 << 0) | (1 << 8);
     unsafe {
         let _: () = msg_send![obj, setCollectionBehavior: behavior];
+        // 读回 collectionBehavior 确认是否真设上（诊断用：重启后看终端日志）。
+        // 怀疑 Tauri show()/set_focus() 会重置 collectionBehavior——此日志用于比对。
+        let val: objc2::ffi::NSUInteger = msg_send![obj, collectionBehavior];
+        eprintln!("overlay collectionBehavior = {} (expect 257)", val);
     }
 }
 
@@ -364,6 +368,10 @@ pub fn run() {
                                         let _ = w.center();
                                         let _ = w.show();
                                         let _ = w.set_focus();
+                                        // Tauri show()/set_focus() 可能重置 collectionBehavior，
+                                        // 每次弹出都重设，保证全屏 app 下 overlay 跨 Space 可见。
+                                        #[cfg(target_os = "macos")]
+                                        join_all_spaces(&w);
                                     }
                                 }
                             }
