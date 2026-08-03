@@ -299,6 +299,23 @@ fn make_panel(w: &tauri::WebviewWindow) {
     }
 }
 
+/// 让 overlay become key（搜索框能接受输入），但不激活 app——
+/// NSPanel nonActivatingPanel 的 makeKey 不触发 NSApp activate，所以不会把同 app 的
+/// HUD 窗口一起拉到最前（Tauri set_focus 会激活 app，导致 HUD 被牵连提最前）。
+#[cfg(target_os = "macos")]
+fn make_key(w: &tauri::WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    let Ok(ptr) = w.ns_window() else {
+        eprintln!("make_key: ns_window unavailable");
+        return;
+    };
+    let obj = ptr as *mut AnyObject;
+    unsafe {
+        let _: () = msg_send![obj, makeKey];
+    }
+}
+
 /// 返回当前前台 app 的 bundle id（NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier）。
 /// 用于 overlay 失焦检测：NSPanel nonActivatingPanel 不触发 Focused(false)，
 /// 改查 frontmost app 是否变化（变了 = 用户切到别的 app）。cc-view 自身是 accessory app
@@ -468,6 +485,11 @@ pub fn run() {
                                         // 每次 show 前居中——即使上次拖动过，呼出总在屏幕中心
                                         let _ = w.center();
                                         let _ = w.show();
+                                        // 用原生 makeKey 而非 set_focus：后者激活 cc-view app，
+                                        // 会把 HUD 一起拉到最前；NSPanel makeKey 不激活 app。
+                                        #[cfg(target_os = "macos")]
+                                        make_key(&w);
+                                        #[cfg(not(target_os = "macos"))]
                                         let _ = w.set_focus();
                                         // show/set_focus 后再设一次，防 Tauri 内部重置。
                                         #[cfg(target_os = "macos")]
