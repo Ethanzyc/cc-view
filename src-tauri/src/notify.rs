@@ -41,9 +41,11 @@ impl Notifier {
     }
 }
 
-/// 发 macOS 通知（tauri-plugin-notification，走原生 UserNotifications）。
-/// 图标自动取 App bundle icon（icon.icns）——这就是「通知图标 = cc-view 雷达」的来源。
-/// msg/title 不含双引号（调用方确保）。show() 轻量，可在 poll 线程内直接调用。
+/// 发 macOS 通知（tauri-plugin-notification，走原生 UserNotifications / 旧版 NSUserNotificationCenter）。
+/// 图标：build 后 .app 取 bundle icon.icns（雷达）；dev 模式（npm run tauri dev）下插件调
+/// notify_rust::set_application("com.apple.Terminal")，通知图标显示为终端图标——验证雷达
+/// 图标需 `npm run tauri build` 产物。builder 自动转义 title/msg，调用方无需预处理。
+/// show() 轻量，可在 poll 线程内直接调用。
 pub fn send_notification(handle: &tauri::AppHandle, title: &str, msg: &str) {
     use tauri_plugin_notification::NotificationExt;
     let _ = handle

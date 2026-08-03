@@ -367,7 +367,12 @@ pub fn run() {
             set_hud_pinned
         ])
         .setup(|app| {
-            // 通知权限：首次 Prompt 时请求（macOS 弹授权弹窗一次）。Granted/Denied 后不再烦扰。
+            // 通知权限请求块——保留以兼容未来插件版本。
+            // 上游限制（tauri-plugin-notification v2.3.3）：桌面端 request_permission() /
+            // permission_state() 是 no-op stub，总返回 Ok(Granted)，故下方 matches!(Prompt)
+            // 永远 false、request_permission 永不执行，当前无应用内弹窗。macOS 通过旧版
+            // NSUserNotificationCenter 按系统设置自动处理通知权限。若未来插件实现真实桌面权限
+            // 检查，此块即自动生效（首次 Prompt 时请求，Granted/Denied 后不再烦扰）。
             use tauri::plugin::PermissionState;
             use tauri_plugin_notification::NotificationExt;
             let notif = app.notification();
