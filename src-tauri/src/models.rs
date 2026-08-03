@@ -59,6 +59,10 @@ pub struct Session {
     pub status_updated_at: i64,
     pub alive: bool,
     pub focus_hint: FocusHint,
+    /// derived：由 poll_loop 每轮用 snoozed::is_effectively_snoozed 算，不持久化。
+    /// serde default 兼容旧缓存/前端旧版。
+    #[serde(default)]
+    pub snoozed: bool,
 }
 
 #[cfg(test)]
@@ -71,6 +75,7 @@ mod tests {
             project: "p".into(), cwd: "/c".into(), name: "n".into(),
             status: Status::Working, started_at: 0, status_updated_at: 0,
             alive: true, focus_hint: FocusHint::default(),
+            snoozed: false,
         };
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("\"statusUpdatedAt\""));

@@ -9,6 +9,7 @@ mod models;
 mod notify;
 mod permission;
 mod reducer;
+mod snoozed;
 mod statemachine;
 
 use std::collections::hash_map::DefaultHasher;

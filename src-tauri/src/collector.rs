@@ -54,6 +54,7 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
         status_updated_at: raw.status_updated_at.unwrap_or(0),
         alive: true,
         focus_hint: FocusHint::default(),
+        snoozed: false,
     })
 }
 
@@ -304,6 +305,7 @@ pub fn parse_roster(json: &str) -> Vec<Session> {
             status_updated_at: w.started_at.unwrap_or(0),
             alive: true, // collect_sessions 会用 pid 校验覆盖
             focus_hint: FocusHint::default(),
+            snoozed: false,
         }
     }).collect()
 }
@@ -397,6 +399,7 @@ pub fn parse_agents(json: &str) -> Vec<Session> {
             status_updated_at: a.started_at.unwrap_or(0),
             alive: true, // agents --json 只列活进程
             focus_hint: FocusHint::default(),
+            snoozed: false,
         }
     }).collect()
 }
@@ -597,6 +600,7 @@ mod tests {
             project: "p".into(), cwd: "/c".into(), name: "test".into(),
             status: Status::Working, started_at: 0, status_updated_at: 0,
             alive: true, focus_hint: FocusHint::default(),
+            snoozed: false,
         };
         let agents_json = r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","state":"blocked"}]"#;
         let agents_sessions: Vec<Session> = super::parse_agents(agents_json)

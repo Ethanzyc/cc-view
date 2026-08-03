@@ -41,6 +41,7 @@ mod tests {
             status_updated_at: 0,
             alive,
             focus_hint: FocusHint::default(),
+            snoozed: false,
         }
     }
 

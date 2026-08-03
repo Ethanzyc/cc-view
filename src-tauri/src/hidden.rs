@@ -80,6 +80,7 @@ mod tests {
             status_updated_at: 0,
             alive: true,
             focus_hint: FocusHint::default(),
+            snoozed: false,
         }
     }
 
