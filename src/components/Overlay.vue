@@ -222,7 +222,7 @@ onMounted(async () => {
 .list-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0 var(--pad-y);
+  padding: var(--gap-xs) 0 var(--pad-y);
 }
 .list-scroll::-webkit-scrollbar { width: 6px; }
 .list-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -266,7 +266,7 @@ onMounted(async () => {
   justify-content: center;
   line-height: var(--lh-body);
 }
-.line1 { display: flex; align-items: baseline; gap: 6px; }
+.line1 { display: flex; align-items: baseline; gap: var(--gap-sm); }
 .name {
   font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
   color: var(--color-fg);
@@ -286,7 +286,7 @@ onMounted(async () => {
 /* 操作按钮组：默认半透明，hover 行时凸显 */
 .actions {
   display: flex;
-  gap: 4px;
+  gap: var(--gap-xs);
   flex-shrink: 0;
   opacity: 0.6;
   transition: opacity var(--motion-duration) var(--motion-easing);
@@ -299,7 +299,7 @@ onMounted(async () => {
   color: var(--color-muted);
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   font-family: inherit;
-  padding: 4px 8px;
+  padding: var(--gap-xs) var(--gap);
   border-radius: 4px;
   cursor: pointer;
   transition: background var(--motion-duration) var(--motion-easing),
@@ -322,7 +322,7 @@ onMounted(async () => {
 }
 
 .empty {
-  padding: 40px 16px;
+  padding: var(--space-empty) var(--pad-x);
   text-align: center;
   font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
   color: var(--color-tertiary);

@@ -127,6 +127,11 @@ onMounted(async () => {
   --radius-hud: 10px; --radius-overlay: 12px;
   --row-hud: 36px; --row-overlay: 36px;
   --pad-x: 12px; --pad-y: 8px; --gap: 8px;
+  /* 细粒度间距 / 控件字号（散落值提升） */
+  --gap-sm: 6px;   /* 文本行内 micro gap（line1 名字↔状态） */
+  --gap-xs: 4px;   /* 控件间 micro gap（actions / toggle / list-scroll 上下） */
+  --fs-control: 15px; /* 控件按钮字号（hide-btn × / +） */
+  --space-empty: 40px; /* 空状态垂直留白 */
   /* 动效 */
   --motion-duration: 160ms;
   --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
@@ -203,7 +208,7 @@ html, body {
 .toggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-xs);
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   color: var(--color-muted);
   cursor: pointer;
@@ -214,6 +219,11 @@ html, body {
   height: 12px;
   accent-color: var(--color-primary);
   cursor: pointer;
+}
+/* toggle checkbox 键盘 focus 环（与 refresh-btn 一致语义） */
+.toggle input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .refresh-btn {
@@ -248,7 +258,7 @@ html, body {
 .list-scroll {
   max-height: 460px;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: var(--gap-xs) 0;
 }
 
 /* 自定义滚动条（macOS 风格 overlay） */

@@ -183,7 +183,7 @@ async function focus(id: string) {
 .line1 {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 .name {
   font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
@@ -213,7 +213,7 @@ async function focus(id: string) {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gap-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -236,9 +236,9 @@ async function focus(id: string) {
   border: none;
   color: var(--color-tertiary);
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--fs-control);
   line-height: 1;
-  padding: 2px 4px;
+  padding: 2px var(--gap-xs);
   border-radius: 4px;
   transition: color var(--motion-duration) var(--motion-easing),
               background var(--motion-duration) var(--motion-easing);

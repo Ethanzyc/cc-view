@@ -50,7 +50,8 @@
       { "role": "display", "size": "13px", "weight": 700, "lineHeight": 1.3 },
       { "role": "body", "size": "13px", "weight": 600, "lineHeight": 1.25 },
       { "role": "caption", "size": "11px", "weight": 400, "lineHeight": 1.3 },
-      { "role": "utility", "size": "10px", "weight": 400, "lineHeight": 1.3 }
+      { "role": "utility", "size": "10px", "weight": 400, "lineHeight": 1.3 },
+      { "role": "control", "size": "15px", "weight": 400, "lineHeight": 1 }
     ]
   },
   "layout": {
@@ -58,7 +59,7 @@
     "hud": { "width": "340px", "radius": "10px", "rowHeight": "36px" },
     "overlay": { "width": "560px", "radius": "12px", "rowHeight": "36px" },
     "padding": { "x": "12px", "y": "8px" },
-    "gap": "8px",
+    "spacing": { "gap": "8px", "gapSm": "6px", "gapXs": "4px", "spaceEmpty": "40px" },
     "divider": "1px"
   },
   "motion": {
