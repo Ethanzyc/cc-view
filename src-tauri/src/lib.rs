@@ -214,6 +214,31 @@ fn focus_session(id: String, cache: tauri::State<'_, Mutex<Vec<models::Session>>
     }
 }
 
+// --- HUD always-on-top（图钉）command ---
+// 后端驱动：前端不直接调 window API（免 capability 麻烦），由 command 中转 set_always_on_top。
+
+/// 读取 HUD 是否置顶（磁盘无记录时默认 true）。
+#[tauri::command]
+fn get_hud_pinned() -> bool {
+    hud::HudPosition::load()
+        .map(|p| p.always_on_top)
+        .unwrap_or(true)
+}
+
+/// 切换 HUD 置顶状态：先调原生 set_always_on_top，再把 pinned 连同现有 (x, y) 一起持久化。
+#[tauri::command]
+fn set_hud_pinned(pinned: bool, app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_always_on_top(pinned);
+    } else {
+        eprintln!("set_hud_pinned: main window not found");
+    }
+    let (x, y) = hud::HudPosition::load()
+        .map(|p| (p.x, p.y))
+        .unwrap_or((0, 0));
+    hud::HudPosition::save_all(x, y, pinned);
+}
+
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
 /// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
@@ -252,7 +277,9 @@ pub fn run() {
             unhide_session,
             list_hidden,
             focus_session,
-            get_sessions
+            get_sessions,
+            get_hud_pinned,
+            set_hud_pinned
         ])
         .setup(|app| {
             // 给 popover 窗口设原生 vibrancy（NSVisualEffectView，系统渲染）。
@@ -271,6 +298,8 @@ pub fn run() {
                 // 找不到 / 失败时静默使用 tauri.conf.json 默认位置。
                 if let Some(pos) = hud::HudPosition::load() {
                     let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                    // 按记忆的 always_on_top 设置（默认 true，保持现有行为）
+                    let _ = w.set_always_on_top(pos.always_on_top);
                 }
 
                 // 拖动 HUD 后存位置：WindowEvent::Moved 携带 PhysicalPosition<i32>，

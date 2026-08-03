@@ -19,6 +19,8 @@ const isOverlay = getCurrentWebviewWindow().label === 'overlay';
 const all = ref<Session[]>([]);
 const hidden = ref<string[]>([]);
 const showHidden = ref(false);
+// HUD 图钉（always-on-top）状态：后端 command 驱动，前端不直接调 window API。
+const pinned = ref(true);
 const visible = computed(() =>
   showHidden.value ? all.value : all.value.filter(s => !hidden.value.includes(s.id)),
 );
@@ -61,8 +63,25 @@ onMounted(async () => {
   } catch (e) {
     console.error('get_sessions on mount failed', e);
   }
+  // 拉取图钉初始状态（后端 command 读取 hud-position.json）。
+  try {
+    pinned.value = await invoke<boolean>('get_hud_pinned');
+  } catch (e) {
+    console.error('get_hud_pinned on mount failed', e);
+  }
   await listen<Session[]>('sessions', e => { all.value = e.payload; });
 });
+
+// 切换图钉：调后端 set_hud_pinned（同时 set_always_on_top + 持久化），更新本地 ref。
+async function togglePin() {
+  const next = !pinned.value;
+  try {
+    await invoke('set_hud_pinned', { pinned: next });
+    pinned.value = next;
+  } catch (e) {
+    console.error('set_hud_pinned failed', e);
+  }
+}
 </script>
 
 <template>
@@ -82,6 +101,20 @@ onMounted(async () => {
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M13.5 8 A5.5 5.5 0 1 1 11 3.6" />
           <path d="M13.5 2.5 V5 H11" />
+        </svg>
+      </button>
+      <button
+        class="pin-btn"
+        :class="{ pinned }"
+        :title="pinned ? '取消置顶' : '置顶'"
+        :aria-label="pinned ? '取消置顶' : '置顶'"
+        :aria-pressed="pinned"
+        @click="togglePin"
+      >
+        <!-- 图钉（Lucide pin 风格）：置顶时 path 填充 currentColor，不置顶时只描边 -->
+        <svg width="13" height="13" viewBox="0 0 24 24" :fill="pinned ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="17" x2="12" y2="22" />
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
         </svg>
       </button>
     </header>
@@ -189,7 +222,8 @@ html, body {
   padding: var(--pad-y) var(--pad-x);
 }
 .title-bar .toggle,
-.title-bar .refresh-btn {
+.title-bar .refresh-btn,
+.title-bar .pin-btn {
   -webkit-app-region: no-drag;
 }
 .title {
@@ -244,6 +278,34 @@ html, body {
   background: var(--color-hover);
 }
 .refresh-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* pin-btn 与 refresh-btn 同尺寸/交互模式，仅颜色语义不同：
+   不置顶 → tertiary（灰），置顶 → primary（蓝高亮），hover → fg + hover bg。
+   颜色全部走 token，无硬编码。 */
+.pin-btn {
+  background: none;
+  border: none;
+  color: var(--color-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color var(--motion-duration) var(--motion-easing),
+              background var(--motion-duration) var(--motion-easing);
+}
+.pin-btn.pinned {
+  color: var(--color-primary);
+}
+.pin-btn:hover {
+  color: var(--color-fg);
+  background: var(--color-hover);
+}
+.pin-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
