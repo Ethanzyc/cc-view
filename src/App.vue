@@ -82,6 +82,17 @@ async function togglePin() {
     console.error('set_hud_pinned failed', e);
   }
 }
+
+// 搁置/恢复 乐观更新：SessionList 调 snooze_session/unsnooze_session 成功后 emit，
+// 这里直接改 all[i].snoozed，不等 3s poll_loop emit——分组/灰显立即生效。
+function onSnooze(id: string) {
+  const s = all.value.find(x => x.id === id);
+  if (s) s.snoozed = true;
+}
+function onUnsnooze(id: string) {
+  const s = all.value.find(x => x.id === id);
+  if (s) s.snoozed = false;
+}
 </script>
 
 <template>
@@ -125,6 +136,8 @@ async function togglePin() {
         :hidden="hidden"
         @hide="refreshHidden"
         @unhide="refreshHidden"
+        @snooze="onSnooze"
+        @unsnooze="onUnsnooze"
       />
     </div>
   </div>
