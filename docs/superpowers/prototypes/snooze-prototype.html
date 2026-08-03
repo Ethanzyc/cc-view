@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>cc-view · 搁置(Snooze)功能原型 v2</title>
+<style>
+  /* ===== 复刻 cc-view 设计 token（src/App.vue :root，dark 默认） ===== */
+  :root {
+    --color-bg: rgba(28, 28, 30, 0.72);
+    --color-fg: #E5E5E7;
+    --color-muted: #8E8E93;
+    --color-tertiary: #6E6E73;
+    --color-primary: #0A84FF;
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-hover: rgba(255, 255, 255, 0.08);
+    --status-working: #30D158;
+    --status-waiting: #0A84FF;
+    --status-permission: #FF9F0A;
+    --status-shell: #BF5AF2;
+    --status-compacting: #64D2FF;
+    --status-snoozed: #8E8E93;
+    --font-body: -apple-system, "PingFang SC", "SF Pro Text", sans-serif;
+    --font-utility: "SF Mono", ui-monospace, "Menlo", monospace;
+    --fs-display: 13px; --fw-display: 700; --lh-display: 1.3;
+    --fs-body: 13px;    --fw-body: 600;    --lh-body: 1.25;
+    --fs-caption: 11px; --fw-caption: 400; --lh-caption: 1.3;
+    --fs-utility: 10px; --fw-utility: 400; --lh-utility: 1.3;
+    --radius-hud: 10px; --radius-overlay: 12px;
+    --row-hud: 36px; --row-overlay: 36px;
+    --pad-x: 12px; --pad-y: 8px; --gap: 8px;
+    --gap-sm: 6px; --gap-xs: 4px; --fs-control: 15px;
+    --motion-duration: 160ms;
+    --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font-body); -webkit-font-smoothing: antialiased; user-select: none; }
+  body {
+    min-height: 100vh; padding: 40px 24px 64px;
+    background:
+      radial-gradient(1200px 800px at 20% 10%, #3a5a7a 0%, transparent 60%),
+      radial-gradient(1000px 700px at 85% 80%, #6a4a6a 0%, transparent 55%),
+      linear-gradient(135deg, #1a2230 0%, #2a1f2e 100%);
+  }
+  .intro { max-width: 820px; margin: 0 auto 28px; color: #c7c7cc; font-size: 13px; line-height: 1.6; }
+  .intro h1 { font-size: 17px; color: #fff; margin: 0 0 8px; font-weight: 700; letter-spacing: -0.01em; }
+  .intro .openpts { margin: 10px 0 0; padding-left: 18px; }
+  .intro .openpts li { margin: 3px 0; }
+  .intro .openpts b { color: #ffd479; }
+  .intro code { font-family: var(--font-utility); font-size: 12px; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; }
+
+  .stage { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .pane { display: flex; flex-direction: column; align-items: center; }
+  .pane-caption { color: rgba(255,255,255,0.55); font-size: 11px; margin-bottom: 8px; letter-spacing: 0.04em; text-transform: uppercase; font-family: var(--font-utility); }
+
+  .panel {
+    background: var(--color-bg);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border-radius: var(--radius-hud); overflow: hidden; color: var(--color-fg);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+  }
+  .hud { width: 330px; }
+  .overlay { width: 380px; border-radius: var(--radius-overlay); }
+
+  .title-bar { display: flex; align-items: center; gap: var(--gap); padding: var(--pad-y) var(--pad-x); }
+  .title { font: var(--fw-display) var(--fs-display)/var(--lh-display) var(--font-body); letter-spacing: -0.01em; }
+  .count { font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility); color: var(--color-tertiary); font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1; }
+  .iconbtn { background: none; border: none; color: var(--color-tertiary); cursor: pointer; padding: 2px; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: color var(--motion-duration) var(--motion-easing), background var(--motion-duration) var(--motion-easing); }
+  .iconbtn:hover { color: var(--color-fg); background: var(--color-hover); }
+  .divider { height: 1px; background: var(--color-border); margin: 0 var(--gap); }
+
+  .list-scroll { max-height: 480px; overflow-y: auto; padding: var(--gap-xs) 0; }
+  .list-scroll::-webkit-scrollbar { width: 6px; }
+  .list-scroll::-webkit-scrollbar-track { background: transparent; }
+  .list-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+
+  /* 一级分组小标题：待介入 / 已搁置 / 已退出 */
+  .group-head { display: flex; align-items: center; gap: 6px; padding: 9px var(--pad-x) 4px; font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility); color: var(--color-tertiary); letter-spacing: 0.05em; text-transform: uppercase; }
+  .group-head .cnt { color: var(--color-tertiary); background: var(--color-border); border-radius: 8px; padding: 0 6px; font-size: 10px; line-height: 14px; }
+  /* 二级：项目小标题 */
+  .proj-head { padding: 5px var(--pad-x) 2px; font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility); color: var(--color-tertiary); }
+  .group-sep { height: 1px; background: var(--color-border); margin: 4px var(--gap) 0; }
+  .dead-more { padding: 4px var(--pad-x) 7px; font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility); color: var(--color-tertiary); }
+
+  .row { display: flex; align-items: center; gap: var(--gap); height: var(--row-hud); padding: 0 var(--pad-x); cursor: pointer; border-left: 2px solid transparent; transition: background var(--motion-duration) var(--motion-easing); }
+  .row:hover { background: var(--color-hover); }
+  .row.perm { border-left-color: var(--status-permission); background: rgba(255,159,10,0.10); }
+  .row.perm:hover { background: rgba(255,159,10,0.16); }
+  .row.dead { opacity: 0.45; }
+  .row.snoozed { opacity: 0.5; }
+  .ico { flex-shrink: 0; display: block; }
+  .ico-working { animation: breathe 2400ms ease-in-out infinite; }
+  @keyframes breathe { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+  .info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: var(--lh-body); }
+  .line1 { display: flex; align-items: baseline; gap: var(--gap-sm); }
+  .name { font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body); color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status-zh { font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body); color: var(--color-muted); flex-shrink: 0; }
+  .status-zh.perm { color: var(--status-permission); }
+  .line2 { font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body); color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+  .ago { font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility); color: var(--color-tertiary); flex-shrink: 0; display: inline-flex; align-items: center; gap: var(--gap-xs); font-variant-numeric: tabular-nums; }
+  .ago.fresh { color: var(--color-primary); }
+  .fresh-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-primary); display: inline-block; }
+
+  .actions { display: flex; gap: var(--gap-xs); flex-shrink: 0; }
+  .act { background: none; border: none; color: var(--color-tertiary); cursor: pointer; padding: 2px var(--gap-xs); border-radius: 4px; line-height: 1; display: flex; align-items: center; justify-content: center; transition: color var(--motion-duration) var(--motion-easing), background var(--motion-duration) var(--motion-easing); }
+  .act:hover { color: var(--color-fg); background: var(--color-hover); }
+  .act.copy { background: var(--color-border); color: var(--color-muted); font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body); padding: 3px var(--gap); border-radius: 4px; }
+  .act.copy:hover { background: var(--color-hover); color: var(--color-fg); }
+
+  /* Overlay 搜索栏 */
+  .search-bar { display: flex; align-items: center; gap: var(--gap); padding: var(--pad-y) var(--pad-x); }
+  .search-bar:focus-within { box-shadow: inset 0 -1.5px 0 var(--color-primary); }
+  .search-icon { color: var(--color-tertiary); flex-shrink: 0; }
+  .search { flex: 1; background: transparent; border: none; outline: none; font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body); color: var(--color-fg); font-family: inherit; min-width: 0; }
+  .search::placeholder { color: var(--color-tertiary); }
+  .overlay-count { font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility); color: var(--color-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+  mark { background: rgba(255,214,121,0.28); color: #ffd479; border-radius: 2px; padding: 0 1px; }
+  .empty { padding: 40px var(--pad-x); text-align: center; font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body); color: var(--color-tertiary); }
+  .hint { margin-top: 10px; color: rgba(255,255,255,0.4); font-size: 11px; max-width: 360px; text-align: center; line-height: 1.5; font-family: var(--font-utility); }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>搁置（Snooze）功能原型 v2 — HUD + Overlay</h1>
+    <div>独立原型，未改项目源码。复刻 cc-view token 与状态图标。<b>v2 改动</b>：① 待介入内<b>按项目聚类</b>（二级小标题）；② Overlay 补齐 <b>ago 时间 + perm 橙边 + fresh 蓝点</b>（与 HUD 一致）；③ <b>搜索重写</b>（扁平列表 + 匹配高亮 + 结果计数）；④ dead <b>限 3 个</b>，更早的折叠；⑤ 已搁置行保留 cc 真实状态文字。</div>
+    <ul class="openpts">
+      <li><b>显示名称</b>：行标题 = <code>Session.name</code>（Claude Code 数据源提供，如 "cc-view-94" 派生名 / 任务描述）。原型为 mock。</li>
+      <li><b>排序</b>：状态档（等权限&gt;等输入&gt;工作&gt;Shell&gt;压缩&gt;搁置&gt;已退出）→ <b>项目聚类</b> → 时间近的靠前。</li>
+      <li><b>待定</b>：项目小标题显示完整路径还是只 tail（<code>~/ai/fang</code>）？dead 上限 3 合适吗？</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <!-- HUD -->
+    <div class="pane">
+      <div class="pane-caption">HUD 主窗口</div>
+      <div class="panel hud" id="hud">
+        <div class="title-bar">
+          <span class="title">Claude Code 会话</span>
+          <span class="count" id="hud-count">0 个活跃</span>
+          <span class="spacer"></span>
+          <button class="iconbtn" title="刷新"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8 A5.5 5.5 0 1 1 11 3.6"/><path d="M13.5 2.5 V5 H11"/></svg></button>
+          <button class="iconbtn" title="置顶"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg></button>
+        </div>
+        <div class="divider"></div>
+        <div class="list-scroll"><ul class="list" id="hud-list"></ul></div>
+      </div>
+      <div class="hint">待介入内同项目会话聚在一起；等输入行点「搁置」→ 移到已搁置组并灰显。</div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="pane">
+      <div class="pane-caption">Overlay 命令面板（优先级更高）</div>
+      <div class="panel overlay" id="overlay">
+        <div class="search-bar">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg>
+          <input class="search" id="overlay-search" placeholder="搜索会话（名称 / 项目）..." spellcheck="false" />
+          <span class="overlay-count" id="overlay-count"></span>
+        </div>
+        <div class="divider"></div>
+        <div class="list-scroll"><ul class="list" id="overlay-list"></ul></div>
+      </div>
+      <div class="hint">= HUD 全集 + 搜索。输入即时过滤、高亮匹配、显示结果数；时间/颜色逻辑与 HUD 一致。</div>
+    </div>
+  </div>
+
+<script>
+  /* 状态图标（复刻 StatusIcon.vue） */
+  const ICONS = {
+    working: '<path d="M9 1.5 L3.5 9 L7.5 9 L7 14.5 L12.5 7 L8.5 7 Z"/>',
+    waitingForInput: '<g><path d="M3.5 3 H12.5 A1.5 1.5 0 0 1 14 4.5 V9 A1.5 1.5 0 0 1 12.5 10.5 H7.5 L5 13 V10.5 H3.5 A1.5 1.5 0 0 1 2 9 V4.5 A1.5 1.5 0 0 1 3.5 3 Z"/><circle cx="5.3" cy="6.75" r="0.55" fill="currentColor" stroke="none"/><circle cx="8" cy="6.75" r="0.55" fill="currentColor" stroke="none"/><circle cx="10.7" cy="6.75" r="0.55" fill="currentColor" stroke="none"/></g>',
+    needsPermission: '<g><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></g>',
+    shell: '<g><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 6.5 L7 8.5 L5 10.5"/><path d="M9 10.5 H11.5"/></g>',
+    compacting: '<g><path d="M8 2.5 V6 M6.2 4.3 L8 6 L9.8 4.3"/><path d="M13.5 8 H10 M11.7 6.2 L10 8 L11.7 9.8"/><path d="M8 13.5 V10 M6.2 11.7 L8 10 L9.8 11.7"/><path d="M2.5 8 H6 M4.3 6.2 L6 8 L4.3 9.8"/></g>',
+  };
+  const STATUS_COLOR = { working:'var(--status-working)', waitingForInput:'var(--status-waiting)', needsPermission:'var(--status-permission)', shell:'var(--status-shell)', compacting:'var(--status-compacting)' };
+  const STATUS_ZH = { working:'工作中', waitingForInput:'等输入', needsPermission:'等权限', shell:'Shell', compacting:'压缩中' };
+  const DEAD_LIMIT = 3;
+
+  /* Mock：刻意让 cc-view / fang 项目各有 2 个，体现项目聚类 */
+  let sessions = [
+    { id:'view-overlay', name:'view-overlay', project:'/Users/zhuyuchen/ai/cc-view', status:'needsPermission', alive:true, ago:'30s', fresh:true },
+    { id:'view-hud',     name:'view-hud',     project:'/Users/zhuyuchen/ai/cc-view', status:'waitingForInput', alive:true, ago:'2m', fresh:true },
+    { id:'fang-dd',      name:'fang-dd',      project:'/Users/zhuyuchen/ai/fang',    status:'working',  alive:true, ago:'3m' },
+    { id:'fang-refactor',name:'fang-refactor',project:'/Users/zhuyuchen/ai/fang',    status:'waitingForInput', alive:true, ago:'12m' },
+    { id:'cc-job-dc',    name:'cc-job-dc',    project:'/Users/zhuyuchen/ai/cc-job',  status:'shell',    alive:true, ago:'8m' },
+    { id:'web-yx',       name:'web-yx',       project:'/Users/zhuyuchen/ai/web',     status:'waitingForInput', alive:true, ago:'5h', snoozed:true },
+    { id:'note-snap',    name:'note-snap',    project:'/Users/zhuyuchen/ai/note',    status:'waitingForInput', alive:true, ago:'2h', snoozed:true },
+    { id:'old-exp',      name:'old-exp',      project:'/Users/zhuyuchen/ai/exp',     status:'waitingForInput', alive:false, ago:'1d' },
+    { id:'old-test',     name:'old-test',     project:'/Users/zhuyuchen/ai/test',    status:'working',  alive:false, ago:'2d' },
+    { id:'old-log',      name:'old-log',      project:'/Users/zhuyuchen/ai/log',     status:'waitingForInput', alive:false, ago:'3d' },
+    { id:'old-api',      name:'old-api',      project:'/Users/zhuyuchen/ai/api',     status:'shell',    alive:false, ago:'4d' },
+  ];
+
+  function rank(s){
+    if (s.snoozed) return s.alive ? 5.5 : 6.5;
+    if (!s.alive) return 6;
+    return { needsPermission:1, waitingForInput:2, working:3, shell:4, compacting:5 }[s.status] ?? 99;
+  }
+  const AGO_ORDER = ['30s','1m','2m','3m','8m','12m','2h','5h','1d','2d','3d','4d'];
+  const agoIdx = a => { const i = AGO_ORDER.indexOf(a); return i<0 ? 999 : i; };
+  // 排序：状态档 → 项目聚类 → 时间近的靠前
+  function sorted(list){
+    return [...list].sort((a,b)=> rank(a)-rank(b) || a.project.localeCompare(b.project) || agoIdx(a.ago)-agoIdx(b.ago));
+  }
+  const projShort = p => p.replace('/Users/zhuyuchen/', '~/');
+  function iconSvg(status){
+    return `<svg class="ico ${status==='working'?'ico-working':''}" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:${STATUS_COLOR[status]}">${ICONS[status]}</svg>`;
+  }
+  const escapeHtml = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  function hl(text, k){
+    if(!k) return escapeHtml(text);
+    const i = text.toLowerCase().indexOf(k.toLowerCase());
+    if(i<0) return escapeHtml(text);
+    return escapeHtml(text.slice(0,i)) + '<mark>' + escapeHtml(text.slice(i,i+k.length)) + '</mark>' + escapeHtml(text.slice(i+k.length));
+  }
+  function snoozeBtn(s){
+    if(!s.alive) return '';
+    if(s.snoozed) return '<button class="act copy" data-act title="恢复（取消搁置）" style="padding:3px 7px">恢复</button>';
+    if(s.status==='waitingForInput') return '<button class="act copy" data-act title="搁置（暂时不管）" style="padding:3px 7px">搁置</button>';
+    return '';
+  }
+
+  // HUD 行（无搜索高亮）
+  function hudRow(s){
+    const isFresh = s.fresh && !s.snoozed && s.alive;
+    const zhCls = s.status==='needsPermission' ? 'perm' : '';
+    const rowCls = ['row', !s.alive&&'dead', s.snoozed&&'snoozed', s.status==='needsPermission'&&!s.snoozed&&'perm'].filter(Boolean).join(' ');
+    return `<li class="${rowCls}" data-id="${s.id}">
+      ${iconSvg(s.status)}
+      <div class="info"><div class="line1"><span class="name">${escapeHtml(s.name)}</span><span class="status-zh ${zhCls}">${STATUS_ZH[s.status]}</span></div><div class="line2">${escapeHtml(projShort(s.project))}</div></div>
+      <span class="ago ${isFresh?'fresh':''}">${isFresh?'<span class="fresh-dot"></span>':''}${s.ago}</span>
+      <div class="actions">${snoozeBtn(s)}</div></li>`;
+  }
+  // Overlay 行（可带搜索高亮）
+  function overlayRow(s, k){
+    const isFresh = s.fresh && !s.snoozed && s.alive;
+    const zhCls = s.status==='needsPermission' ? 'perm' : '';
+    const rowCls = ['row', !s.alive&&'dead', s.snoozed&&'snoozed', s.status==='needsPermission'&&!s.snoozed&&'perm'].filter(Boolean).join(' ');
+    return `<li class="${rowCls}" data-id="${s.id}">
+      ${iconSvg(s.status)}
+      <div class="info"><div class="line1"><span class="name">${hl(s.name,k)}</span><span class="status-zh ${zhCls}" style="font-size:10px">${STATUS_ZH[s.status]}</span></div><div class="line2">${hl(projShort(s.project),k)}</div></div>
+      <span class="ago ${isFresh?'fresh':''}">${isFresh?'<span class="fresh-dot"></span>':''}${s.ago}</span>
+      <div class="actions" style="opacity:.6">${snoozeBtn(s)}<button class="act copy" data-copy>复制 ID</button></div></li>`;
+  }
+
+  // 分组渲染：一级(状态) > 二级(项目)
+  function sectionHtml(rows, label, rowFn, k){
+    if(!rows.length) return '';
+    let html = `<li class="group-head">${label} <span class="cnt">${rows.length}</span></li>`;
+    const byProj = new Map();
+    for(const s of rows){ if(!byProj.has(s.project)) byProj.set(s.project, []); byProj.get(s.project).push(s); }
+    for(const [proj, sess] of byProj){
+      html += `<li class="proj-head">${k ? hl(projShort(proj),k) : escapeHtml(projShort(proj))}</li>`;
+      html += sess.map(s => rowFn(s, k)).join('');
+    }
+    return html;
+  }
+  // dead 超限折叠：保留最近的 DEAD_LIMIT 个
+  function capDead(dead){
+    if(dead.length <= DEAD_LIMIT) return { show: dead, hidden: 0 };
+    const near = [...dead].sort((a,b)=> agoIdx(a.ago)-agoIdx(b.ago));
+    return { show: near.slice(0, DEAD_LIMIT), hidden: dead.length - DEAD_LIMIT };
+  }
+
+  function renderHUD(){
+    const list = sorted(sessions);
+    const active = list.filter(s=>s.alive && !s.snoozed);
+    const snoozedAlive = list.filter(s=>s.alive && s.snoozed);
+    const { show:deadShow, hidden:deadHidden } = capDead(list.filter(s=>!s.alive));
+    document.getElementById('hud-count').textContent = `${active.length} 个活跃${snoozedAlive.length?` · ${snoozedAlive.length} 搁置`:''}`;
+    let html = sectionHtml(active, '待介入', hudRow);
+    if(snoozedAlive.length) html += '<li class="group-sep"></li>' + sectionHtml(snoozedAlive, '已搁置', hudRow);
+    if(deadShow.length){ html += '<li class="group-sep"></li>' + sectionHtml(deadShow, '已退出', hudRow); if(deadHidden) html += `<li class="dead-more">+${deadHidden} 个更早的已隐藏（共 ${deadShow.length+deadHidden}）</li>`; }
+    document.getElementById('hud-list').innerHTML = html || '<li class="empty">暂无会话</li>';
+  }
+
+  let overlayQuery = '';
+  function renderOverlay(){
+    const list = sorted(sessions);
+    const k = overlayQuery.trim();
+    const kl = k.toLowerCase();
+    const listEl = document.getElementById('overlay-list');
+    const countEl = document.getElementById('overlay-count');
+    if(kl){
+      const filtered = list.filter(s => (s.name+' '+projShort(s.project)).toLowerCase().includes(kl));
+      countEl.textContent = `${filtered.length} 个结果`;
+      listEl.innerHTML = filtered.length
+        ? filtered.map(s => overlayRow(s, kl)).join('')
+        : `<li class="empty">无匹配 “${escapeHtml(k)}”</li>`;
+    } else {
+      const active = list.filter(s=>s.alive && !s.snoozed);
+      const snoozedAlive = list.filter(s=>s.alive && s.snoozed);
+      const { show:deadShow, hidden:deadHidden } = capDead(list.filter(s=>!s.alive));
+      countEl.textContent = `${active.length} 待介入`;
+      let html = sectionHtml(active, '待介入', overlayRow);
+      if(snoozedAlive.length) html += '<li class="group-sep"></li>' + sectionHtml(snoozedAlive, '已搁置', overlayRow);
+      if(deadShow.length){ html += '<li class="group-sep"></li>' + sectionHtml(deadShow, '已退出', overlayRow); if(deadHidden) html += `<li class="dead-more">+${deadHidden} 个更早的已隐藏</li>`; }
+      listEl.innerHTML = html || '<li class="empty">暂无会话</li>';
+    }
+  }
+  const render = () => { renderHUD(); renderOverlay(); };
+
+  // 点击交互：搁置/恢复 切换；复制 ID 反馈
+  function bind(rootId){
+    document.getElementById(rootId).addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-act],[data-copy]');
+      const li = e.target.closest('[data-id]');
+      if(!btn || !li) return;
+      if(btn.hasAttribute('data-copy')){
+        btn.textContent = '已复制'; btn.style.color = 'var(--color-primary)'; btn.style.background = 'rgba(10,132,255,0.12)';
+        setTimeout(()=>{ btn.textContent='复制 ID'; btn.style.color=''; btn.style.background=''; }, 1200);
+        return;
+      }
+      const s = sessions.find(x => x.id === li.dataset.id);
+      if(s){ s.snoozed = !s.snoozed; render(); }
+    });
+  }
+  document.getElementById('overlay-search').addEventListener('input', (e)=>{ overlayQuery = e.target.value; renderOverlay(); });
+  bind('hud'); bind('overlay');
+  render();
+</script>
+</body>
+</html>
