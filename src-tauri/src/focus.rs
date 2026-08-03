@@ -18,6 +18,6 @@ pub fn activate_host(host: &Host) {
         Host::Unknown => return, // 未知 host 不动作
     };
     let script = format!("tell application \"{}\" to activate", app);
-    // spawn 不 wait：激活是异步副作用，失败静默忽略（let _ =）
-    let _ = Command::new("osascript").arg("-e").arg(script).spawn();
+    // 全路径 osascript（GUI app 打包后 PATH 可能不含 /usr/bin）+ spawn 不 wait（激活是异步副作用）。
+    let _ = Command::new("/usr/bin/osascript").arg("-e").arg(script).spawn();
 }
