@@ -42,9 +42,9 @@
     ],
     "trayIcon": {
       "id": "main",
-      "iconPath": "icons/icon.png",
+      "iconPath": "icons/tray.png",
       "tooltip": "cc-view",
-      "iconAsTemplate": false,
+      "iconAsTemplate": true,
       "showMenuOnLeftClick": false
     },
     "security": {

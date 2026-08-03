@@ -50,6 +50,10 @@ fn tint_orange(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
     tauri::image::Image::new_owned(out, w, h)
 }
 
+/// 单色 menubar 剪影（template image：黑 + 透明）。
+/// include_bytes 编译期嵌入，运行时无需读盘；改图后需重新编译。
+const TRAY_PNG: &[u8] = include_bytes!("../icons/tray.png");
+
 /// 后台线程：每 3s collect → reduce → notify → hash 去重 → 仅变化时 emit("sessions")。
 /// 同时每轮聚合 need_attention/working 计数 → tray.set_tooltip + set_icon。
 fn start_poll_loop(handle: tauri::AppHandle) {
@@ -57,17 +61,12 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         let mut last_hash = 0u64;
         // 线程私有 notifier——observe 每轮调用以维护状态迁移
         let mut notifier = notify::Notifier::new();
-        // 预计算两份图标：默认（活→无 attention 时）+ 橙（有 attention 时）。
-        // default_window_icon 返回 &Image<'a>（借 handle），先 cloned 再 to_owned 拿到
-        // Image<'static>（rgba owned）——后续循环里不再借 handle。参考 tauri app/plugin.rs。
-        let default_icon: Option<tauri::image::Image<'static>> = handle
-            .default_window_icon()
-            .cloned()
-            .map(tauri::image::Image::to_owned);
-        let orange_icon = default_icon.as_ref().map(tint_orange);
-        if default_icon.is_none() {
-            eprintln!("poll_loop: default_window_icon missing, set_icon disabled");
-        }
+        // 加载嵌入的单色剪影（template image）+ 预计算 attention 态橙色版。
+        // tauri::image::Image::from_bytes 解码 PNG（需 tauri feature "image-png"）。
+        let tray_icon = tauri::image::Image::from_bytes(TRAY_PNG)
+            .map_err(|e| eprintln!("poll_loop: embedded tray.png decode failed: {e}"))
+            .ok();
+        let orange_icon = tray_icon.as_ref().map(tint_orange);
         // 跟踪 attention 状态，仅在 0↔>0 跳变时 set_icon（避免每轮 main-thread IPC 重绘）
         let mut last_attention = false;
         loop {
@@ -111,17 +110,19 @@ fn start_poll_loop(handle: tauri::AppHandle) {
             if let Some(tray) = handle.tray_by_id("main") {
                 // set_tooltip 走 main-thread IPC 但开销极小，每轮更新无妨
                 let _ = tray.set_tooltip(Some(tip));
-                // set_icon 仅在 attention 状态跳变时调用（0↔>0），避免无谓重绘
+                // set_icon_with_as_template 原子切换图标 + template 状态（macOS）：
+                // 正常 → 单色剪影 + template=true（自动适配深浅栏）；
+                // attention → 橙色实色 + template=false（跳出 menubar 引起注意）。
                 let has_attention = need_attention > 0;
                 if has_attention != last_attention {
                     last_attention = has_attention;
-                    let img = if has_attention {
-                        orange_icon.clone()
+                    let (icon, as_template) = if has_attention {
+                        (orange_icon.as_ref(), false)
                     } else {
-                        default_icon.clone()
+                        (tray_icon.as_ref(), true)
                     };
-                    if let Some(img) = img {
-                        let _ = tray.set_icon(Some(img));
+                    if let Some(img) = icon {
+                        let _ = tray.set_icon_with_as_template(Some(img.clone()), as_template);
                     }
                 }
             }
