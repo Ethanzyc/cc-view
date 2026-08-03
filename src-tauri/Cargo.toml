@@ -26,3 +26,8 @@ serde_json = "1"
 sysinfo = "0.32"  # Plan 2 §7/§8 discovery 将用于进程 env 扫描；Plan 1 暂未使用
 libc = "0.2"
 dirs = "5"
+
+# macOS 原生 NSWindow 调用：给 overlay 设 collectionBehavior 跨 Space（全屏可见）
+# objc2 已被 tauri 间接依赖（v0.6.4），此处显式声明仅复用同一版本，不触发重复编译。
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"

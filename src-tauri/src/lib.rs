@@ -214,6 +214,29 @@ fn focus_session(id: String, cache: tauri::State<'_, Mutex<Vec<models::Session>>
     }
 }
 
+/// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
+/// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
+/// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
+///   - CanJoinAllSpaces    (1 << 0)   跨所有 Space 显示
+///   - FullScreenAuxiliary (1 << 8)   作为全屏辅助浮层，盖在全屏 app 内容之上
+/// 合计 = 1 | 256 = 257。仅对 overlay 调；HUD（main）保持默认（不跨全屏，避免干扰沉浸）。
+#[cfg(target_os = "macos")]
+fn join_all_spaces(w: &tauri::WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let Ok(ptr) = w.ns_window() else {
+        eprintln!("join_all_spaces: ns_window unavailable, overlay will not cross spaces");
+        return;
+    };
+    let obj = ptr as *mut AnyObject;
+    // CanJoinAllSpaces (1<<0) | FullScreenAuxiliary (1<<8)
+    let behavior: objc2::ffi::NSUInteger = (1 << 0) | (1 << 8);
+    unsafe {
+        let _: () = msg_send![obj, setCollectionBehavior: behavior];
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -270,6 +293,11 @@ pub fn run() {
                         .radius(12.)
                         .build(),
                 );
+
+                // 跨 Space / 全屏可见：overlay 需在全屏 app 下也能弹出（Spotlight/Raycast 行为）
+                #[cfg(target_os = "macos")]
+                join_all_spaces(&overlay);
+
                 let w = overlay.clone();
                 overlay.on_window_event(move |e| {
                     if let tauri::WindowEvent::Focused(false) = e {
