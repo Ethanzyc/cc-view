@@ -299,6 +299,35 @@ fn make_panel(w: &tauri::WebviewWindow) {
     }
 }
 
+/// 返回当前前台 app 的 bundle id（NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier）。
+/// 用于 overlay 失焦检测：NSPanel nonActivatingPanel 不触发 Focused(false)，
+/// 改查 frontmost app 是否变化（变了 = 用户切到别的 app）。cc-view 自身是 accessory app
+/// （LSUIElement）从不是 frontmost，所以基准值是用户呼出时所在的 app。
+#[cfg(target_os = "macos")]
+fn frontmost_bundle_id() -> Option<String> {
+    use objc2::{class, msg_send};
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use std::ffi::CStr;
+
+    unsafe {
+        // [NSWorkspace sharedWorkspace]
+        let ws: Retained<AnyObject> = msg_send![class!(NSWorkspace), sharedWorkspace];
+        // .frontmostApplication（NSRunningApplication?，刚启动无前台 app 时可能为 nil）
+        let app: Option<Retained<AnyObject>> = msg_send![&ws, frontmostApplication];
+        let app = app?;
+        // .bundleIdentifier（NSString?，可能为 nil）
+        let bid: Option<Retained<AnyObject>> = msg_send![&app, bundleIdentifier];
+        let bid = bid?;
+        // [NSString UTF8String] → *const c_char（null-terminated UTF-8，NSString 生命周期与 bid 绑定）
+        let utf8: *const std::os::raw::c_char = msg_send![&bid, UTF8String];
+        if utf8.is_null() {
+            return None;
+        }
+        Some(CStr::from_ptr(utf8).to_string_lossy().into_owned())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -431,6 +460,13 @@ pub fn run() {
                                     if w.is_visible().unwrap_or(false) {
                                         let _ = w.hide();
                                     } else {
+                                        // 在 center/show 之前记录当前前台 app（用户此刻所在的 app）。
+                                        // 必须在 show/set_focus 之前捕获——nonActivatingPanel 虽不激活 app，
+                                        // 但仍可能扰动 frontmost，先存基准值。
+                                        // NSPanel nonActivating 不触发 Focused(false)，改查 frontmost 变化检测失焦。
+                                        #[cfg(target_os = "macos")]
+                                        let initial_front = frontmost_bundle_id();
+
                                         // 呼出时抢焦点（overlay 用于搜索输入，区别于 HUD 不抢焦点）
                                         // 关键：show() 之前先设 collectionBehavior + level——
                                         // 否则 show 那刻窗口被 macOS 钉在桌面 Space（事后设也来不及）。
@@ -443,6 +479,37 @@ pub fn run() {
                                         // show/set_focus 后再设一次，防 Tauri 内部重置。
                                         #[cfg(target_os = "macos")]
                                         join_all_spaces(&w);
+
+                                        // show 后启动失焦检测轮询（Alfred/Raycast 做法）：
+                                        // NSPanel nonActivatingPanel 点别的 app 时不 resign key →
+                                        // on_window_event(Focused(false)) 不触发。改每 200ms 查 frontmost app，
+                                        // 一旦变了（用户切到别的 app）→ hide overlay。
+                                        // overlay 不再 visible 时（别的方式收起）轮询自动退出，无泄漏。
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            let app_handle = app.clone();
+                                            std::thread::spawn(move || {
+                                                loop {
+                                                    std::thread::sleep(
+                                                        std::time::Duration::from_millis(200),
+                                                    );
+                                                    let Some(w) =
+                                                        app_handle.get_webview_window("overlay")
+                                                    else {
+                                                        break;
+                                                    };
+                                                    // overlay 已 hide（别的方式收起）→ 退出
+                                                    if !w.is_visible().unwrap_or(false) {
+                                                        break;
+                                                    }
+                                                    // 前台 app 变了（用户切到别的 app）→ hide
+                                                    if frontmost_bundle_id() != initial_front {
+                                                        let _ = w.hide();
+                                                        break;
+                                                    }
+                                                }
+                                            });
+                                        }
                                     }
                                 }
                             }
