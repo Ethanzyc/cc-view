@@ -460,13 +460,6 @@ pub fn run() {
                                     if w.is_visible().unwrap_or(false) {
                                         let _ = w.hide();
                                     } else {
-                                        // 在 center/show 之前记录当前前台 app（用户此刻所在的 app）。
-                                        // 必须在 show/set_focus 之前捕获——nonActivatingPanel 虽不激活 app，
-                                        // 但仍可能扰动 frontmost，先存基准值。
-                                        // NSPanel nonActivating 不触发 Focused(false)，改查 frontmost 变化检测失焦。
-                                        #[cfg(target_os = "macos")]
-                                        let initial_front = frontmost_bundle_id();
-
                                         // 呼出时抢焦点（overlay 用于搜索输入，区别于 HUD 不抢焦点）
                                         // 关键：show() 之前先设 collectionBehavior + level——
                                         // 否则 show 那刻窗口被 macOS 钉在桌面 Space（事后设也来不及）。
@@ -489,6 +482,13 @@ pub fn run() {
                                         {
                                             let app_handle = app.clone();
                                             std::thread::spawn(move || {
+                                                // 先等 show/set_focus 稳定——首次激活 cc-view 会短暂改变
+                                                // frontmost，立即比较会误判"切走"导致 overlay 闪一下消失。
+                                                std::thread::sleep(
+                                                    std::time::Duration::from_millis(300),
+                                                );
+                                                // 稳定后的基准前台 app（之后变了 = 用户切走）
+                                                let stable_front = frontmost_bundle_id();
                                                 loop {
                                                     std::thread::sleep(
                                                         std::time::Duration::from_millis(200),
@@ -503,7 +503,7 @@ pub fn run() {
                                                         break;
                                                     }
                                                     // 前台 app 变了（用户切到别的 app）→ hide
-                                                    if frontmost_bundle_id() != initial_front {
+                                                    if frontmost_bundle_id() != stable_front {
                                                         let _ = w.hide();
                                                         break;
                                                     }
