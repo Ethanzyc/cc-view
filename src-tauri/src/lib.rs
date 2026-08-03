@@ -450,11 +450,12 @@ pub fn run() {
                 {
                     let app = tray.app_handle();
                     if let Some(w) = app.get_webview_window("main") {
-                        if w.is_visible().unwrap_or(false) {
-                            let _ = w.hide();
-                        } else {
-                            let _ = w.show();
-                        }
+                        // 点图标总是把 HUD 调到最前（show + set_focus）。
+                        // 之前是 toggle（可见→hide），但 HUD 被别的 app 挡住时仍是 visible，
+                        // 点图标会走 hide 分支收起——不符合"被挡住时点图标拉到最前"的直觉。
+                        // show 对已 visible 的窗口相当于 orderFront（提最前），对 hide 的则显示。
+                        let _ = w.show();
+                        let _ = w.set_focus();
                     }
                 }
             });
