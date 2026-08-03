@@ -46,10 +46,6 @@ impl SnoozeMap {
         self.map.remove(id);
     }
 
-    pub fn get(&self, id: &str) -> Option<i64> {
-        self.map.get(id).copied()
-    }
-
     #[allow(dead_code)]
     pub fn to_map(&self) -> HashMap<String, i64> {
         self.map.clone()
@@ -82,11 +78,11 @@ mod tests {
     }
 
     #[test]
-    fn add_then_get() {
+    fn add_then_visible_in_map() {
         let mut m = SnoozeMap::empty();
         m.add("a", 1000);
-        assert_eq!(m.get("a"), Some(1000));
-        assert!(m.get("b").is_none());
+        assert_eq!(m.to_map().get("a").copied(), Some(1000));
+        assert!(m.to_map().get("b").is_none());
     }
 
     #[test]
@@ -94,7 +90,7 @@ mod tests {
         let mut m = SnoozeMap::empty();
         m.add("a", 1000);
         m.remove("a");
-        assert!(m.get("a").is_none());
+        assert!(m.to_map().get("a").is_none());
     }
 
     #[test]

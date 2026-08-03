@@ -4,11 +4,6 @@
 use crate::models::Host;
 use std::process::Command;
 
-/// 从 pid 用 ps 爬父进程链（最多 8 层），按 comm 匹配终端 app。
-pub fn detect_host(pid: u32) -> Host {
-    detect_host_via_ps(pid)
-}
-
 /// 兼容旧签名（collect_sessions 传 sysinfo System）——内部走 ps，不依赖 sys。
 /// 保留签名避免大改 collector；sys 参数未使用（后续可清理 sysinfo 依赖）。
 pub fn detect_host_with_sys(_sys: &sysinfo::System, pid: u32) -> Host {

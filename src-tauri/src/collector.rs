@@ -7,8 +7,9 @@ use std::path::Path;
 
 #[derive(Debug)]
 pub enum ParseError {
+    // 字段经 Debug 打印使用；dead_code 分析有意忽略 Debug derive，故标注。
+    #[allow(dead_code)]
     BadJson(serde_json::Error),
-    MissingField,
 }
 
 impl From<serde_json::Error> for ParseError {
