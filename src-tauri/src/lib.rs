@@ -43,14 +43,17 @@ fn apply_snoozed(
         .collect()
 }
 
-/// 对会话列表做内容 hash，仅按 (id, status, alive) 维度。
-/// 只要这三项不变就不 emit，避免每 3s 给前端刷一屏。
+/// 对会话列表做内容 hash，仅按 (id, status, alive, snoozed) 维度。
+/// 只要这四项不变就不 emit，避免每 3s 给前端刷一屏。
+/// 含 snoozed：derived 字段 true→false（自动冒泡）时即便 (id,status,alive) 不变也得 emit，
+/// 否则前端滞留灰显、违背 spec 3.1"有新动静自动冒泡"。
 fn hash_sessions(s: &[models::Session]) -> u64 {
     let mut h = DefaultHasher::new();
     for x in s {
         x.id.hash(&mut h);
         format!("{:?}", x.status).hash(&mut h);
         x.alive.hash(&mut h);
+        x.snoozed.hash(&mut h);
     }
     h.finish()
 }
@@ -114,12 +117,14 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 notify::send_notification(&handle, "cc-view", &format!("{}：{}", name, status_zh));
             }
 
-            // 聚合：need_attention = alive && (NeedsPermission|WaitingForInput)；
+            // 聚合：need_attention = alive && !snoozed && (NeedsPermission|WaitingForInput)；
             //       working       = alive && Working
+            // 排除 snoozed：snoozed = "暂时不管"，不该橙显/计入"等我"（与 notify 语义一致）。
             let need_attention = derived
                 .iter()
                 .filter(|s| {
                     s.alive
+                        && !s.snoozed
                         && matches!(
                             s.status,
                             models::Status::NeedsPermission | models::Status::WaitingForInput
