@@ -89,7 +89,7 @@ async function togglePin() {
   <Overlay v-if="isOverlay" />
   <!-- HUD 分支：现有 main 窗口 UI -->
   <div v-else class="app">
-    <header class="title-bar">
+    <header class="title-bar" data-tauri-drag-region>
       <span class="title">Claude Code 会话</span>
       <span class="count">{{ activeCount }} 个活跃</span>
       <span class="spacer" />
@@ -212,19 +212,14 @@ html, body {
   min-height: 100vh;
 }
 
-/* title-bar：整条可拖动 HUD（-webkit-app-region: drag），
-   内部按钮/checkbox 标 no-drag 以保留点击。 */
+/* title-bar：整条可拖动 HUD。Tauri 用 data-tauri-drag-region 属性触发拖动，
+   不是 -webkit-app-region——后者是 Chromium/Electron 私有，WKWebView 不支持。
+   带属性的元素才拖；按钮/checkbox 无属性，点击不触发拖动，无需 no-drag。 */
 .title-bar {
-  -webkit-app-region: drag;
   display: flex;
   align-items: center;
   gap: var(--gap);
   padding: var(--pad-y) var(--pad-x);
-}
-.title-bar .toggle,
-.title-bar .refresh-btn,
-.title-bar .pin-btn {
-  -webkit-app-region: no-drag;
 }
 .title {
   font: var(--fw-display) var(--fs-display)/var(--lh-display) var(--font-body);
