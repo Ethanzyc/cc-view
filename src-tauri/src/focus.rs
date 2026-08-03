@@ -17,10 +17,10 @@ pub fn activate_host(host: &Host) {
         Host::Terminal => "Terminal",
         Host::Unknown => return, // 未知 host 不动作
     };
-    // 激活终端 app：open -a（LaunchServices）+ System Events set frontmost（强制前台）。
-    // 单独 open -a / osascript activate 对全屏 app 只让其变 active（菜单栏变）但不切 Space；
-    // set frontmost 强制前台，触发 macOS 切到该 app 所在的 Space（含全屏 Space）。
-    // 注意：set frontmost 首次会触发"自动化权限"对话框（授权 cc-view 控制 System Events）。
+    // 激活终端 app：open -a + set frontmost，让目标终端可靠变 active（菜单栏变它）。
+    // ⚠️ 已知限制：全屏 app 的 Space 切换受 macOS 系统保护，activate/open/set frontmost/AXRaise
+    // 都切不到全屏 Space（辅助功能也翻不过）。若终端是全屏，点会话只 active、需用户手动 ⌘Tab 切 Space。
+    // 可靠方案：终端不全屏（最大化窗口），activate 即可切 Space。
     let _ = Command::new("/usr/bin/open").args(["-a", app]).spawn();
     let script = format!(
         r#"tell application "System Events" to set frontmost of (first process whose name is "{}") to true"#,
