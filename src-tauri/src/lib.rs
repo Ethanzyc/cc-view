@@ -1,4 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod badge;
 mod collector;
 mod discovery;
 mod focus;
@@ -91,6 +92,8 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         let orange_icon = tray_icon.as_ref().map(tint_orange);
         // 跟踪 attention 状态，仅在 0↔>0 跳变时 set_icon（避免每轮 main-thread IPC 重绘）
         let mut last_attention = false;
+        // perm_count 防抖：仅在等权限计数变化时重画 badge（避免每轮 main-thread IPC 重绘）
+        let mut last_perm_count: usize = 0;
         loop {
             let sessions = collector::collect_sessions();
             let merged = reducer::reduce(sessions);
@@ -128,29 +131,44 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 .filter(|s| s.alive && matches!(s.status, models::Status::Working))
                 .count();
 
-            // tooltip：need>0 时双段"N 等我 · M 工作"，否则只显示"M 工作"
-            let tip = if need_attention > 0 {
-                format!("{} 等我 · {} 工作", need_attention, working)
-            } else {
-                format!("{} 工作", working)
-            };
+            // perm_count：等权限（硬阻塞）计数，用于 tray badge。
+            // 排除 snoozed（按失效规则应已 unsnooze，保险排除）。
+            let perm_count = derived
+                .iter()
+                .filter(|s| s.alive && !s.snoozed && matches!(s.status, models::Status::NeedsPermission))
+                .count();
 
             if let Some(tray) = handle.tray_by_id("main") {
+                // tooltip 三段：perm>0 时最前加"等权限"段（硬阻塞优先于软阻塞等我）
+                let tip = if perm_count > 0 {
+                    format!("{} 等权限 · {} 等我 · {} 工作", perm_count, need_attention, working)
+                } else if need_attention > 0 {
+                    format!("{} 等我 · {} 工作", need_attention, working)
+                } else {
+                    format!("{} 工作", working)
+                };
                 // set_tooltip 走 main-thread IPC 但开销极小，每轮更新无妨
                 let _ = tray.set_tooltip(Some(tip));
-                // set_icon_with_as_template 原子切换图标 + template 状态（macOS）：
-                // 正常 → 单色剪影 + template=true（自动适配深浅栏）；
-                // attention → 橙色实色 + template=false（跳出 menubar 引起注意）。
+
+                // tray icon 三态：perm>0 → badge icon（红圆数字，template=false）；
+                //                  attention>0 → 橙色实色 + template=false（跳出 menubar 引起注意）；
+                //                  否则单色剪影 + template=true（自动适配深浅栏）。
+                // 仅在 perm_count 或 attention 跳变时 set_icon（避免每轮 main-thread IPC 重绘）。
                 let has_attention = need_attention > 0;
-                if has_attention != last_attention {
+                if perm_count != last_perm_count || has_attention != last_attention {
+                    last_perm_count = perm_count;
                     last_attention = has_attention;
-                    let (icon, as_template) = if has_attention {
-                        (orange_icon.as_ref(), false)
+                    let (icon, as_template) = if perm_count > 0 {
+                        // badge 合成：基于单色剪影底图画红圆数字，template=false 才能显出红色。
+                        // draw_badge 返回 owned Image，无借用逃逸问题。
+                        (tray_icon.as_ref().map(|img| badge::draw_badge(img, perm_count)), false)
+                    } else if has_attention {
+                        (orange_icon.clone(), false)
                     } else {
-                        (tray_icon.as_ref(), true)
+                        (tray_icon.clone(), true)
                     };
                     if let Some(img) = icon {
-                        let _ = tray.set_icon_with_as_template(Some(img.clone()), as_template);
+                        let _ = tray.set_icon_with_as_template(Some(img), as_template);
                     }
                 }
             }
