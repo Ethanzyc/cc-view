@@ -382,11 +382,12 @@ pub fn run() {
 
             // 给 popover 窗口设原生 vibrancy（NSVisualEffectView，系统渲染）。
             // 替代 CSS backdrop-filter：桌面变化时背景稳定，且自适应明暗主题。
-            // Popover material 语义匹配 menubar popover；radius 8 与 .app CSS border-radius 对齐。
+            // HudWindow material：HUD 面板专用，比 Popover 更暗更不透明——深色模式下
+            // Popover 偏中灰透桌面亮色，灰阶文字（muted/tertiary）对比不足发糊。radius 8 与 .app 对齐。
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.set_effects(
                     EffectsBuilder::new()
-                        .effect(Effect::Popover)
+                        .effect(Effect::HudWindow)
                         .state(EffectState::Active)
                         .radius(8.)
                         .build(),

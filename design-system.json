@@ -28,8 +28,8 @@
     "dark": {
       "bg": "transparent",
       "fg": "#E5E5E7",
-      "muted": "#8E8E93",
-      "tertiary": "#6E6E73",
+      "muted": "#AEAEB2",
+      "tertiary": "#8E8E93",
       "primary": "#0A84FF",
       "accent": "#0A84FF",
       "border": "rgba(255, 255, 255, 0.08)",

@@ -136,8 +136,8 @@ async function togglePin() {
   /* color（dark 默认） */
   --color-bg: transparent;
   --color-fg: #E5E5E7;
-  --color-muted: #8E8E93;
-  --color-tertiary: #6E6E73;
+  --color-muted: #AEAEB2; /* dark 提亮达 AA：vibrancy 上原 #8E8E93 ~4.3:1 < 4.5（小字） */
+  --color-tertiary: #8E8E93; /* dark 提亮：原 #6E6E73 ~3:1，ago 时间/按钮发虚 */
   --color-primary: #0A84FF;
   --color-accent: #0A84FF;
   --color-border: rgba(255, 255, 255, 0.08);
@@ -177,6 +177,8 @@ async function togglePin() {
     --color-hover: rgba(0, 0, 0, 0.06);
     /* muted 提暗达标 AA（light 毛玻璃上原 #8E8E93 ~3.3:1 < 4.5）；其余系统色明暗一致，不覆盖 */
     --color-muted: #6E6E73;
+    /* tertiary：dark 已提亮到 #8E8E93，light override 回 #6E6E73（浅底上 #8E8E93 ~3.3:1 偏淡） */
+    --color-tertiary: #6E6E73;
   }
 }
 
@@ -229,7 +231,7 @@ html, body {
 /* count 走等宽：仪表质感的数据列 */
 .count {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility);
-  color: var(--color-tertiary);
+  color: var(--color-muted);
   font-variant-numeric: tabular-nums;
 }
 .spacer { flex: 1; }
