@@ -80,7 +80,7 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                     models::Status::WaitingForInput => "等待输入",
                     _ => "需要关注",
                 };
-                notify::send_notification("cc-view", &format!("{}：{}", name, status_zh));
+                notify::send_notification(&handle, "cc-view", &format!("{}：{}", name, status_zh));
             }
 
             // 聚合：need_attention = alive && (NeedsPermission|WaitingForInput)；
@@ -354,6 +354,7 @@ fn frontmost_bundle_id() -> Option<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Mutex::new(hidden::HiddenList::load()))
         .manage(Mutex::new(Vec::<models::Session>::new()))
         .invoke_handler(tauri::generate_handler![
@@ -366,6 +367,14 @@ pub fn run() {
             set_hud_pinned
         ])
         .setup(|app| {
+            // 通知权限：首次 Prompt 时请求（macOS 弹授权弹窗一次）。Granted/Denied 后不再烦扰。
+            use tauri::plugin::PermissionState;
+            use tauri_plugin_notification::NotificationExt;
+            let notif = app.notification();
+            if matches!(notif.permission_state(), Ok(PermissionState::Prompt)) {
+                let _ = notif.request_permission();
+            }
+
             // 给 popover 窗口设原生 vibrancy（NSVisualEffectView，系统渲染）。
             // 替代 CSS backdrop-filter：桌面变化时背景稳定，且自适应明暗主题。
             // Popover material 语义匹配 menubar popover；radius 8 与 .app CSS border-radius 对齐。

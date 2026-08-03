@@ -41,14 +41,17 @@ impl Notifier {
     }
 }
 
-/// 发 macOS 通知（osascript）。msg/title 不含双引号（调用方确保）。
-/// spawn 不 wait——避免阻塞轮询线程。
-pub fn send_notification(title: &str, msg: &str) {
-    let script = format!("display notification \"{}\" with title \"{}\"", msg, title);
-    let _ = std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(script)
-        .spawn();
+/// 发 macOS 通知（tauri-plugin-notification，走原生 UserNotifications）。
+/// 图标自动取 App bundle icon（icon.icns）——这就是「通知图标 = cc-view 雷达」的来源。
+/// msg/title 不含双引号（调用方确保）。show() 轻量，可在 poll 线程内直接调用。
+pub fn send_notification(handle: &tauri::AppHandle, title: &str, msg: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = handle
+        .notification()
+        .builder()
+        .title(title)
+        .body(msg)
+        .show();
 }
 
 #[cfg(test)]
