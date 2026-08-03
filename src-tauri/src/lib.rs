@@ -269,6 +269,35 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
     }
 }
 
+/// 把 overlay 的 NSWindow isa swizzle 成 NSPanel（Spotlight/Raycast 做法）。
+/// NSPanel + nonActivatingPanel 能在不激活 app 的情况下 become key 接受输入，
+/// 从而不触发 Space 归属/切换——这是普通 NSWindow 跨全屏 Space 的唯一可靠解法。
+/// NSPanel 是 NSWindow 子类且不加 ivar，object_setClass 安全；Tauri 的
+/// show/hide/focus/vibrancy 调的都是 NSWindow 方法，swizzle 后仍正常。
+#[cfg(target_os = "macos")]
+fn make_panel(w: &tauri::WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let Ok(ptr) = w.ns_window() else {
+        eprintln!("make_panel: ns_window unavailable");
+        return;
+    };
+    let obj = ptr as *mut AnyObject;
+    unsafe {
+        // isa swizzle: NSWindow → NSPanel
+        // ffi::object_setClass 签名: (*mut AnyObject, *const AnyClass) -> *const AnyClass
+        let panel = objc2::class!(NSPanel);
+        objc2::ffi::object_setClass(obj, panel as *const _);
+        // NSWindowStyleMaskNonactivatingPanel = 1 << 7 (128) —— 加到现有 mask
+        let mask: objc2::ffi::NSUInteger = msg_send![obj, styleMask];
+        let _: () = msg_send![obj, setStyleMask: mask | (1 << 7)];
+        // 只在需要时 become key（不主动 activate app）
+        let _: () = msg_send![obj, setBecomesKeyOnlyIfNeeded: true];
+        eprintln!("overlay swizzled to NSPanel (nonActivatingPanel + becomesKeyOnlyIfNeeded)");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -333,6 +362,12 @@ pub fn run() {
                 // 跨 Space / 全屏可见：overlay 需在全屏 app 下也能弹出（Spotlight/Raycast 行为）
                 #[cfg(target_os = "macos")]
                 join_all_spaces(&overlay);
+
+                // isa swizzle NSWindow → NSPanel（一次性）：
+                // nonActivatingPanel + becomesKeyOnlyIfNeeded 才能真正跨全屏 Space。
+                // 必须在 vibriosity set_effects 之后、窗口 show 之前调。
+                #[cfg(target_os = "macos")]
+                make_panel(&overlay);
 
                 let w = overlay.clone();
                 overlay.on_window_event(move |e| {
