@@ -15,6 +15,11 @@ import { STATUS_ZH, statusRank, projShort, agoF, isFresh, hlParts } from '../uti
 
 const all = ref<Session[]>([]);
 const q = ref('');
+// 隐藏列表 + 显示已隐藏 toggle（从 App.vue HUD 分支迁入）。visible 按 toggle 过滤。
+const hidden = ref<string[]>([]);
+const showHidden = ref(false);
+// 图钉（pin = 失焦不收起）：后端 command + overlay_position.json 驱动。
+const pinned = ref(false);
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
 const copiedId = ref<string | null>(null);
 const searchRef = ref<HTMLInputElement>();
@@ -142,12 +147,35 @@ async function copyId(id: string) {
   }
 }
 
+// 切换图钉：调后端 set_overlay_pinned（更新 State + 持久化），更新本地 ref。
+async function togglePin() {
+  const next = !pinned.value;
+  try {
+    await invoke('set_overlay_pinned', { pinned: next });
+    pinned.value = next;
+  } catch (e) {
+    console.error('set_overlay_pinned failed', e);
+  }
+}
+
+// refreshHidden 留待 Task 5 接管 hide/unhide 时再加（YAGNI：当前无调用点，vue-tsc 会报 TS6133）。
+
 onMounted(async () => {
   // 打开即拉当前会话，不等 3s 轮询/hash 变化——避免空列表。
   try {
     all.value = await invoke<Session[]>('get_sessions');
   } catch (e) {
     console.error('get_sessions on mount failed', e);
+  }
+  try {
+    hidden.value = await invoke<string[]>('list_hidden');
+  } catch (e) {
+    console.error('list_hidden on mount failed', e);
+  }
+  try {
+    pinned.value = await invoke<boolean>('get_overlay_pinned');
+  } catch (e) {
+    console.error('get_overlay_pinned on mount failed', e);
   }
   try {
     await listen<Session[]>('sessions', e => { all.value = e.payload; });
@@ -168,7 +196,7 @@ onMounted(async () => {
 
 <template>
   <div class="overlay">
-    <div class="search-bar">
+    <div class="search-bar" data-tauri-drag-region>
       <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="7" cy="7" r="4.5" />
         <path d="M10.5 10.5 L14 14" />
@@ -180,9 +208,29 @@ onMounted(async () => {
         placeholder="搜索会话（名称 / 项目）..."
         autofocus
         spellcheck="false"
+        data-tauri-drag-region="false"
       />
       <!-- 计数：搜索态→结果数；非搜索态→待介入数 -->
-      <span class="overlay-count">{{ overlayCount }}</span>
+      <span class="overlay-count" data-tauri-drag-region="false">{{ overlayCount }}</span>
+      <label class="toggle" data-tauri-drag-region="false">
+        <input type="checkbox" v-model="showHidden" />
+        <span>显示已隐藏</span>
+      </label>
+      <button
+        class="pin-btn"
+        :class="{ pinned }"
+        :title="pinned ? '取消定住' : '定住（失焦不收起）'"
+        :aria-label="pinned ? '取消定住' : '定住（失焦不收起）'"
+        :aria-pressed="pinned"
+        data-tauri-drag-region="false"
+        @click="togglePin"
+      >
+        <!-- 图钉（Lucide pin）：定住时填充高亮，未钉只描边 -->
+        <svg width="13" height="13" viewBox="0 0 24 24" :fill="pinned ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="17" x2="12" y2="22" />
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+        </svg>
+      </button>
     </div>
     <div class="divider" />
     <div class="list-scroll">
@@ -331,9 +379,8 @@ onMounted(async () => {
   flex-direction: column;
 }
 
-/* 搜索栏：顶部贴边，不随列表滚动 */
+/* 搜索栏：顶部贴边，不随列表滚动。可拖动改用 data-tauri-drag-region（见 template）。 */
 .search-bar {
-  -webkit-app-region: drag;
   display: flex;
   align-items: center;
   gap: var(--gap);
@@ -348,7 +395,6 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .search {
-  -webkit-app-region: no-drag;
   flex: 1;
   background: transparent;
   border: none;
@@ -365,13 +411,56 @@ onMounted(async () => {
   outline: none;
 }
 
+/* 显示已隐藏 toggle（从 App.vue HUD 迁入） */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toggle input {
+  margin: 0;
+  width: 12px;
+  height: 12px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.toggle input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 图钉：未钉 tertiary，定住 primary 高亮，hover fg + hover bg（同 App.vue HUD） */
+.pin-btn {
+  background: none;
+  border: none;
+  color: var(--color-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color var(--motion-duration) var(--motion-easing),
+              background var(--motion-duration) var(--motion-easing);
+}
+.pin-btn.pinned { color: var(--color-primary); }
+.pin-btn:hover { color: var(--color-fg); background: var(--color-hover); }
+.pin-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 /* 计数标签：搜索栏右侧，等宽数据列质感 */
 .overlay-count {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility);
   color: var(--color-tertiary);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
-  -webkit-app-region: no-drag;
 }
 
 .divider {
