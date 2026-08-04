@@ -68,6 +68,7 @@ const onInterval = (v: number) => wrap('interval', async () => { await invoke('s
 // 检查更新：check() 返回 Update（有更新）或 null（已是最新）
 async function checkForUpdates() {
   error.value = null;
+  installError.value = null;
   checking.value = true;
   upToDate.value = false;
   updateAvailable.value = null;

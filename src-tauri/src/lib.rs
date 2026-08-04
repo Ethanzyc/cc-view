@@ -807,7 +807,7 @@ pub fn run() {
             })?;
             tray.set_menu(Some(menu))?;
 
-            // 菜单事件：show → 呼出 overlay；prefs → 打开偏好（转 regular）；quit → 退出。version/update 占位 no-op。
+            // 菜单事件：show → 呼出 overlay；prefs → 打开偏好（转 regular）；quit → 退出。version 占位 no-op；update → 打开偏好。
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "show" => show_overlay(app),
                 "prefs" => open_prefs(app),
