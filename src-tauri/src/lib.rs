@@ -58,24 +58,6 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
     h.finish()
 }
 
-/// 把默认图标非透明像素染成 macOS system orange（RGB 255,159,10 = #FF9F0A），保留 alpha 通道
-/// 维持抗锯齿边缘。采用方式 (b) 代码着色而非预制 PNG——无需维护第二份资源。
-fn tint_orange(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
-    let w = src.width();
-    let h = src.height();
-    let mut out = src.rgba().to_vec();
-    // RGBA row-major，每 4 字节一像素；alpha>0 视为前景，硬置 RGB=橙。
-    for px in out.chunks_exact_mut(4) {
-        if px[3] > 0 {
-            px[0] = 255;
-            px[1] = 159;
-            px[2] = 10;
-            // alpha 保留
-        }
-    }
-    tauri::image::Image::new_owned(out, w, h)
-}
-
 /// 单色 menubar 剪影（template image：黑 + 透明）。
 /// include_bytes 编译期嵌入，运行时无需读盘；改图后需重新编译。
 const TRAY_PNG: &[u8] = include_bytes!("../icons/tray.png");
@@ -87,14 +69,11 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         let mut last_hash = 0u64;
         // 线程私有 notifier——observe 每轮调用以维护状态迁移
         let mut notifier = notify::Notifier::new();
-        // 加载嵌入的单色剪影（template image）+ 预计算 attention 态橙色版。
+        // 加载嵌入的单色剪影（template image）。
         // tauri::image::Image::from_bytes 解码 PNG（需 tauri feature "image-png"）。
         let tray_icon = tauri::image::Image::from_bytes(TRAY_PNG)
             .map_err(|e| eprintln!("poll_loop: embedded tray.png decode failed: {e}"))
             .ok();
-        let orange_icon = tray_icon.as_ref().map(tint_orange);
-        // 跟踪 attention 状态，仅在 0↔>0 跳变时 set_icon（避免每轮 main-thread IPC 重绘）
-        let mut last_attention = false;
         // urgent_count 防抖：仅在必须响应计数（权限+回答）变化时重画 badge
         let mut last_urgent_count: usize = 0;
         loop {
@@ -168,20 +147,14 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 // set_tooltip 走 main-thread IPC 但开销极小，每轮更新无妨
                 let _ = tray.set_tooltip(Some(tip));
 
-                // tray icon 三态：urgent>0 → badge（红圆数字 = 权限+回答总数，template=false）；
-                //                  idle>0   → 橙色实色（任务完成待我，非紧急）；
-                //                  否则     → 单色剪影 + template=true（自动适配深浅栏）。
-                // 仅在 urgent 或 idle-attention 跳变时 set_icon（避免每轮 main-thread IPC 重绘）。
-                let has_idle_attention = idle > 0;
-                if urgent != last_urgent_count || has_idle_attention != last_attention {
+                // tray icon 二态：urgent>0 → badge（红圆数字 = 权限+回答总数，template=false）；
+                //                 否则    → 单色剪影 + template=true（等输入也白色，用户偏好）。
+                // 仅 urgent 计数变化时 set_icon（避免每轮 main-thread IPC 重绘）。
+                if urgent != last_urgent_count {
                     last_urgent_count = urgent;
-                    last_attention = has_idle_attention;
                     let (icon, as_template) = if urgent > 0 {
                         // badge 合成：基于单色剪影底图画红圆数字，template=false 才能显出红色。
-                        // draw_badge 返回 owned Image，无借用逃逸问题。
                         (tray_icon.as_ref().map(|img| badge::draw_badge(img, urgent)), false)
-                    } else if has_idle_attention {
-                        (orange_icon.clone(), false)
                     } else {
                         (tray_icon.clone(), true)
                     };
@@ -401,6 +374,17 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
 /// NSPanel 是 NSWindow 子类且不加 ivar，object_setClass 安全；Tauri 的
 /// show/hide/focus/vibrancy 调的都是 NSWindow 方法，swizzle 后仍正常。
 #[cfg(target_os = "macos")]
+/// NSPanel canBecomeKeyWindow 强制返回 YES：borderless（Tauri 无标题栏）window 默认 false，
+/// 导致 makeKey 不成 key、搜索框无法 input。titled styleMask 与 NSPanel swizzle 冲突 panic，
+/// 故用 method swizzle 直接替换 NSPanel 的 canBecomeKeyWindow 实现（cc-view 只一个 NSPanel，全局安全）。
+#[cfg(target_os = "macos")]
+unsafe extern "C-unwind" fn panel_can_become_key(
+    _this: *mut objc2::runtime::AnyObject,
+    _cmd: objc2::runtime::Sel,
+) -> objc2::runtime::Bool {
+    objc2::runtime::Bool::YES
+}
+
 fn make_panel(w: &tauri::WebviewWindow) {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
@@ -415,36 +399,36 @@ fn make_panel(w: &tauri::WebviewWindow) {
         // ffi::object_setClass 签名: (*mut AnyObject, *const AnyClass) -> *const AnyClass
         let panel = objc2::class!(NSPanel);
         objc2::ffi::object_setClass(obj, panel as *const _);
-        // NSWindowStyleMaskNonactivatingPanel = 1 << 7 (128) —— 加到现有 mask
+        // mask：nonActivatingPanel(1<<7) + titled(1<<0) + fullSizeContentView(1<<13)。
+        // 关键：titled 让 canBecomeKeyWindow=true——borderless（Tauri decorations:false）默认 false，
+        // 导致 makeKey 不成 key、搜索框无法 input。fullSizeContentView + titlebar transparent +
+        // title hidden 视觉保持无标题栏。
         let mask: objc2::ffi::NSUInteger = msg_send![obj, styleMask];
         let _: () = msg_send![obj, setStyleMask: mask | (1 << 7)];
-        // 不设 becomesKeyOnlyIfNeeded：它让窗口"只在需要时才 key"，导致点别处时没有
-        // resign key 事件、失焦 hide 不触发（Alfred "点外面消失"需要正常 become/resign key）。
-        // nonActivatingPanel 已保证 become key 不激活 app，跨全屏 Space 不受影响。
-        eprintln!("overlay swizzled to NSPanel (nonActivatingPanel)");
+        // 强制替换 NSPanel 的 canBecomeKeyWindow 返回 true：borderless（Tauri 无标题栏）默认 false
+        // → makeKey 不成 key → 搜索框无法 input。titled styleMask 与 swizzle 冲突 panic，故走 method swizzle。
+        let ns_panel: *mut objc2::runtime::AnyClass =
+            objc2::class!(NSPanel) as *const _ as *mut _;
+        let fn_ptr: unsafe extern "C-unwind" fn(
+            *mut objc2::runtime::AnyObject,
+            objc2::runtime::Sel,
+        ) -> objc2::runtime::Bool = panel_can_become_key;
+        let imp_fn: unsafe extern "C-unwind" fn() = std::mem::transmute(fn_ptr);
+        objc2::ffi::class_replaceMethod(
+            ns_panel,
+            objc2::sel!(canBecomeKeyWindow),
+            imp_fn,
+            b"B@:\0".as_ptr() as *const std::os::raw::c_char,
+        );
+        // becomesKeyOnlyIfNeeded = false：nonActivatingPanel 默认 true（只在 hit view 的
+        // needsPanelToBecomeKey 返回 true 时才 become key），WKWebView 不触发 → makeKey 不成 key。
+        let _: () = msg_send![obj, setBecomesKeyOnlyIfNeeded: false];
+        eprintln!("overlay swizzled to NSPanel (canBecomeKeyWindow forced true)");
     }
 }
 
-/// 让 overlay become key（搜索框能接受输入），但不激活 app——
-/// NSPanel nonActivatingPanel 的 makeKey 不触发 NSApp activate，所以不会把同 app 的
-/// HUD 窗口一起拉到最前（Tauri set_focus 会激活 app，导致 HUD 被牵连提最前）。
-#[cfg(target_os = "macos")]
-fn make_key(w: &tauri::WebviewWindow) {
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-    let Ok(ptr) = w.ns_window() else {
-        eprintln!("make_key: ns_window unavailable");
-        return;
-    };
-    let obj = ptr as *mut AnyObject;
-    unsafe {
-        // NSWindow 没有 makeKey 方法（之前误用 → selector 无效 → objc2 panic →
-        // extern "C" 回调不能 unwind → abort 闪退）。正确的是 makeKeyAndOrderFront:，
-        // 同时 orderFront + makeKey；对 nonActivatingPanel 不激活 app，不牵连 HUD。
-        let nil: *mut AnyObject = std::ptr::null_mut();
-        let _: () = msg_send![obj, makeKeyAndOrderFront: nil];
-    }
-}
+// make_key 已移除：show_overlay 改用 set_focus（激活 app + makeKey）替代。
+// 原理见 show_overlay 注释（删 main 后需显式激活 app，否则 WKWebView input 不接受键盘）。
 
 /// 返回当前前台 app 的 bundle id（NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier）。
 /// 用于 overlay 失焦检测：NSPanel nonActivatingPanel 不触发 Focused(false)，
@@ -493,8 +477,19 @@ fn show_overlay(app: &tauri::AppHandle) {
         let _ = w.center();
     }
     let _ = w.show();
+    // window 必须 become key 才能让搜索框 focus/输入、顶栏拖动生效。canBecomeKeyWindow 已由
+    // make_panel 的 method swizzle 强制 true（borderless 默认 false）。makeKeyAndOrderFront 成为
+    // key；activateIgnoringOtherApps 激活 app（WKWebView input 需 app active）。HUD 已删无牵连。
     #[cfg(target_os = "macos")]
-    make_key(&w);
+    unsafe {
+        use objc2::{class, msg_send, runtime::AnyObject};
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        if let Ok(p) = w.ns_window() {
+            let nil: *mut AnyObject = std::ptr::null_mut();
+            let _: () = msg_send![p as *mut AnyObject, makeKeyAndOrderFront: nil];
+        }
+    }
     #[cfg(not(target_os = "macos"))]
     let _ = w.set_focus();
     #[cfg(target_os = "macos")]
@@ -511,7 +506,8 @@ fn show_overlay(app: &tauri::AppHandle) {
                 std::thread::sleep(std::time::Duration::from_millis(200));
                 let Some(win) = app_handle.get_webview_window("overlay") else { break };
                 if !win.is_visible().unwrap_or(false) { break; }
-                if frontmost_bundle_id() != stable_front {
+                let current_front = frontmost_bundle_id();
+                if current_front != stable_front {
                     let pinned = app_handle
                         .state::<Mutex<bool>>()
                         .lock()
@@ -521,6 +517,7 @@ fn show_overlay(app: &tauri::AppHandle) {
                         let _ = win.hide();
                         break;
                     }
+                    // pinned: 静默 continue（钉住时常驻，不收起、不刷屏）
                 }
             }
         });

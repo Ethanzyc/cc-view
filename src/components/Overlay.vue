@@ -221,7 +221,7 @@ onMounted(async () => {
 
 <template>
   <div class="overlay">
-    <div class="search-bar" data-tauri-drag-region>
+    <div class="search-bar" data-tauri-drag-region="deep">
       <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="7" cy="7" r="4.5" />
         <path d="M10.5 10.5 L14 14" />
@@ -236,7 +236,7 @@ onMounted(async () => {
         data-tauri-drag-region="false"
       />
       <!-- 计数：搜索态→结果数；非搜索态→待介入数 -->
-      <span class="overlay-count" data-tauri-drag-region="false">{{ overlayCount }}</span>
+      <span class="overlay-count">{{ overlayCount }}</span>
       <label class="toggle" data-tauri-drag-region="false">
         <input type="checkbox" v-model="showHidden" />
         <span>显示已隐藏</span>
@@ -322,7 +322,7 @@ onMounted(async () => {
               @click.stop="hidden.includes(s.id) ? unhide(s.id) : hide(s.id)"
             >{{ hidden.includes(s.id) ? '取消隐藏' : '隐藏' }}</button>
             <button
-              class="act-btn copy hover-only"
+              class="act-btn copy"
               :class="{ done: copiedId === s.id }"
               :title="copiedId === s.id ? '已复制' : '复制 ID'"
               @click.stop="copyId(s.id)"
@@ -390,7 +390,7 @@ onMounted(async () => {
                   @click.stop="hidden.includes(s.id) ? unhide(s.id) : hide(s.id)"
                 >{{ hidden.includes(s.id) ? '取消隐藏' : '隐藏' }}</button>
                 <button
-                  class="act-btn copy hover-only"
+                  class="act-btn copy"
                   :class="{ done: copiedId === s.id }"
                   :title="copiedId === s.id ? '已复制' : '复制 ID'"
                   @click.stop="copyId(s.id)"
@@ -721,16 +721,7 @@ onMounted(async () => {
   margin-left: var(--gap-xs);
 }
 
-/* 复制 ID：低频，仅 hover 行时显示（搁置/隐藏常驻） */
-.act-btn.hover-only {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion-duration) var(--motion-easing);
-}
-.row:hover .act-btn.hover-only {
-  opacity: 1;
-  pointer-events: auto;
-}
+/* 复制 ID 常驻显示（用户反馈：hover 切换有问题，要求一直可见，与搁置/隐藏一致） */
 
 .empty {
   padding: var(--space-empty) var(--pad-x);
