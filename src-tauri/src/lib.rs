@@ -339,6 +339,88 @@ fn set_overlay_pinned(
     // 3) 无窗口 + 无文件：不写（等 Moved 事件或下次 show 时自然落盘）。
 }
 
+// --- 偏好设置 commands ---
+// notify/shortcut/interval 存 Mutex<Prefs>，改后立即 save。autostart 走插件自管。
+// 校验遵循 fail fast：非法 shortcut/interval 返回 Err 给前端。
+
+#[tauri::command]
+fn get_prefs(state: tauri::State<'_, Mutex<prefs::Prefs>>) -> prefs::Prefs {
+    state.lock().map(|p| p.clone()).unwrap_or_default()
+}
+
+#[tauri::command]
+fn set_notify(notify: bool, state: tauri::State<'_, Mutex<prefs::Prefs>>) {
+    if let Ok(mut p) = state.lock() {
+        p.notify = notify;
+        p.save();
+    }
+}
+
+/// 开/关开机自启动。enable=true→enable()，false→disable()。插件错误转 String 返回前端。
+#[tauri::command]
+fn toggle_autostart(app: tauri::AppHandle, enable: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let mgr = app.autolaunch();
+    if enable {
+        mgr.enable().map_err(|e| e.to_string())?
+    } else {
+        mgr.disable().map_err(|e| e.to_string())?
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> bool {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+/// 切换全局快捷键：unregister_all → 按新值 register（off 则不注册）→ 存 prefs。
+/// 失败（解析/注册）返回 Err，不落库。
+#[tauri::command]
+fn set_shortcut(
+    shortcut: String,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    if !prefs::Prefs::is_valid_shortcut(&shortcut) {
+        return Err(format!("invalid shortcut: {}", shortcut));
+    }
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    app.global_shortcut()
+        .unregister_all()
+        .map_err(|e| e.to_string())?;
+    if shortcut != "off" {
+        // register 接受 TryInto<ShortcutWrapper>；&str 直接满足，内部 parse。
+        app.global_shortcut()
+            .register(shortcut.as_str())
+            .map_err(|e| e.to_string())?;
+    }
+    if let Ok(mut p) = state.lock() {
+        p.shortcut = shortcut;
+        p.save();
+    }
+    Ok(())
+}
+
+/// 设置轮询间隔（1-30 秒）：更新 AtomicU64（poll_loop 读）+ 存 prefs。
+#[tauri::command]
+fn set_interval(
+    seconds: u64,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    interval: tauri::State<'_, std::sync::atomic::AtomicU64>,
+) -> Result<(), String> {
+    if !(1..=30).contains(&seconds) {
+        return Err(format!("interval must be 1-30, got {}", seconds));
+    }
+    interval.store(seconds, std::sync::atomic::Ordering::Relaxed);
+    if let Ok(mut p) = state.lock() {
+        p.poll_interval = seconds;
+        p.save();
+    }
+    Ok(())
+}
+
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
 /// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
@@ -546,9 +628,15 @@ fn open_prefs(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let loaded_prefs = prefs::Prefs::load();
+    let poll_secs = loaded_prefs.poll_interval;
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(Mutex::new(hidden::HiddenList::load()))
         .manage(Mutex::new(snoozed::SnoozeMap::load()))
         .manage(Mutex::new(Vec::<models::Session>::new()))
@@ -557,6 +645,8 @@ pub fn run() {
                 .map(|p| p.pinned)
                 .unwrap_or(false),
         ))
+        .manage(std::sync::atomic::AtomicU64::new(poll_secs))
+        .manage(Mutex::new(loaded_prefs))
         .invoke_handler(tauri::generate_handler![
             hide_session,
             unhide_session,
@@ -567,7 +657,13 @@ pub fn run() {
             set_overlay_pinned,
             snooze_session,
             unsnooze_session,
-            list_snoozed
+            list_snoozed,
+            get_prefs,
+            set_notify,
+            toggle_autostart,
+            get_autostart,
+            set_shortcut,
+            set_interval
         ])
         .setup(|app| {
             // 通知权限请求块——保留以兼容未来插件版本。
