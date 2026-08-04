@@ -640,7 +640,8 @@ pub fn run() {
             if let Some(prefs_win) = app.get_webview_window("prefs") {
                 let prefs_handle = app.handle().clone();
                 prefs_win.on_window_event(move |e| {
-                    if matches!(e, tauri::WindowEvent::CloseRequested { .. }) {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                        api.prevent_close();
                         #[cfg(target_os = "macos")]
                         set_activation_policy(1); // accessory
                         if let Some(w) = prefs_handle.get_webview_window("prefs") {
