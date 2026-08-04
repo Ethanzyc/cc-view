@@ -1,10 +1,15 @@
 <script setup lang="ts">
-// 单窗口：overlay 承载全部 UI（原 HUD 已废弃合并）。App 仅挂载 Overlay。
+// 多视图单入口：overlay 承载命令面板，prefs 承载偏好设置。按 window label 分发。
+import { computed } from 'vue';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import Overlay from './components/Overlay.vue';
+import Preferences from './components/Preferences.vue';
+const isPrefs = computed(() => getCurrentWebviewWindow().label === 'prefs');
 </script>
 
 <template>
-  <Overlay />
+  <Preferences v-if="isPrefs" />
+  <Overlay v-else />
 </template>
 
 <style>
