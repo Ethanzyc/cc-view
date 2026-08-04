@@ -3,7 +3,7 @@
 // 数据自管——直接 listen "sessions" event（与 HUD 同事件，互不干扰）。
 // 排序/分组/ago/isFresh 算法与 SessionList 一致（MVP 重复可接受；不抽 composable）。
 // 搜索态：扁平列表 + span 拆分高亮 + 计数；非搜索态：分组（同 HUD）。
-// 隐藏列表不过滤——Overlay 是"快速启动器"，hidden 也能搜到（恢复走 HUD）。
+// 隐藏列表：showHidden off→过滤；on→全显示（行内可 hide/unhide，顶栏 toggle 控制显隐）。
 // 搁置/恢复：成功后直接改 all.value 里对应 session.snoozed（Overlay 自管乐观更新，不等 poll）。
 import { ref, computed, onMounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
@@ -24,9 +24,13 @@ const pinned = ref(false);
 const copiedId = ref<string | null>(null);
 const searchRef = ref<HTMLInputElement>();
 
+// visible：按 showHidden toggle 过滤 hidden。off→只未隐藏；on→全显示。
+const visible = computed(() =>
+  showHidden.value ? all.value : all.value.filter(s => !hidden.value.includes(s.id)),
+);
 // 全集排序：rank → project 字母序 → statusUpdatedAt 降序（最近变更靠前）
 const sorted = computed(() =>
-  [...all.value].sort((a, b) => {
+  [...visible.value].sort((a, b) => {
     const ra = statusRank(a), rb = statusRank(b);
     if (ra !== rb) return ra - rb;
     const pc = a.project.localeCompare(b.project);
@@ -158,7 +162,28 @@ async function togglePin() {
   }
 }
 
-// refreshHidden 留待 Task 5 接管 hide/unhide 时再加（YAGNI：当前无调用点，vue-tsc 会报 TS6133）。
+// 刷新隐藏列表（hide/unhide 成功后调，让 visible 立即反映）。
+async function refreshHidden() {
+  hidden.value = await invoke<string[]>('list_hidden');
+}
+
+// 隐藏/取消隐藏：成功后刷新 hidden 列表，visible 立即反映。
+async function hide(id: string) {
+  try {
+    await invoke('hide_session', { id });
+    await refreshHidden();
+  } catch (e) {
+    console.error('hide failed', e);
+  }
+}
+async function unhide(id: string) {
+  try {
+    await invoke('unhide_session', { id });
+    await refreshHidden();
+  } catch (e) {
+    console.error('unhide failed', e);
+  }
+}
 
 onMounted(async () => {
   // 打开即拉当前会话，不等 3s 轮询/hash 变化——避免空列表。
@@ -244,6 +269,7 @@ onMounted(async () => {
             dead: !s.alive,
             snoozed: s.snoozed,
             perm: s.status === 'needsPermission' && !s.snoozed,
+            'is-hidden': hidden.includes(s.id),
           }"
           role="button"
           tabindex="0"
@@ -275,6 +301,7 @@ onMounted(async () => {
           <span class="ago" :class="{ fresh: isFresh(s) }">
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
+            <span v-if="hidden.includes(s.id)" class="hidden-tag">已隐藏</span>
           </span>
           <div class="actions">
             <button
@@ -290,7 +317,12 @@ onMounted(async () => {
               @click.stop="snooze(s.id)"
             >搁置</button>
             <button
-              class="act-btn copy"
+              class="act-btn hide"
+              :title="hidden.includes(s.id) ? '取消隐藏' : '隐藏'"
+              @click.stop="hidden.includes(s.id) ? unhide(s.id) : hide(s.id)"
+            >{{ hidden.includes(s.id) ? '取消隐藏' : '隐藏' }}</button>
+            <button
+              class="act-btn copy hover-only"
               :class="{ done: copiedId === s.id }"
               :title="copiedId === s.id ? '已复制' : '复制 ID'"
               @click.stop="copyId(s.id)"
@@ -318,6 +350,7 @@ onMounted(async () => {
                 snoozed: s.snoozed,
                 perm: s.status === 'needsPermission' && !s.snoozed,
                 reply: s.status === 'waitingForReply' && !s.snoozed,
+                'is-hidden': hidden.includes(s.id),
               }"
               role="button"
               tabindex="0"
@@ -337,6 +370,7 @@ onMounted(async () => {
               <span class="ago" :class="{ fresh: isFresh(s) }">
                 <span v-if="isFresh(s)" class="fresh-dot" />
                 {{ agoF(s.statusUpdatedAt) }}
+                <span v-if="hidden.includes(s.id)" class="hidden-tag">已隐藏</span>
               </span>
               <div class="actions">
                 <button
@@ -352,7 +386,12 @@ onMounted(async () => {
                   @click.stop="snooze(s.id)"
                 >搁置</button>
                 <button
-                  class="act-btn copy"
+                  class="act-btn hide"
+                  :title="hidden.includes(s.id) ? '取消隐藏' : '隐藏'"
+                  @click.stop="hidden.includes(s.id) ? unhide(s.id) : hide(s.id)"
+                >{{ hidden.includes(s.id) ? '取消隐藏' : '隐藏' }}</button>
+                <button
+                  class="act-btn copy hover-only"
                   :class="{ done: copiedId === s.id }"
                   :title="copiedId === s.id ? '已复制' : '复制 ID'"
                   @click.stop="copyId(s.id)"
@@ -673,6 +712,25 @@ onMounted(async () => {
 .act-btn.copy.done {
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+/* 已隐藏行更淡（比 dead/snoozed 更淡，强化"被收起"语义） */
+.row.is-hidden { opacity: 0.35; }
+.hidden-tag {
+  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
+  color: var(--color-tertiary);
+  margin-left: var(--gap-xs);
+}
+
+/* 复制 ID：低频，仅 hover 行时显示（搁置/隐藏常驻） */
+.act-btn.hover-only {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration) var(--motion-easing);
+}
+.row:hover .act-btn.hover-only {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .empty {
