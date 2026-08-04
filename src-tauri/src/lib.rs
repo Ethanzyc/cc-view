@@ -88,14 +88,21 @@ fn start_poll_loop(handle: tauri::AppHandle) {
 
             // reduce 之后、hash 之前：每轮都 observe，让 notifier 维护状态机
             let to_notify = notifier.observe(&derived);
-            for (name, status) in to_notify {
-                let status_zh = match status {
-                    models::Status::NeedsPermission => "等待权限确认",
-                    models::Status::WaitingForReply => "等待你回答",
-                    models::Status::WaitingForInput => "等待输入",
-                    _ => "需要关注",
-                };
-                notify::send_notification(&handle, "cc-view", &format!("{}：{}", name, status_zh));
+            // 通知开关：prefs.notify=false 时静默（emit/tray badge 不受影响，只压通知）。
+            let notify_on = handle
+                .try_state::<Mutex<prefs::Prefs>>()
+                .and_then(|s| s.lock().ok().map(|p| p.notify))
+                .unwrap_or(true);
+            if notify_on {
+                for (name, status) in to_notify {
+                    let status_zh = match status {
+                        models::Status::NeedsPermission => "等待权限确认",
+                        models::Status::WaitingForReply => "等待你回答",
+                        models::Status::WaitingForInput => "等待输入",
+                        _ => "需要关注",
+                    };
+                    notify::send_notification(&handle, "cc-view", &format!("{}：{}", name, status_zh));
+                }
             }
 
             // 聚合计数（一轮遍历）：
@@ -180,7 +187,13 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 last_hash = h;
                 let _ = handle.emit("sessions", &derived);
             }
-            std::thread::sleep(Duration::from_secs(3));
+            // 间隔由偏好 AtomicU64 控制（默认 3，可 1-30）；无 state 则兜底 3。
+            let secs = handle
+                .try_state::<std::sync::atomic::AtomicU64>()
+                .map(|a| a.load(std::sync::atomic::Ordering::Relaxed))
+                .unwrap_or(3)
+                .max(1);
+            std::thread::sleep(Duration::from_secs(secs));
         }
     });
 }
@@ -800,35 +813,35 @@ pub fn run() {
                 _ => {}
             });
 
-            // 注册 ⌥Space 全局快捷键 → toggle overlay 窗口。
-            // 2.x API（v2.3.2 实测）：没有 init() 工厂函数，须用 Builder 模式在 setup 内
-            // 通过 app.handle().plugin(...) 动态注册。brief 提到的 register(s).on_shortcut(...)
-            // 链式调用也无效（register 返回 Result<()>）。正确路径是 with_shortcuts +
-            // with_handler 一步到位（参考 v2 README）。
-            // Builder / shortcut 注册失败时 ? 向上传播（setup 返回 Box<dyn Error>）——fail fast。
+            // 快捷键按 prefs.shortcut 注册（默认 alt+space，可改/禁用）。
+            // handler 不写死组合——对当前注册的任意快捷键都 toggle overlay。
+            // 核对 v2.x：with_shortcuts 接受 [&str]，"cmd+alt+space"/"ctrl+space" 能解析。
             #[cfg(desktop)]
             {
-                use tauri_plugin_global_shortcut::{
-                    Builder, Code, Modifiers, ShortcutState,
-                };
-                app.handle().plugin(
-                    Builder::new()
-                        .with_shortcuts(["alt+space"])?
-                        .with_handler(|app, shortcut, event| {
-                            if event.state == ShortcutState::Pressed
-                                && shortcut.matches(Modifiers::ALT, Code::Space)
-                            {
-                                if let Some(w) = app.get_webview_window("overlay") {
-                                    if w.is_visible().unwrap_or(false) {
-                                        let _ = w.hide();
-                                    } else {
-                                        show_overlay(app);
+                use tauri_plugin_global_shortcut::{Builder, ShortcutState};
+                let shortcut_str = app
+                    .state::<Mutex<prefs::Prefs>>()
+                    .lock()
+                    .map(|p| p.shortcut.clone())
+                    .unwrap_or_else(|_| "alt+space".into());
+                if shortcut_str != "off" {
+                    app.handle().plugin(
+                        Builder::new()
+                            .with_shortcuts([shortcut_str.as_str()])?
+                            .with_handler(|app, _shortcut, event| {
+                                if event.state == ShortcutState::Pressed {
+                                    if let Some(w) = app.get_webview_window("overlay") {
+                                        if w.is_visible().unwrap_or(false) {
+                                            let _ = w.hide();
+                                        } else {
+                                            show_overlay(app);
+                                        }
                                     }
                                 }
-                            }
-                        })
-                        .build(),
-                )?;
+                            })
+                            .build(),
+                    )?;
+                }
             }
 
             // 启动后台轮询：每 3s 收集 sessions → reduce → hash 去重 → emit
