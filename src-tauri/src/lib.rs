@@ -19,7 +19,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{Emitter, Manager};
 
@@ -485,6 +485,53 @@ fn frontmost_bundle_id() -> Option<String> {
     }
 }
 
+/// 呼出 overlay：恢复/居中位置 → show → makeKey → 启动失焦轮询。
+/// 快捷键 ⌥Space 与 tray 菜单「显示面板」共用。
+fn show_overlay(app: &tauri::AppHandle) {
+    let Some(w) = app.get_webview_window("overlay") else { return };
+    // show 前设 collectionBehavior + level，否则被钉在桌面 Space。
+    #[cfg(target_os = "macos")]
+    join_all_spaces(&w);
+    if let Some(pos) = overlay_position::OverlayPosition::load() {
+        let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+    } else {
+        let _ = w.center();
+    }
+    let _ = w.show();
+    #[cfg(target_os = "macos")]
+    make_key(&w);
+    #[cfg(not(target_os = "macos"))]
+    let _ = w.set_focus();
+    #[cfg(target_os = "macos")]
+    join_all_spaces(&w);
+
+    // 失焦轮询（钉住时按 pin 跳过 hide，见轮询内判断）
+    #[cfg(target_os = "macos")]
+    {
+        let app_handle = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let stable_front = frontmost_bundle_id();
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                let Some(win) = app_handle.get_webview_window("overlay") else { break };
+                if !win.is_visible().unwrap_or(false) { break; }
+                if frontmost_bundle_id() != stable_front {
+                    let pinned = app_handle
+                        .state::<Mutex<bool>>()
+                        .lock()
+                        .map(|g| *g)
+                        .unwrap_or(false);
+                    if !pinned {
+                        let _ = win.hide();
+                        break;
+                    }
+                }
+            }
+        });
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -610,36 +657,56 @@ pub fn run() {
                 });
             }
 
-            // 构建 menubar 托盘菜单（当前仅 Quit；后续任务按需扩展）
+            // 构建 menubar 托盘菜单：版本号(只读) / 显示面板 / 偏好设置(占位) / 检查更新(占位) / 退出。
+            let version = env!("CARGO_PKG_VERSION");
+            let version_item = MenuItem::with_id(
+                app.handle(),
+                "version",
+                &format!("cc-view {version}"),
+                false,
+                None::<&str>,
+            )?;
+            let sep1 = PredefinedMenuItem::separator(app.handle())?;
+            let show_item =
+                MenuItem::with_id(app.handle(), "show", "显示面板", true, None::<&str>)?;
+            let sep2 = PredefinedMenuItem::separator(app.handle())?;
+            let prefs_item = MenuItem::with_id(
+                app.handle(),
+                "prefs",
+                "偏好设置…",
+                false,
+                None::<&str>,
+            )?;
+            let update_item = MenuItem::with_id(
+                app.handle(),
+                "update",
+                "检查更新…",
+                false,
+                None::<&str>,
+            )?;
+            let sep3 = PredefinedMenuItem::separator(app.handle())?;
             let quit_item =
-                MenuItem::with_id(app.handle(), "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app.handle(), &[&quit_item])?;
+                MenuItem::with_id(app.handle(), "quit", "退出 cc-view", true, None::<&str>)?;
+            let menu = Menu::with_items(
+                app.handle(),
+                &[
+                    &version_item, &sep1, &show_item, &sep2, &prefs_item, &update_item, &sep3,
+                    &quit_item,
+                ],
+            )?;
 
-            // tray icon 已在 tauri.conf.json 的 app.trayIcon 声明（id="main"），
-            // 这里取出已存在的实例并附加菜单与点击事件。
-            // 左键点击 toggle HUD 窗口显示/隐藏——位置由用户拖动记忆，不再贴 tray。
-            // 同时去掉 set_focus 避免抢走当前焦点（终端输入）。
+            // tray icon 已在 tauri.conf.json 声明（id="main"），取出附菜单。
+            // 左键弹菜单（showMenuOnLeftClick: true）——不再 on_tray_icon_event toggle。
             let tray = app.tray_by_id("main").ok_or_else(|| {
                 tauri::Error::AssetNotFound("tray icon 'main'".to_string())
             })?;
             tray.set_menu(Some(menu))?;
-            tray.on_tray_icon_event(|tray, event| {
-                if let tauri::tray::TrayIconEvent::Click {
-                    button: tauri::tray::MouseButton::Left,
-                    button_state: tauri::tray::MouseButtonState::Up,
-                    ..
-                } = event
-                {
-                    let app = tray.app_handle();
-                    if let Some(w) = app.get_webview_window("main") {
-                        // 点图标总是把 HUD 调到最前（show + set_focus）。
-                        // 之前是 toggle（可见→hide），但 HUD 被别的 app 挡住时仍是 visible，
-                        // 点图标会走 hide 分支收起——不符合"被挡住时点图标拉到最前"的直觉。
-                        // show 对已 visible 的窗口相当于 orderFront（提最前），对 hide 的则显示。
-                        let _ = w.show();
-                        let _ = w.set_focus();
-                    }
-                }
+
+            // 菜单事件：show → 呼出 overlay；quit → 退出。version/prefs/update 占位 no-op。
+            app.on_menu_event(|app, event| match event.id().as_ref() {
+                "show" => show_overlay(app),
+                "quit" => app.exit(0),
+                _ => {}
             });
 
             // 注册 ⌥Space 全局快捷键 → toggle overlay 窗口。
@@ -664,76 +731,7 @@ pub fn run() {
                                     if w.is_visible().unwrap_or(false) {
                                         let _ = w.hide();
                                     } else {
-                                        // 呼出时抢焦点（overlay 用于搜索输入，区别于 HUD 不抢焦点）
-                                        // 关键：show() 之前先设 collectionBehavior + level——
-                                        // 否则 show 那刻窗口被 macOS 钉在桌面 Space（事后设也来不及）。
-                                        #[cfg(target_os = "macos")]
-                                        join_all_spaces(&w);
-                                        // 有记忆位置则恢复，无则居中；不再每次强制 center。
-                                        if let Some(pos) =
-                                            overlay_position::OverlayPosition::load()
-                                        {
-                                            let _ = w.set_position(
-                                                tauri::PhysicalPosition::new(pos.x, pos.y),
-                                            );
-                                        } else {
-                                            let _ = w.center();
-                                        }
-                                        let _ = w.show();
-                                        // 用原生 makeKey 而非 set_focus：后者激活 cc-view app，
-                                        // 会把 HUD 一起拉到最前；NSPanel makeKey 不激活 app。
-                                        #[cfg(target_os = "macos")]
-                                        make_key(&w);
-                                        #[cfg(not(target_os = "macos"))]
-                                        let _ = w.set_focus();
-                                        // show/set_focus 后再设一次，防 Tauri 内部重置。
-                                        #[cfg(target_os = "macos")]
-                                        join_all_spaces(&w);
-
-                                        // show 后启动失焦检测轮询（Alfred/Raycast 做法）：
-                                        // NSPanel nonActivatingPanel 点别的 app 时不 resign key →
-                                        // on_window_event(Focused(false)) 不触发。改每 200ms 查 frontmost app，
-                                        // 一旦变了（用户切到别的 app）→ hide overlay。
-                                        // overlay 不再 visible 时（别的方式收起）轮询自动退出，无泄漏。
-                                        #[cfg(target_os = "macos")]
-                                        {
-                                            let app_handle = app.clone();
-                                            std::thread::spawn(move || {
-                                                // 先等 show/set_focus 稳定——首次激活 cc-view 会短暂改变
-                                                // frontmost，立即比较会误判"切走"导致 overlay 闪一下消失。
-                                                std::thread::sleep(
-                                                    std::time::Duration::from_millis(300),
-                                                );
-                                                // 稳定后的基准前台 app（之后变了 = 用户切走）
-                                                let stable_front = frontmost_bundle_id();
-                                                loop {
-                                                    std::thread::sleep(
-                                                        std::time::Duration::from_millis(200),
-                                                    );
-                                                    let Some(w) =
-                                                        app_handle.get_webview_window("overlay")
-                                                    else {
-                                                        break;
-                                                    };
-                                                    // overlay 已 hide（别的方式收起）→ 退出
-                                                    if !w.is_visible().unwrap_or(false) {
-                                                        break;
-                                                    }
-                                                    // 前台 app 变了 → 仅未钉时 hide；钉住则继续轮询不收起。
-                                                    if frontmost_bundle_id() != stable_front {
-                                                        let pinned = app_handle
-                                                            .state::<Mutex<bool>>()
-                                                            .lock()
-                                                            .map(|g| *g)
-                                                            .unwrap_or(false);
-                                                        if !pinned {
-                                                            let _ = w.hide();
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            });
-                                        }
+                                        show_overlay(app);
                                     }
                                 }
                             }

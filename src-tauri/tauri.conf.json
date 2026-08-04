@@ -45,7 +45,7 @@
       "iconPath": "icons/tray.png",
       "tooltip": "cc-view",
       "iconAsTemplate": true,
-      "showMenuOnLeftClick": false
+      "showMenuOnLeftClick": true
     },
     "security": {
       "csp": null
