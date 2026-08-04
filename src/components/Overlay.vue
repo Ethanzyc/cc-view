@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Overlay 命令面板：搜索框 + 会话列表 + 每行操作（focus / 复制 ID / 搁置 / 恢复）。
 // 数据自管——直接 listen "sessions" event（与 HUD 同事件，互不干扰）。
-// 排序/分组/ago/isFresh 算法与 SessionList 一致（MVP 重复可接受；不抽 composable）。
+// 排序/分组/ago/isFresh 算法与分组逻辑一致（MVP 重复可接受；不抽 composable）。
 // 搜索态：扁平列表 + span 拆分高亮 + 计数；非搜索态：分组（同 HUD）。
 // 隐藏列表：showHidden off→过滤；on→全显示（行内可 hide/unhide，顶栏 toggle 控制显隐）。
 // 搁置/恢复：成功后直接改 all.value 里对应 session.snoozed（Overlay 自管乐观更新，不等 poll）。
@@ -51,7 +51,7 @@ const flatResults = computed(() => {
   );
 });
 
-// 非搜索态：分组（同 SessionList —— 待介入 / 已搁置 / 已退出；dead 限 5）
+// 非搜索态：分组（待介入 / 已搁置 / 已退出；dead 限 5）
 const DEAD_LIMIT = 5;
 type Section = {
   key: string;
@@ -581,7 +581,7 @@ onMounted(async () => {
   outline-offset: -2px;
 }
 
-/* NeedsPermission 行（非搁置）：左侧 2px 橙边框 + 浅橙背景（参考 SessionList .perm-row） */
+/* NeedsPermission 行（非搁置）：左侧 2px 橙边框 + 浅橙背景（参考 .perm-row） */
 .row.perm {
   border-left-color: var(--status-permission);
   background: color-mix(in srgb, var(--status-permission) 10%, transparent);

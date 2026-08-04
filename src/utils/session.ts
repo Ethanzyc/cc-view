@@ -1,4 +1,4 @@
-// 会话展示工具：SessionList 与 Overlay 共用（去重，原两组件各自重复一份）。
+// Overlay 会话展示工具（排序/分组/状态文案等，从原两组件去重合并而来）。
 import type { Session, Status } from '../types';
 
 // 状态中文名：保留 cc 真实状态（不因 snoozed 改成"已搁置"——分组标题已表达）

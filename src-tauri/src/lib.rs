@@ -340,13 +340,29 @@ fn get_overlay_pinned(state: tauri::State<'_, Mutex<bool>>) -> bool {
 }
 
 /// 切换 overlay 钉住状态：更新 State + 持久化（保留现有 x,y）。
+/// 三档 fallback 避免新装用户无位置文件时落 (0,0)：
+///   1) 读窗口当前 outer_position（pin 通常在呼出可见时操作，最准）
+///   2) 窗口不可见/拿不到 → 回退磁盘记录（仅替换 pinned，保留 x,y）
+///   3) 无窗口 + 无文件 → 不写（等 Moved 事件或下次 show 自然落盘）
 #[tauri::command]
-fn set_overlay_pinned(pinned: bool, state: tauri::State<'_, Mutex<bool>>) {
+fn set_overlay_pinned(
+    pinned: bool,
+    state: tauri::State<'_, Mutex<bool>>,
+    app: tauri::AppHandle,
+) {
     *state.lock().unwrap() = pinned;
-    let (x, y) = overlay_position::OverlayPosition::load()
-        .map(|p| (p.x, p.y))
-        .unwrap_or((0, 0));
-    overlay_position::OverlayPosition::save_all(x, y, pinned);
+    // 1) 优先读窗口当前位置（pin 通常在呼出可见时操作）。
+    if let Some(w) = app.get_webview_window("overlay") {
+        if let Ok(pos) = w.outer_position() {
+            overlay_position::OverlayPosition::save_all(pos.x, pos.y, pinned);
+            return;
+        }
+    }
+    // 2) overlay 不可见时：仅当磁盘已有记录才更新（保留 x,y，只换 pinned）。
+    if let Some(p) = overlay_position::OverlayPosition::load() {
+        overlay_position::OverlayPosition::save_all(p.x, p.y, pinned);
+    }
+    // 3) 无窗口 + 无文件：不写（等 Moved 事件或下次 show 时自然落盘）。
 }
 
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
@@ -463,6 +479,11 @@ fn frontmost_bundle_id() -> Option<String> {
 /// 快捷键 ⌥Space 与 tray 菜单「显示面板」共用。
 fn show_overlay(app: &tauri::AppHandle) {
     let Some(w) = app.get_webview_window("overlay") else { return };
+    // 已可见直接 return：避免 tray 菜单「显示面板」重复点击 spawn 第二个 frontmost 轮询线程。
+    // （⌥Space handler 已有自己的 is_visible 守卫，此处不影响它。）
+    if w.is_visible().unwrap_or(false) {
+        return;
+    }
     // show 前设 collectionBehavior + level，否则被钉在桌面 Space。
     #[cfg(target_os = "macos")]
     join_all_spaces(&w);
@@ -548,7 +569,7 @@ pub fn run() {
             // overlay 窗口：失焦自动 hide（Alfred/uTools 行为——点别处就收起）。
             // on_window_event 闭包签名是 Fn(&WindowEvent)（单参），拿不到 window 引用——
             // 外层 clone WebviewWindow（Tauri 2 派生 Clone，是廉价 handle 非拥有资源）
-            // 再 move 进闭包，失焦时调 hide()。仅 overlay 有此行为；HUD（main）常驻不 hide。
+            // 再 move 进闭包，失焦时调 hide()。仅 overlay 有此行为。
             // 同时套同款 Popover vibrancy——与 HUD 视觉一致；radius 12 比 main 略大，
             // 命令面板观感更柔和。EffectState::Active 保证失焦时仍保持毛玻璃（不灰化）。
             if let Some(overlay) = app.get_webview_window("overlay") {
