@@ -650,6 +650,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(Mutex::new(hidden::HiddenList::load()))
         .manage(Mutex::new(snoozed::SnoozeMap::load()))
         .manage(Mutex::new(Vec::<models::Session>::new()))
@@ -784,7 +786,7 @@ pub fn run() {
                 app.handle(),
                 "update",
                 "检查更新…",
-                false,
+                true,
                 None::<&str>,
             )?;
             let sep3 = PredefinedMenuItem::separator(app.handle())?;
@@ -809,6 +811,7 @@ pub fn run() {
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "show" => show_overlay(app),
                 "prefs" => open_prefs(app),
+                "update" => open_prefs(app),
                 "quit" => app.exit(0),
                 _ => {}
             });

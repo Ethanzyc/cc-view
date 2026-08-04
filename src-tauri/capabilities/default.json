@@ -7,6 +7,8 @@
     "core:default",
     "core:window:allow-start-dragging",
     "opener:default",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "updater:default",
+    "process:default"
   ]
 }
