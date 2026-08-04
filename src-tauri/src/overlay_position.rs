@@ -1,7 +1,5 @@
 // overlay 窗口位置 + pin 持久化：load/save 读写 ~/.claude/cc-view/overlay-position.json。
 // 用户拖动 overlay 后存位，下次呼出恢复——不再每次 center。pin（失焦是否收起）一并持久化。
-// 模块在 Task 2 被命令引用前暂未被非测试代码使用，允许 dead_code。
-#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
 /// pinned 的 serde 默认值：false（开机隐藏 + 呼出默认未钉 = 失焦收起）。

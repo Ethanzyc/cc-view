@@ -355,6 +355,26 @@ fn set_hud_pinned(pinned: bool, app: tauri::AppHandle) {
     hud::HudPosition::save_all(x, y, pinned);
 }
 
+// --- overlay pin（图钉：失焦是否自动收起）command ---
+// pin 状态由 app State<Mutex<bool>> 持有，失焦双机制读它判断要不要 hide。
+// set 时同步持久化（保留磁盘 x,y），开机/重启按记忆恢复。
+
+/// 读取 overlay 是否钉住（失焦不收起）。State 初始从磁盘恢复，无记录 false。
+#[tauri::command]
+fn get_overlay_pinned(state: tauri::State<'_, Mutex<bool>>) -> bool {
+    *state.lock().unwrap()
+}
+
+/// 切换 overlay 钉住状态：更新 State + 持久化（保留现有 x,y）。
+#[tauri::command]
+fn set_overlay_pinned(pinned: bool, state: tauri::State<'_, Mutex<bool>>) {
+    *state.lock().unwrap() = pinned;
+    let (x, y) = overlay_position::OverlayPosition::load()
+        .map(|p| (p.x, p.y))
+        .unwrap_or((0, 0));
+    overlay_position::OverlayPosition::save_all(x, y, pinned);
+}
+
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
 /// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
@@ -473,6 +493,11 @@ pub fn run() {
         .manage(Mutex::new(hidden::HiddenList::load()))
         .manage(Mutex::new(snoozed::SnoozeMap::load()))
         .manage(Mutex::new(Vec::<models::Session>::new()))
+        .manage(Mutex::new(
+            overlay_position::OverlayPosition::load()
+                .map(|p| p.pinned)
+                .unwrap_or(false),
+        ))
         .invoke_handler(tauri::generate_handler![
             hide_session,
             unhide_session,
@@ -481,6 +506,8 @@ pub fn run() {
             get_sessions,
             get_hud_pinned,
             set_hud_pinned,
+            get_overlay_pinned,
+            set_overlay_pinned,
             snooze_session,
             unsnooze_session,
             list_snoozed
@@ -556,9 +583,18 @@ pub fn run() {
                 make_panel(&overlay);
 
                 let w = overlay.clone();
+                let app_handle = app.handle().clone();
                 overlay.on_window_event(move |e| {
                     if let tauri::WindowEvent::Focused(false) = e {
-                        let _ = w.hide();
+                        // 钉住时失焦不收起；未钉才 hide。
+                        let pinned = app_handle
+                            .state::<Mutex<bool>>()
+                            .lock()
+                            .map(|g| *g)
+                            .unwrap_or(false);
+                        if !pinned {
+                            let _ = w.hide();
+                        }
                     }
                 });
             }
@@ -664,10 +700,17 @@ pub fn run() {
                                                     if !w.is_visible().unwrap_or(false) {
                                                         break;
                                                     }
-                                                    // 前台 app 变了（用户切到别的 app）→ hide
+                                                    // 前台 app 变了 → 仅未钉时 hide；钉住则继续轮询不收起。
                                                     if frontmost_bundle_id() != stable_front {
-                                                        let _ = w.hide();
-                                                        break;
+                                                        let pinned = app_handle
+                                                            .state::<Mutex<bool>>()
+                                                            .lock()
+                                                            .map(|g| *g)
+                                                            .unwrap_or(false);
+                                                        if !pinned {
+                                                            let _ = w.hide();
+                                                            break;
+                                                        }
                                                     }
                                                 }
                                             });
