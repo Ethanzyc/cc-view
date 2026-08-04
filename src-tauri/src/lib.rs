@@ -582,10 +582,20 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 make_panel(&overlay);
 
+                // 恢复上次保存的 overlay 位置（vibrancy / swizzle 之后）。
+                // 无记录时跳过——由呼出时的 center() 兜底。
+                if let Some(pos) = overlay_position::OverlayPosition::load() {
+                    let _ = overlay.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                }
+
                 let w = overlay.clone();
                 let app_handle = app.handle().clone();
-                overlay.on_window_event(move |e| {
-                    if let tauri::WindowEvent::Focused(false) = e {
+                overlay.on_window_event(move |e| match e {
+                    tauri::WindowEvent::Moved(p) => {
+                        // 拖动后存位置（保留磁盘 pinned）。
+                        overlay_position::OverlayPosition::save(p.x, p.y);
+                    }
+                    tauri::WindowEvent::Focused(false) => {
                         // 钉住时失焦不收起；未钉才 hide。
                         let pinned = app_handle
                             .state::<Mutex<bool>>()
@@ -596,6 +606,7 @@ pub fn run() {
                             let _ = w.hide();
                         }
                     }
+                    _ => {}
                 });
             }
 
@@ -658,8 +669,16 @@ pub fn run() {
                                         // 否则 show 那刻窗口被 macOS 钉在桌面 Space（事后设也来不及）。
                                         #[cfg(target_os = "macos")]
                                         join_all_spaces(&w);
-                                        // 每次 show 前居中——即使上次拖动过，呼出总在屏幕中心
-                                        let _ = w.center();
+                                        // 有记忆位置则恢复，无则居中；不再每次强制 center。
+                                        if let Some(pos) =
+                                            overlay_position::OverlayPosition::load()
+                                        {
+                                            let _ = w.set_position(
+                                                tauri::PhysicalPosition::new(pos.x, pos.y),
+                                            );
+                                        } else {
+                                            let _ = w.center();
+                                        }
                                         let _ = w.show();
                                         // 用原生 makeKey 而非 set_focus：后者激活 cc-view app，
                                         // 会把 HUD 一起拉到最前；NSPanel makeKey 不激活 app。
