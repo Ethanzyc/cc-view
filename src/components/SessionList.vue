@@ -6,9 +6,10 @@
 // 乐观更新 all[i].snoozed（不等 3s 轮询），分组/灰显立即生效。
 // 隐藏（× / +）保留原 hide_session / unhide_session 流程。
 import { computed } from 'vue';
-import type { Session, Status } from '../types';
+import type { Session } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import StatusIcon from './StatusIcon.vue';
+import { STATUS_ZH, statusRank, projShort, agoF, isFresh } from '../utils/session';
 
 const props = withDefaults(defineProps<{ sessions: Session[]; hidden?: string[] }>(), {
   hidden: () => [] as string[],
@@ -20,34 +21,8 @@ const emit = defineEmits<{
   (e: 'unsnooze', id: string): void;
 }>();
 
-// 状态中文名：保留 cc 真实状态（不因 snoozed 改成"已搁置"——分组标题已表达）
-const STATUS_ZH: Record<Status, string> = {
-  working: '工作中',
-  waitingForInput: '等输入',
-  needsPermission: '等权限',
-  shell: 'Shell',
-  compacting: '压缩中',
-};
-
-// 排序档：等权限 > 等输入 > 工作中 > Shell > 压缩中 > 搁置(alive 5.5) > 已退出(6) > 搁置(dead 6.5)
-function statusRank(s: Session): number {
-  if (s.snoozed) return s.alive ? 5.5 : 6.5;
-  if (!s.alive) return 6;
-  switch (s.status) {
-    case 'needsPermission': return 1;
-    case 'waitingForInput': return 2;
-    case 'working': return 3;
-    case 'shell': return 4;
-    case 'compacting': return 5;
-    default: return 99;
-  }
-}
-
-// 项目路径缩短：/Users/<name>/ai/fang → ~/ai/fang（二级小标题 + 行 line2 共用）
-const projShort = (p: string) => p.replace(/^\/Users\/[^/]+\//, '~/');
-
 // 排序：rank → project 字母序 → statusUpdatedAt 降序（最近变更靠前；与原型 agoIdx 升序等价，
-// 同时保证 dead 限 5 时保留最近的——slice(0, N) 取头部）
+// 同时保证 dead 限 5 时保留最近的——slice(0, N) 取头部）。statusRank/projShort/agoF/isFresh/STATUS_ZH 见 utils/session。
 const sorted = computed(() =>
   [...props.sessions].sort((a, b) => {
     const ra = statusRank(a), rb = statusRank(b);
@@ -57,22 +32,6 @@ const sorted = computed(() =>
     return b.statusUpdatedAt - a.statusUpdatedAt;
   }),
 );
-
-// ago 自适应：<60s→Xs, <3600→Xm, <86400→Xh, else→Xd
-function agoF(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h`;
-  return `${Math.floor(s / 86400)}d`;
-}
-
-// "刚完成"高亮：waitingForInput 且 ago < 120s 且未搁置（搁置行不显示蓝点）
-function isFresh(s: Session): boolean {
-  return !s.snoozed &&
-    s.status === 'waitingForInput' &&
-    Date.now() - s.statusUpdatedAt < 120_000;
-}
 
 // dead 限 5：超过的只留最近的 5 个，其余折叠为 "+N 个更早的已隐藏"
 const DEAD_LIMIT = 5;
