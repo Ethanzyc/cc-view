@@ -88,11 +88,6 @@ pub fn collect_sessions() -> Vec<Session> {
             Ok(mut s) => {
                 s.alive = is_claude_alive(pid);
                 if s.alive {
-                    // name 优先用 JSONL 的 ai-title（Claude 生成的会话短标题 = /status 显示的命令名），
-                    // fallback sessions.json 的 name（derived/任务名/sessionId 短码）。
-                    if let Some(title) = read_ai_title(&s.id, &s.cwd) {
-                        s.name = title;
-                    }
                     // 末尾文本一次读出，供 pending tool_use + compact 检测共用（避免两次 seek）
                     // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
                     // 任一环节失败（无 settings / 无 JSONL / 无 pending）静默跳过，保留原 status。
@@ -235,38 +230,6 @@ pub fn read_jsonl_tail_text(session_id: &str, cwd: &str) -> Option<String> {
     };
     let text = std::str::from_utf8(slice).ok()?;
     Some(text.to_string())
-}
-
-/// 解析 JSONL 文本：找最后一条 `type=ai-title` 的 `aiTitle`（Claude 生成的会话短标题，
-/// 即 /status 显示的命令名）。ai-title 可能在会话早期生成且稳定，故取最后一条兜底最新。
-/// 无则 None。
-pub fn parse_ai_title(text: &str) -> Option<String> {
-    let mut last: Option<String> = None;
-    for line in text.lines() {
-        if !line.contains("\"type\":\"ai-title\"") {
-            continue;
-        }
-        if let Ok(d) = serde_json::from_str::<serde_json::Value>(line) {
-            if let Some(t) = d.get("aiTitle").and_then(|v| v.as_str()) {
-                last = Some(t.to_string());
-            }
-        }
-    }
-    last
-}
-
-/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 全文，取最后一条 ai-title。
-/// 读全文（非尾部）：ai-title 可能在会话早期生成，尾部采样会漏。
-/// 失败（无文件/无 ai-title）返回 None，调用方 fallback sessions.json 的 name。
-pub fn read_ai_title(session_id: &str, cwd: &str) -> Option<String> {
-    let home = dirs::home_dir()?;
-    let encoded = cwd.replace('/', "-");
-    let path = home
-        .join(".claude/projects")
-        .join(&encoded)
-        .join(format!("{}.jsonl", session_id));
-    let text = std::fs::read_to_string(&path).ok()?;
-    parse_ai_title(&text)
 }
 
 /// 扫 JSONL 末尾文本：若任行含 compact_boundary 标志 → true。
@@ -506,19 +469,6 @@ mod tests {
         assert_eq!(s.status, Status::Working);
         assert_eq!(s.project, "cc-view");
         assert_eq!(s.name, "cc-view-94");
-    }
-
-    #[test]
-    fn parse_ai_title_finds_last() {
-        let text = "{\"type\":\"ai-title\",\"aiTitle\":\"旧标题\",\"sessionId\":\"x\"}\n\
-{\"type\":\"user\",\"message\":\"hi\"}\n\
-{\"type\":\"ai-title\",\"aiTitle\":\"新标题\",\"sessionId\":\"x\"}";
-        assert_eq!(parse_ai_title(text).as_deref(), Some("新标题"));
-    }
-
-    #[test]
-    fn parse_ai_title_none_when_absent() {
-        assert_eq!(parse_ai_title("{\"type\":\"user\",\"message\":\"hi\"}"), None);
     }
 
     #[test]
