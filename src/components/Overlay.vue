@@ -365,7 +365,6 @@ onMounted(async () => {
                   <span class="name">{{ s.name || s.project }}</span>
                   <span class="status-zh" :class="{ perm: s.status === 'needsPermission', reply: s.status === 'waitingForReply' }">{{ STATUS_ZH[s.status] }}</span>
                 </div>
-                <div class="line2">{{ projShort(s.project) }}</div>
               </div>
               <span class="ago" :class="{ fresh: isFresh(s) }">
                 <span v-if="isFresh(s)" class="fresh-dot" />
@@ -531,9 +530,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px var(--pad-x) 4px;
-  font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility);
-  color: var(--color-tertiary);
+  padding: 12px var(--pad-x) 5px;
+  font: 600 var(--fs-caption)/var(--lh-caption) var(--font-utility);
+  color: var(--color-muted);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -546,11 +545,11 @@ onMounted(async () => {
   line-height: 14px;
   font-variant-numeric: tabular-nums;
 }
-/* 二级项目小标题 */
+/* 二级项目小标题（mono + 600，与一级分组标题层级拉开） */
 .proj-head {
   padding: 5px var(--pad-x) 2px;
-  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility);
-  color: var(--color-tertiary);
+  font: 600 var(--fs-utility)/var(--lh-utility) var(--font-utility);
+  color: var(--color-muted);
 }
 .group-sep {
   height: 1px;
