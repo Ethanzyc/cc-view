@@ -343,7 +343,7 @@ fn set_overlay_pinned(
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
 ///   - CanJoinAllSpaces    (1 << 0)   跨所有 Space 显示
 ///   - FullScreenAuxiliary (1 << 8)   作为全屏辅助浮层，盖在全屏 app 内容之上
-/// 合计 = 1 | 256 = 257。仅对 overlay 调；HUD（main）保持默认（不跨全屏，避免干扰沉浸）。
+/// 合计 = 1 | 256 = 257。
 #[cfg(target_os = "macos")]
 fn join_all_spaces(w: &tauri::WebviewWindow) {
     use objc2::msg_send;
@@ -427,9 +427,6 @@ fn make_panel(w: &tauri::WebviewWindow) {
     }
 }
 
-// make_key 已移除：show_overlay 改用 set_focus（激活 app + makeKey）替代。
-// 原理见 show_overlay 注释（删 main 后需显式激活 app，否则 WKWebView input 不接受键盘）。
-
 /// 返回当前前台 app 的 bundle id（NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier）。
 /// 用于 overlay 失焦检测：NSPanel nonActivatingPanel 不触发 Focused(false)，
 /// 改查 frontmost app 是否变化（变了 = 用户切到别的 app）。cc-view 自身是 accessory app
@@ -479,7 +476,7 @@ fn show_overlay(app: &tauri::AppHandle) {
     let _ = w.show();
     // window 必须 become key 才能让搜索框 focus/输入、顶栏拖动生效。canBecomeKeyWindow 已由
     // make_panel 的 method swizzle 强制 true（borderless 默认 false）。makeKeyAndOrderFront 成为
-    // key；activateIgnoringOtherApps 激活 app（WKWebView input 需 app active）。HUD 已删无牵连。
+    // key；activateIgnoringOtherApps 激活 app（WKWebView input 需 app active）。
     #[cfg(target_os = "macos")]
     unsafe {
         use objc2::{class, msg_send, runtime::AnyObject};
@@ -567,8 +564,8 @@ pub fn run() {
             // on_window_event 闭包签名是 Fn(&WindowEvent)（单参），拿不到 window 引用——
             // 外层 clone WebviewWindow（Tauri 2 派生 Clone，是廉价 handle 非拥有资源）
             // 再 move 进闭包，失焦时调 hide()。仅 overlay 有此行为。
-            // 同时套同款 Popover vibrancy——与 HUD 视觉一致；radius 12 比 main 略大，
-            // 命令面板观感更柔和。EffectState::Active 保证失焦时仍保持毛玻璃（不灰化）。
+            // 同时套同款 Popover vibrancy——与 overlay 视觉一致；radius 12，命令面板观感更柔和。
+            // EffectState::Active 保证失焦时仍保持毛玻璃（不灰化）。
             if let Some(overlay) = app.get_webview_window("overlay") {
                 let _ = overlay.set_effects(
                     EffectsBuilder::new()
