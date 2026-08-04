@@ -16,7 +16,7 @@ import { STATUS_ZH, statusRank, projShort, agoF, isFresh, hlParts } from '../uti
 const all = ref<Session[]>([]);
 const q = ref('');
 // 隐藏列表 + 显示已隐藏 toggle（从 App.vue HUD 分支迁入）。visible 按 toggle 过滤。
-const hidden = ref<string[]>([]);
+const hidden = ref<Set<string>>(new Set());
 const showHidden = ref(false);
 // 图钉（pin = 失焦不收起）：后端 command + overlay_position.json 驱动。
 const pinned = ref(false);
@@ -26,7 +26,7 @@ const searchRef = ref<HTMLInputElement>();
 
 // visible：按 showHidden toggle 过滤 hidden。off→只未隐藏；on→全显示。
 const visible = computed(() =>
-  showHidden.value ? all.value : all.value.filter(s => !hidden.value.includes(s.id)),
+  showHidden.value ? all.value : all.value.filter(s => !hidden.value.has(s.id)),
 );
 // 全集排序：rank → project 字母序 → statusUpdatedAt 降序（最近变更靠前）
 const sorted = computed(() =>
@@ -164,7 +164,7 @@ async function togglePin() {
 
 // 刷新隐藏列表（hide/unhide 成功后调，让 visible 立即反映）。
 async function refreshHidden() {
-  hidden.value = await invoke<string[]>('list_hidden');
+  hidden.value = new Set(await invoke<string[]>('list_hidden'));
 }
 
 // 隐藏/取消隐藏：成功后刷新 hidden 列表，visible 立即反映。
@@ -193,7 +193,7 @@ onMounted(async () => {
     console.error('get_sessions on mount failed', e);
   }
   try {
-    hidden.value = await invoke<string[]>('list_hidden');
+    hidden.value = new Set(await invoke<string[]>('list_hidden'));
   } catch (e) {
     console.error('list_hidden on mount failed', e);
   }
@@ -269,7 +269,7 @@ onMounted(async () => {
             dead: !s.alive,
             snoozed: s.snoozed,
             perm: s.status === 'needsPermission' && !s.snoozed,
-            'is-hidden': hidden.includes(s.id),
+            'is-hidden': hidden.has(s.id),
           }"
           role="button"
           tabindex="0"
@@ -301,7 +301,7 @@ onMounted(async () => {
           <span class="ago" :class="{ fresh: isFresh(s) }">
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
-            <span v-if="hidden.includes(s.id)" class="hidden-tag">已隐藏</span>
+            <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
           </span>
           <div class="actions">
             <button
@@ -318,9 +318,9 @@ onMounted(async () => {
             >搁置</button>
             <button
               class="act-btn hide"
-              :title="hidden.includes(s.id) ? '取消隐藏' : '隐藏'"
-              @click.stop="hidden.includes(s.id) ? unhide(s.id) : hide(s.id)"
-            >{{ hidden.includes(s.id) ? '取消隐藏' : '隐藏' }}</button>
+              :title="hidden.has(s.id) ? '取消隐藏' : '隐藏'"
+              @click.stop="hidden.has(s.id) ? unhide(s.id) : hide(s.id)"
+            >{{ hidden.has(s.id) ? '取消隐藏' : '隐藏' }}</button>
             <button
               class="act-btn copy"
               :class="{ done: copiedId === s.id }"
@@ -350,7 +350,7 @@ onMounted(async () => {
                 snoozed: s.snoozed,
                 perm: s.status === 'needsPermission' && !s.snoozed,
                 reply: s.status === 'waitingForReply' && !s.snoozed,
-                'is-hidden': hidden.includes(s.id),
+                'is-hidden': hidden.has(s.id),
               }"
               role="button"
               tabindex="0"
@@ -369,7 +369,7 @@ onMounted(async () => {
               <span class="ago" :class="{ fresh: isFresh(s) }">
                 <span v-if="isFresh(s)" class="fresh-dot" />
                 {{ agoF(s.statusUpdatedAt) }}
-                <span v-if="hidden.includes(s.id)" class="hidden-tag">已隐藏</span>
+                <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
               </span>
               <div class="actions">
                 <button
@@ -386,9 +386,9 @@ onMounted(async () => {
                 >搁置</button>
                 <button
                   class="act-btn hide"
-                  :title="hidden.includes(s.id) ? '取消隐藏' : '隐藏'"
-                  @click.stop="hidden.includes(s.id) ? unhide(s.id) : hide(s.id)"
-                >{{ hidden.includes(s.id) ? '取消隐藏' : '隐藏' }}</button>
+                  :title="hidden.has(s.id) ? '取消隐藏' : '隐藏'"
+                  @click.stop="hidden.has(s.id) ? unhide(s.id) : hide(s.id)"
+                >{{ hidden.has(s.id) ? '取消隐藏' : '隐藏' }}</button>
                 <button
                   class="act-btn copy"
                   :class="{ done: copiedId === s.id }"
