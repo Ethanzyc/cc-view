@@ -681,6 +681,10 @@ pub fn run() {
             set_interval
         ])
         .setup(|app| {
+            // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
+            // cc-view 平时 accessory（无 dock）——启动显式 set Accessory；打开偏好设置时切 Regular。
+            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             // 通知权限请求块——保留以兼容未来插件版本。
             // 上游限制（tauri-plugin-notification v2.3.3）：桌面端 request_permission() /
             // permission_state() 是 no-op stub，总返回 Ok(Granted)，故下方 matches!(Prompt)

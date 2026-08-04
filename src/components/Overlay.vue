@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Overlay 命令面板：搜索框 + 会话列表 + 每行操作（focus / 复制 ID / 搁置 / 恢复）。
+// Overlay 命令面板：搜索框 + 会话列表 + 每行操作（focus / 复制 / 搁置 / 恢复）。
 // 数据自管——直接 listen "sessions" event（与 HUD 同事件，互不干扰）。
 // 排序/分组/ago/isFresh 算法与分组逻辑一致（MVP 重复可接受；不抽 composable）。
 // 搜索态：扁平列表 + span 拆分高亮 + 计数；非搜索态：分组（同 HUD）。
@@ -125,7 +125,7 @@ async function focusSession(id: string) {
   }
 }
 
-// 复制 ID：优先 navigator.clipboard（WKWebView 支持，secure context）。
+// 复制：优先 navigator.clipboard（WKWebView 支持，secure context）。
 // 失败时 fallback 用 deprecated execCommand，再不行 console.error。
 async function copyId(id: string) {
   try {
@@ -324,9 +324,9 @@ onMounted(async () => {
             <button
               class="act-btn copy"
               :class="{ done: copiedId === s.id }"
-              :title="copiedId === s.id ? '已复制' : '复制 ID'"
+              :title="copiedId === s.id ? '已复制' : '复制'"
               @click.stop="copyId(s.id)"
-            >{{ copiedId === s.id ? '已复制' : '复制 ID' }}</button>
+            >{{ copiedId === s.id ? '已复制' : '复制' }}</button>
           </div>
         </li>
         <li v-if="!flatResults.length" class="empty">无匹配 "{{ q.trim() }}"</li>
@@ -392,9 +392,9 @@ onMounted(async () => {
                 <button
                   class="act-btn copy"
                   :class="{ done: copiedId === s.id }"
-                  :title="copiedId === s.id ? '已复制' : '复制 ID'"
+                  :title="copiedId === s.id ? '已复制' : '复制'"
                   @click.stop="copyId(s.id)"
-                >{{ copiedId === s.id ? '已复制' : '复制 ID' }}</button>
+                >{{ copiedId === s.id ? '已复制' : '复制' }}</button>
               </div>
             </li>
           </template>
@@ -721,7 +721,7 @@ onMounted(async () => {
   margin-left: var(--gap-xs);
 }
 
-/* 复制 ID 常驻显示（用户反馈：hover 切换有问题，要求一直可见，与搁置/隐藏一致） */
+/* 复制 常驻显示（用户反馈：hover 切换有问题，要求一直可见，与搁置/隐藏一致） */
 
 .empty {
   padding: var(--space-empty) var(--pad-x);

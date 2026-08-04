@@ -73,7 +73,7 @@ async function checkForUpdates() {
   upToDate.value = false;
   updateAvailable.value = null;
   try {
-    const upd = await check();
+    const upd = await check({ timeout: 8000 });
     if (upd) updateAvailable.value = upd;
     else upToDate.value = true;
   } catch (e: unknown) {
@@ -164,14 +164,16 @@ h1 { font-size: 18px; font-weight: 700; margin: 0 0 20px; }
   border: 1px solid var(--color-border); border-radius: 6px;
 }
 .error { color: var(--status-permission); margin-top: 16px; }
-.update-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+.update-section { margin-top: 24px; }
 .update-section .row { border-bottom: none; }
 .update-section button {
-  font-size: var(--fs-control); padding: 4px 12px;
-  background: var(--color-bg); color: var(--color-fg);
+  font-size: var(--fs-control); padding: 5px 14px;
+  background: var(--color-hover); color: var(--color-fg);
   border: 1px solid var(--color-border); border-radius: 6px;
   cursor: pointer;
+  transition: background var(--motion-duration) var(--motion-easing), color var(--motion-duration) var(--motion-easing), border-color var(--motion-duration) var(--motion-easing);
 }
+.update-section button:not(:disabled):hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .update-section button:disabled { opacity: 0.5; cursor: default; }
 .update-detail { margin-top: 12px; padding: 12px; background: var(--color-hover); border-radius: 8px; }
 .update-detail pre { white-space: pre-wrap; margin: 8px 0; font-size: 12px; }
