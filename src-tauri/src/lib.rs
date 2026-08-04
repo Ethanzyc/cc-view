@@ -369,6 +369,17 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
     }
 }
 
+/// 切换 app activation policy：0=regular（有 dock），1=accessory（无 dock）。
+/// cc-view 平时 accessory（LSUIElement）；打开偏好设置需 regular 给用户 app 入口。
+#[cfg(target_os = "macos")]
+fn set_activation_policy(policy: i64) {
+    use objc2::{class, msg_send, runtime::AnyObject};
+    unsafe {
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        let _: () = msg_send![app, setActivationPolicy: policy as objc2::ffi::NSInteger];
+    }
+}
+
 /// 把 overlay 的 NSWindow isa swizzle 成 NSPanel（Spotlight/Raycast 做法）。
 /// NSPanel + nonActivatingPanel 能在不激活 app 的情况下 become key 接受输入，
 /// 从而不触发 Space 归属/切换——这是普通 NSWindow 跨全屏 Space 的唯一可靠解法。
@@ -522,6 +533,17 @@ fn show_overlay(app: &tauri::AppHandle) {
     }
 }
 
+/// 打开偏好设置窗口：转 regular（dock 出现）→ show → focus。
+/// accessory app 默认无 dock，点偏好设置时需切 regular 提供 app 入口。
+fn open_prefs(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    set_activation_policy(0); // NSApplicationActivationPolicyRegular
+    if let Some(w) = app.get_webview_window("prefs") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -614,6 +636,20 @@ pub fn run() {
                 });
             }
 
+            // prefs 窗口：关闭即转回 accessory（dock 消失）+ hide（不销毁，下次复用）。
+            if let Some(prefs_win) = app.get_webview_window("prefs") {
+                let prefs_handle = app.handle().clone();
+                prefs_win.on_window_event(move |e| {
+                    if matches!(e, tauri::WindowEvent::CloseRequested { .. }) {
+                        #[cfg(target_os = "macos")]
+                        set_activation_policy(1); // accessory
+                        if let Some(w) = prefs_handle.get_webview_window("prefs") {
+                            let _ = w.hide();
+                        }
+                    }
+                });
+            }
+
             // 构建 menubar 托盘菜单：版本号(只读) / 显示面板 / 偏好设置(占位) / 检查更新(占位) / 退出。
             let version = env!("CARGO_PKG_VERSION");
             let version_item = MenuItem::with_id(
@@ -631,7 +667,7 @@ pub fn run() {
                 app.handle(),
                 "prefs",
                 "偏好设置…",
-                false,
+                true,
                 None::<&str>,
             )?;
             let update_item = MenuItem::with_id(
@@ -659,9 +695,10 @@ pub fn run() {
             })?;
             tray.set_menu(Some(menu))?;
 
-            // 菜单事件：show → 呼出 overlay；quit → 退出。version/prefs/update 占位 no-op。
+            // 菜单事件：show → 呼出 overlay；prefs → 打开偏好（转 regular）；quit → 退出。version/update 占位 no-op。
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "show" => show_overlay(app),
+                "prefs" => open_prefs(app),
                 "quit" => app.exit(0),
                 _ => {}
             });
