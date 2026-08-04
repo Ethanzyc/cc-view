@@ -680,15 +680,15 @@ onMounted(async () => {
   display: flex;
   gap: var(--gap-xs);
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.85;
   transition: opacity var(--motion-duration) var(--motion-easing);
 }
 .row:hover .actions { opacity: 1; }
 
 .act-btn {
-  background: var(--color-border);
+  background: var(--color-hover);
   border: none;
-  color: var(--color-muted);
+  color: var(--color-fg);
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   font-family: inherit;
   padding: var(--gap-xs) var(--gap);
@@ -699,7 +699,7 @@ onMounted(async () => {
   -webkit-font-smoothing: antialiased;
 }
 .act-btn:hover {
-  background: var(--color-hover);
+  background: color-mix(in srgb, var(--color-primary) 22%, var(--color-hover));
   color: var(--color-fg);
 }
 .act-btn:focus-visible {

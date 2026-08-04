@@ -77,7 +77,10 @@ async function checkForUpdates() {
     if (upd) updateAvailable.value = upd;
     else upToDate.value = true;
   } catch (e: unknown) {
-    error.value = typeof e === 'string' ? e : (e as Error)?.message ?? '检查失败';
+    const msg = typeof e === 'string' ? e : (e as Error)?.message ?? '检查失败';
+    error.value = /sending request|fetch|network|timeout|connect/i.test(msg)
+      ? '⚠ 无法连接 GitHub（网络/代理问题）'
+      : msg;
   } finally {
     checking.value = false;
   }
