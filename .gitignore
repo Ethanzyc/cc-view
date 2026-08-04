@@ -26,3 +26,4 @@ dist-ssr
 # Project
 .superpowers/
 src-tauri/target/
+.gstack/
