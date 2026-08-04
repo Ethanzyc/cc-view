@@ -88,24 +88,12 @@ pub fn collect_sessions() -> Vec<Session> {
             Ok(mut s) => {
                 s.alive = is_claude_alive(pid);
                 if s.alive {
-                    // /status Session name 逻辑：sessions.json 的 name 有意义（用户改名，
-                    // nameSource≠derived 且非 sessionId 短码）则用它；否则（derived/sessionId 短码）
-                    // fallback 到 JSONL 的 ai-title（Claude 生成的会话标题）。无 ai-title 则保留 sessions name。
-                    // 实测：cc-view-45(sessions=derived) /status 显示 ai-title；c80b3e62(sessions=述职) 显示 sessions name。
-                    let name_source = serde_json::from_str::<serde_json::Value>(&json)
-                        .ok()
-                        .and_then(|d| {
-                            d.get("nameSource")
-                                .and_then(|v| v.as_str())
-                                .map(str::to_string)
-                        });
-                    let id_prefix = s.id.get(..8).unwrap_or("");
-                    let name_meaningful =
-                        name_source.as_deref() != Some("derived") && s.name != id_prefix;
-                    if !name_meaningful {
-                        if let Some(title) = read_ai_title(&s.id, &s.cwd) {
-                            s.name = title;
-                        }
+                    // /status Session name 逻辑（参考 claude-hud transcript.ts）：JSONL
+                    // custom-title（/rename 用户改名）优先，否则 ai-title（Claude 生成）。
+                    // 无两者则保留 sessions.json 的 name（derived/sessionId 短码）。
+                    // 实测：cc-view-45(无custom,ai=了解...)→了解...；述职(custom=述职)→述职。
+                    if let Some(title) = read_session_title(&s.id, &s.cwd) {
+                        s.name = title;
                     }
                     // 末尾文本一次读出，供 pending tool_use + compact 检测共用（避免两次 seek）
                     // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
@@ -251,25 +239,35 @@ pub fn read_jsonl_tail_text(session_id: &str, cwd: &str) -> Option<String> {
     Some(text.to_string())
 }
 
-/// 解析 JSONL 文本：找最后一条 `type=ai-title` 的 `aiTitle`（Claude 生成的会话短标题）。
-/// /status 的 Session name 在 sessions.json name 无意义（derived/sessionId 短码）时用它。
-pub fn parse_ai_title(text: &str) -> Option<String> {
-    let mut last: Option<String> = None;
+/// 解析 JSONL 文本，取会话标题：最后一条 `custom-title`（/rename 用户改名）优先，
+/// 否则最后一条 `ai-title`（Claude 生成）。与 Claude Code /status 同源
+/// （参考 claude-hud transcript.ts: customTitle ?? aiTitle）。无则 None。
+pub fn parse_session_title(text: &str) -> Option<String> {
+    let mut custom: Option<String> = None;
+    let mut ai: Option<String> = None;
     for line in text.lines() {
-        if !line.contains("\"type\":\"ai-title\"") {
+        let Ok(d) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
-        }
-        if let Ok(d) = serde_json::from_str::<serde_json::Value>(line) {
-            if let Some(t) = d.get("aiTitle").and_then(|v| v.as_str()) {
-                last = Some(t.to_string());
+        };
+        match d.get("type").and_then(|v| v.as_str()) {
+            Some("custom-title") => {
+                if let Some(t) = d.get("customTitle").and_then(|v| v.as_str()) {
+                    custom = Some(t.to_string());
+                }
             }
+            Some("ai-title") => {
+                if let Some(t) = d.get("aiTitle").and_then(|v| v.as_str()) {
+                    ai = Some(t.to_string());
+                }
+            }
+            _ => {}
         }
     }
-    last
+    custom.or(ai)
 }
 
-/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 全文，取最后一条 ai-title。
-pub fn read_ai_title(session_id: &str, cwd: &str) -> Option<String> {
+/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 全文，取会话标题（custom ?? ai）。
+pub fn read_session_title(session_id: &str, cwd: &str) -> Option<String> {
     let home = dirs::home_dir()?;
     let encoded = cwd.replace('/', "-");
     let path = home
@@ -277,7 +275,7 @@ pub fn read_ai_title(session_id: &str, cwd: &str) -> Option<String> {
         .join(&encoded)
         .join(format!("{}.jsonl", session_id));
     let text = std::fs::read_to_string(&path).ok()?;
-    parse_ai_title(&text)
+    parse_session_title(&text)
 }
 
 /// 扫 JSONL 末尾文本：若任行含 compact_boundary 标志 → true。
@@ -520,16 +518,22 @@ mod tests {
     }
 
     #[test]
-    fn parse_ai_title_finds_last() {
-        let text = "{\"type\":\"ai-title\",\"aiTitle\":\"旧标题\",\"sessionId\":\"x\"}\n\
-{\"type\":\"user\",\"message\":\"hi\"}\n\
-{\"type\":\"ai-title\",\"aiTitle\":\"新标题\",\"sessionId\":\"x\"}";
-        assert_eq!(parse_ai_title(text).as_deref(), Some("新标题"));
+    fn parse_session_title_custom_over_ai() {
+        // custom-title（用户 rename）优先于 ai-title（Claude 生成）
+        let text = "{\"type\":\"ai-title\",\"aiTitle\":\"AI生成标题\",\"sessionId\":\"x\"}\n\
+{\"type\":\"custom-title\",\"customTitle\":\"用户改名\",\"slug\":\"abc\"}";
+        assert_eq!(parse_session_title(text).as_deref(), Some("用户改名"));
     }
 
     #[test]
-    fn parse_ai_title_none_when_absent() {
-        assert_eq!(parse_ai_title("{\"type\":\"user\",\"message\":\"hi\"}"), None);
+    fn parse_session_title_ai_when_no_custom() {
+        let text = "{\"type\":\"ai-title\",\"aiTitle\":\"AI生成标题\",\"sessionId\":\"x\"}";
+        assert_eq!(parse_session_title(text).as_deref(), Some("AI生成标题"));
+    }
+
+    #[test]
+    fn parse_session_title_none_when_absent() {
+        assert_eq!(parse_session_title("{\"type\":\"user\",\"message\":\"hi\"}"), None);
     }
 
     #[test]
