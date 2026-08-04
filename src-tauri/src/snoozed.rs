@@ -12,7 +12,6 @@ impl SnoozeMap {
         Self { map: HashMap::new() }
     }
 
-    #[allow(dead_code)]
     pub fn load() -> Self {
         let Some(home) = dirs::home_dir() else { return Self::empty(); };
         let path = home.join(".claude/cc-view/snoozed.json");
@@ -28,7 +27,6 @@ impl SnoozeMap {
         }
     }
 
-    #[allow(dead_code)]
     pub fn save(&self) {
         let Some(home) = dirs::home_dir() else { return; };
         let dir = home.join(".claude/cc-view");
@@ -46,7 +44,6 @@ impl SnoozeMap {
         self.map.remove(id);
     }
 
-    #[allow(dead_code)]
     pub fn to_map(&self) -> HashMap<String, i64> {
         self.map.clone()
     }
