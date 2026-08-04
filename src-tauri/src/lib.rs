@@ -5,6 +5,7 @@ mod discovery;
 mod focus;
 mod hidden;
 mod hud;
+mod overlay_position;
 mod liveness;
 mod models;
 mod notify;
