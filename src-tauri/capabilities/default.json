@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the overlay window",
-  "windows": ["overlay"],
+  "description": "Capability for the overlay and prefs windows",
+  "windows": ["overlay", "prefs"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

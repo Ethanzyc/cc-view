@@ -25,6 +25,18 @@
         "alwaysOnTop": true,
         "transparent": true,
         "shadow": true
+      },
+      {
+        "label": "prefs",
+        "url": "index.html",
+        "visible": false,
+        "decorations": true,
+        "resizable": false,
+        "width": 480,
+        "height": 460,
+        "center": true,
+        "skipTaskbar": false,
+        "title": "cc-view 偏好设置"
       }
     ],
     "trayIcon": {
