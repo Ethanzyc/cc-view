@@ -187,7 +187,7 @@ async function focus(id: string) {
           <div class="info">
             <div class="line1">
               <span class="name">{{ s.name || s.project }}</span>
-              <span class="status-zh">{{ STATUS_ZH[s.status] }}</span>
+              <span class="status-zh" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
             </div>
             <div class="line2">{{ projShort(s.project) }}</div>
           </div>
@@ -334,6 +334,10 @@ async function focus(id: string) {
   font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
   color: var(--color-muted);
   flex-shrink: 0;
+}
+/* needsPermission 状态文字染橙（与 Overlay 一致，强调最紧急） */
+.status-zh.perm {
+  color: var(--status-permission);
 }
 .line2 {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
