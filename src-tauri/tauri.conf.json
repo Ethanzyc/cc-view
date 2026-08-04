@@ -13,19 +13,6 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "label": "main",
-        "title": "cc-view",
-        "visible": true,
-        "decorations": false,
-        "resizable": false,
-        "transparent": true,
-        "width": 340,
-        "height": 480,
-        "skipTaskbar": true,
-        "alwaysOnTop": true,
-        "shadow": true
-      },
-      {
         "label": "overlay",
         "url": "index.html",
         "visible": false,

@@ -4,7 +4,6 @@ mod collector;
 mod discovery;
 mod focus;
 mod hidden;
-mod hud;
 mod overlay_position;
 mod liveness;
 mod models;
@@ -330,31 +329,6 @@ fn focus_session(id: String, cache: tauri::State<'_, Mutex<Vec<models::Session>>
     }
 }
 
-// --- HUD always-on-top（图钉）command ---
-// 后端驱动：前端不直接调 window API（免 capability 麻烦），由 command 中转 set_always_on_top。
-
-/// 读取 HUD 是否置顶（磁盘无记录时默认 true）。
-#[tauri::command]
-fn get_hud_pinned() -> bool {
-    hud::HudPosition::load()
-        .map(|p| p.always_on_top)
-        .unwrap_or(true)
-}
-
-/// 切换 HUD 置顶状态：先调原生 set_always_on_top，再把 pinned 连同现有 (x, y) 一起持久化。
-#[tauri::command]
-fn set_hud_pinned(pinned: bool, app: tauri::AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.set_always_on_top(pinned);
-    } else {
-        eprintln!("set_hud_pinned: main window not found");
-    }
-    let (x, y) = hud::HudPosition::load()
-        .map(|p| (p.x, p.y))
-        .unwrap_or((0, 0));
-    hud::HudPosition::save_all(x, y, pinned);
-}
-
 // --- overlay pin（图钉：失焦是否自动收起）command ---
 // pin 状态由 app State<Mutex<bool>> 持有，失焦双机制读它判断要不要 hide。
 // set 时同步持久化（保留磁盘 x,y），开机/重启按记忆恢复。
@@ -551,8 +525,6 @@ pub fn run() {
             list_hidden,
             focus_session,
             get_sessions,
-            get_hud_pinned,
-            set_hud_pinned,
             get_overlay_pinned,
             set_overlay_pinned,
             snooze_session,
@@ -571,37 +543,6 @@ pub fn run() {
             let notif = app.notification();
             if matches!(notif.permission_state(), Ok(PermissionState::Prompt)) {
                 let _ = notif.request_permission();
-            }
-
-            // 给 popover 窗口设原生 vibrancy（NSVisualEffectView，系统渲染）。
-            // 替代 CSS backdrop-filter：桌面变化时背景稳定，且自适应明暗主题。
-            // HudWindow material：HUD 面板专用，比 Popover 更暗更不透明——深色模式下
-            // Popover 偏中灰透桌面亮色，灰阶文字（muted/tertiary）对比不足发糊。radius 8 与 .app 对齐。
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.set_effects(
-                    EffectsBuilder::new()
-                        .effect(Effect::HudWindow)
-                        .state(EffectState::Active)
-                        .radius(8.)
-                        .build(),
-                );
-
-                // 恢复上次保存的 HUD 位置（vibrancy 之后）。
-                // 找不到 / 失败时静默使用 tauri.conf.json 默认位置。
-                if let Some(pos) = hud::HudPosition::load() {
-                    let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-                    // 按记忆的 always_on_top 设置（默认 true，保持现有行为）
-                    let _ = w.set_always_on_top(pos.always_on_top);
-                }
-
-                // 拖动 HUD 后存位置：WindowEvent::Moved 携带 PhysicalPosition<i32>，
-                // 直接传给 hud::HudPosition::save 即可（无需 cast）。
-                // on_window_event 接收 Fn(&WindowEvent) + Send + 'static。
-                w.on_window_event(|e| {
-                    if let tauri::WindowEvent::Moved(p) = e {
-                        hud::HudPosition::save(p.x, p.y);
-                    }
-                });
             }
 
             // overlay 窗口：失焦自动 hide（Alfred/uTools 行为——点别处就收起）。
