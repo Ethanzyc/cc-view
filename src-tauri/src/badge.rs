@@ -99,8 +99,14 @@ mod tests {
 
     #[test]
     fn count_over_9_capped() {
-        // >9 显示 9+，不 panic
+        // >9 显示 9+：画白点阵（数字 9 与 "+"），不 panic 且有白像素
         let src = tauri::image::Image::new_owned(vec![0u8; 22 * 22 * 4], 22, 22);
-        let _ = draw_badge(&src, 99); // 不 panic 即可
+        let out = draw_badge(&src, 99);
+        let white_count = out
+            .rgba()
+            .chunks_exact(4)
+            .filter(|p| p[0] == 255 && p[1] == 255 && p[2] == 255 && p[3] == 255)
+            .count();
+        assert!(white_count > 0, "9+ must paint white digit pixels");
     }
 }

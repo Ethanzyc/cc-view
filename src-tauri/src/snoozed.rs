@@ -63,7 +63,7 @@ impl SnoozeMap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{FocusHint, Session, Source, Status};
+    use crate::models::{FocusHint, Source};
 
     fn sess(id: &str, st: Status, updated_at: i64) -> Session {
         Session {

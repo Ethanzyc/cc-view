@@ -132,7 +132,7 @@ function isFresh(s: Session): boolean {
 type HlSeg = { text: string; hl: boolean };
 function hlParts(text: string, k: string): HlSeg[] {
   if (!k) return [{ text, hl: false }];
-  const i = text.toLowerCase().indexOf(k.toLowerCase());
+  const i = text.toLowerCase().indexOf(k);
   if (i < 0) return [{ text, hl: false }];
   return [
     { text: text.slice(0, i), hl: false },
@@ -621,11 +621,6 @@ onMounted(async () => {
 .act-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
-}
-
-/* 搁置 / 恢复 按钮：与复制按钮并列，样式一致（淡背景） */
-.act-btn.snooze {
-  /* 同 .act-btn 基础样式；保留独立 class 便于后续语义化扩展 */
 }
 
 /* 复制成功状态：主色蓝 */
