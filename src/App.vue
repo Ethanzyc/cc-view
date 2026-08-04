@@ -158,6 +158,7 @@ function onUnsnooze(id: string) {
   /* 状态语义色（StatusIcon） */
   --status-working: #30D158;
   --status-waiting: #0A84FF;
+  --status-reply: #FFD60A;
   --status-permission: #FF9F0A;
   --status-shell: #BF5AF2;
   --status-compacting: #64D2FF;

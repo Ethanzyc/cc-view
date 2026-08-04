@@ -5,21 +5,23 @@ import type { Session, Status } from '../types';
 export const STATUS_ZH: Record<Status, string> = {
   working: '工作中',
   waitingForInput: '等输入',
+  waitingForReply: '等回答',
   needsPermission: '等权限',
   shell: 'Shell',
   compacting: '压缩中',
 };
 
-// 排序档：等权限 > 等输入 > 工作 > Shell > 压缩 > 搁置(alive 5.5) > 已退出(6) > 搁置(dead 6.5)
+// 排序档：等权限 > 等回答 > 等输入 > 工作 > Shell > 压缩 > 搁置(alive 6.5) > 已退出(7) > 搁置(dead 7.5)
 export function statusRank(s: Session): number {
-  if (s.snoozed) return s.alive ? 5.5 : 6.5;
-  if (!s.alive) return 6;
+  if (s.snoozed) return s.alive ? 6.5 : 7.5;
+  if (!s.alive) return 7;
   switch (s.status) {
     case 'needsPermission': return 1;
-    case 'waitingForInput': return 2;
-    case 'working': return 3;
-    case 'shell': return 4;
-    case 'compacting': return 5;
+    case 'waitingForReply': return 2;
+    case 'waitingForInput': return 3;
+    case 'working': return 4;
+    case 'shell': return 5;
+    case 'compacting': return 6;
     default: return 99;
   }
 }
@@ -37,10 +39,10 @@ export function agoF(ts: number): string {
   return `${Math.floor(s / 86400)}d`;
 }
 
-// "刚完成"高亮：waitingForInput 且 ago < 120s 且未搁置（搁置行不显示蓝点）
+// "刚完成/刚提问"高亮：等输入或等回答 且 ago < 120s 且未搁置（搁置行不显示蓝点）
 export function isFresh(s: Session): boolean {
   return !s.snoozed &&
-    s.status === 'waitingForInput' &&
+    (s.status === 'waitingForInput' || s.status === 'waitingForReply') &&
     Date.now() - s.statusUpdatedAt < 120_000;
 }
 

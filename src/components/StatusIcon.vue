@@ -9,6 +9,7 @@ const props = defineProps<{ status: Status }>();
 const COLOR: Record<Status, string> = {
   working:         'var(--status-working)',
   waitingForInput: 'var(--status-waiting)',
+  waitingForReply: 'var(--status-reply)',
   needsPermission: 'var(--status-permission)',
   shell:           'var(--status-shell)',
   compacting:      'var(--status-compacting)',
@@ -37,6 +38,15 @@ const COLOR: Record<Status, string> = {
       <circle cx="5.3" cy="6.75" r="0.55" fill="currentColor" stroke="none" />
       <circle cx="8" cy="6.75" r="0.55" fill="currentColor" stroke="none" />
       <circle cx="10.7" cy="6.75" r="0.55" fill="currentColor" stroke="none" />
+    </g>
+
+    <!-- 对话气泡 + 问号: WaitingForReply（过程中提问，必须回答才能继续）-->
+    <g v-else-if="status === 'waitingForReply'">
+      <path d="M3.5 3 H12.5 A1.5 1.5 0 0 1 14 4.5 V9 A1.5 1.5 0 0 1 12.5 10.5 H7.5 L5 13 V10.5 H3.5 A1.5 1.5 0 0 1 2 9 V4.5 A1.5 1.5 0 0 1 3.5 3 Z" />
+      <!-- 问号上半钩弧 -->
+      <path d="M6.2 7 A1.8 1.8 0 1 1 8 8.8" />
+      <!-- 问号点 -->
+      <circle cx="8" cy="10.1" r="0.5" fill="currentColor" stroke="none" />
     </g>
 
     <!-- 挂锁: NeedsPermission -->

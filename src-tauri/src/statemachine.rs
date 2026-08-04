@@ -14,6 +14,9 @@ pub fn decide(input: &DecideInput) -> Status {
     match input.raw_status {
         "busy" => Status::Working,
         "shell" => Status::Shell,
+        // sessions.json status="waiting"：过程中提问（Claude 问了问题，必须回答才能继续）。
+        // 区别于 "idle"（任务完成、等下一条指令）→ WaitingForInput。
+        "waiting" => Status::WaitingForReply,
         _ => Status::WaitingForInput,
     }
 }
@@ -37,5 +40,10 @@ mod tests {
     #[test]
     fn unknown_status_is_waiting() {
         assert_eq!(decide(&DecideInput { raw_status: "idle", pending_permission: false }), Status::WaitingForInput);
+    }
+    #[test]
+    fn waiting_is_waiting_for_reply() {
+        // sessions.json status="waiting" = 过程中提问，区别于 "idle"（任务完成）
+        assert_eq!(decide(&DecideInput { raw_status: "waiting", pending_permission: false }), Status::WaitingForReply);
     }
 }

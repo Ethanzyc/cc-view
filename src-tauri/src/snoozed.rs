@@ -50,12 +50,13 @@ impl SnoozeMap {
 
     /// 有效搁置：有 snoozedAt，且未触发自动失效。
     /// 失效 = 搁置后状态又更新(statusUpdatedAt > snoozedAt) 且停在需要介入的状态
-    ///        (WaitingForInput | NeedsPermission) → 自动冒泡回待介入。
+    ///        (WaitingForInput | WaitingForReply | NeedsPermission) → 自动冒泡回待介入。
+    /// 含 WaitingForReply：Claude 新提问是"新动作"，搁置中的提问也该冒泡提醒。
     /// 边界：statusUpdatedAt == snoozedAt 不算更新（同刻搁置不立即失效）。
     pub fn is_effectively_snoozed(&self, s: &Session) -> bool {
         let Some(at) = self.map.get(&s.id).copied() else { return false; };
         let stale = s.status_updated_at > at
-            && matches!(s.status, Status::WaitingForInput | Status::NeedsPermission);
+            && matches!(s.status, Status::WaitingForInput | Status::WaitingForReply | Status::NeedsPermission);
         !stale
     }
 }

@@ -95,8 +95,8 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         let orange_icon = tray_icon.as_ref().map(tint_orange);
         // 跟踪 attention 状态，仅在 0↔>0 跳变时 set_icon（避免每轮 main-thread IPC 重绘）
         let mut last_attention = false;
-        // perm_count 防抖：仅在等权限计数变化时重画 badge（避免每轮 main-thread IPC 重绘）
-        let mut last_perm_count: usize = 0;
+        // urgent_count 防抖：仅在必须响应计数（权限+回答）变化时重画 badge
+        let mut last_urgent_count: usize = 0;
         loop {
             let sessions = collector::collect_sessions();
             let merged = reducer::reduce(sessions);
@@ -111,63 +111,76 @@ fn start_poll_loop(handle: tauri::AppHandle) {
             for (name, status) in to_notify {
                 let status_zh = match status {
                     models::Status::NeedsPermission => "等待权限确认",
+                    models::Status::WaitingForReply => "等待你回答",
                     models::Status::WaitingForInput => "等待输入",
                     _ => "需要关注",
                 };
                 notify::send_notification(&handle, "cc-view", &format!("{}：{}", name, status_zh));
             }
 
-            // 聚合：need_attention = alive && !snoozed && (NeedsPermission|WaitingForInput)；
-            //       working       = alive && Working
-            // 排除 snoozed：snoozed = "暂时不管"，不该橙显/计入"等我"（与 notify 语义一致）。
-            let need_attention = derived
-                .iter()
-                .filter(|s| {
-                    s.alive
-                        && !s.snoozed
-                        && matches!(
-                            s.status,
-                            models::Status::NeedsPermission | models::Status::WaitingForInput
-                        )
-                })
-                .count();
-            let working = derived
-                .iter()
-                .filter(|s| s.alive && matches!(s.status, models::Status::Working))
-                .count();
-
-            // perm_count：等权限（硬阻塞）计数，用于 tray badge。
-            // 排除 snoozed（按失效规则应已 unsnooze，保险排除）。
-            let perm_count = derived
-                .iter()
-                .filter(|s| s.alive && !s.snoozed && matches!(s.status, models::Status::NeedsPermission))
-                .count();
+            // 聚合计数（一轮遍历）：
+            //   perm   = 等权限（硬阻塞，工具待批准）
+            //   reply  = 等回答（过程中提问，必须回答才能继续）
+            //   idle   = 等输入（任务完成，等下一条指令）
+            //   working 不排 snoozed（工作就是工作；搁置只压"等我"计数）
+            // perm/reply/idle 排除 snoozed：搁置 = "暂时不管"，不催促（与 notify 语义一致）。
+            let mut perm = 0usize;
+            let mut reply = 0usize;
+            let mut idle = 0usize;
+            let mut working = 0usize;
+            for s in &derived {
+                if !s.alive {
+                    continue;
+                }
+                match s.status {
+                    models::Status::Working => working += 1,
+                    _ if s.snoozed => {}
+                    models::Status::NeedsPermission => perm += 1,
+                    models::Status::WaitingForReply => reply += 1,
+                    models::Status::WaitingForInput => idle += 1,
+                    _ => {}
+                }
+            }
+            // urgent = 必须立刻响应（权限 + 回答）→ 驱动 tray badge 红圆数字
+            let urgent = perm + reply;
 
             if let Some(tray) = handle.tray_by_id("main") {
-                // tooltip 三段：perm>0 时最前加"等权限"段（硬阻塞优先于软阻塞等我）
-                let tip = if perm_count > 0 {
-                    format!("{} 等权限 · {} 等我 · {} 工作", perm_count, need_attention, working)
-                } else if need_attention > 0 {
-                    format!("{} 等我 · {} 工作", need_attention, working)
+                // tooltip：urgent>0 时按权限/回答/等我/工作分段（仅显示 >0 的段）；
+                //          否则 idle>0 → "等我·工作"；再否则 → "工作"。
+                let tip = if urgent > 0 {
+                    let mut parts: Vec<String> = Vec::new();
+                    if perm > 0 {
+                        parts.push(format!("{} 等权限", perm));
+                    }
+                    if reply > 0 {
+                        parts.push(format!("{} 等回答", reply));
+                    }
+                    if idle > 0 {
+                        parts.push(format!("{} 等我", idle));
+                    }
+                    parts.push(format!("{} 工作", working));
+                    parts.join(" · ")
+                } else if idle > 0 {
+                    format!("{} 等我 · {} 工作", idle, working)
                 } else {
                     format!("{} 工作", working)
                 };
                 // set_tooltip 走 main-thread IPC 但开销极小，每轮更新无妨
                 let _ = tray.set_tooltip(Some(tip));
 
-                // tray icon 三态：perm>0 → badge icon（红圆数字，template=false）；
-                //                  attention>0 → 橙色实色 + template=false（跳出 menubar 引起注意）；
-                //                  否则单色剪影 + template=true（自动适配深浅栏）。
-                // 仅在 perm_count 或 attention 跳变时 set_icon（避免每轮 main-thread IPC 重绘）。
-                let has_attention = need_attention > 0;
-                if perm_count != last_perm_count || has_attention != last_attention {
-                    last_perm_count = perm_count;
-                    last_attention = has_attention;
-                    let (icon, as_template) = if perm_count > 0 {
+                // tray icon 三态：urgent>0 → badge（红圆数字 = 权限+回答总数，template=false）；
+                //                  idle>0   → 橙色实色（任务完成待我，非紧急）；
+                //                  否则     → 单色剪影 + template=true（自动适配深浅栏）。
+                // 仅在 urgent 或 idle-attention 跳变时 set_icon（避免每轮 main-thread IPC 重绘）。
+                let has_idle_attention = idle > 0;
+                if urgent != last_urgent_count || has_idle_attention != last_attention {
+                    last_urgent_count = urgent;
+                    last_attention = has_idle_attention;
+                    let (icon, as_template) = if urgent > 0 {
                         // badge 合成：基于单色剪影底图画红圆数字，template=false 才能显出红色。
                         // draw_badge 返回 owned Image，无借用逃逸问题。
-                        (tray_icon.as_ref().map(|img| badge::draw_badge(img, perm_count)), false)
-                    } else if has_attention {
+                        (tray_icon.as_ref().map(|img| badge::draw_badge(img, urgent)), false)
+                    } else if has_idle_attention {
                         (orange_icon.clone(), false)
                     } else {
                         (tray_icon.clone(), true)

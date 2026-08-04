@@ -415,6 +415,7 @@ pub fn parse_agents(json: &str) -> Vec<Session> {
             match st {
                 "busy" => Status::Working,
                 "idle" => Status::WaitingForInput,
+                "waiting" => Status::WaitingForReply,
                 _ => Status::Working,
             }
         } else if let Some(state) = a.state.as_deref() {

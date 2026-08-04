@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 pub enum Status {
     Working,
     WaitingForInput,
+    /// 过程中提问（sessions.json status="waiting"）：Claude 问了问题/呈现选项，
+    /// 必须用户回答才能继续当前任务。区别于 WaitingForInput（任务完成、等下一条指令）。
+    WaitingForReply,
     NeedsPermission,
     Shell,
     Compacting, // post-compact 窗口（刚 compact 完、agent 未 resume）；进行中无法从 JSONL 检测

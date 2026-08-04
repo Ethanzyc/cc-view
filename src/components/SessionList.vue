@@ -135,6 +135,7 @@ async function focus(id: string) {
             dead: !s.alive,
             snoozed: s.snoozed,
             'perm-row': s.status === 'needsPermission' && !s.snoozed,
+            'reply-row': s.status === 'waitingForReply' && !s.snoozed,
           }"
           role="button"
           tabindex="0"
@@ -146,7 +147,7 @@ async function focus(id: string) {
           <div class="info">
             <div class="line1">
               <span class="name">{{ s.name || s.project }}</span>
-              <span class="status-zh" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
+              <span class="status-zh" :class="{ perm: s.status === 'needsPermission', reply: s.status === 'waitingForReply' }">{{ STATUS_ZH[s.status] }}</span>
             </div>
             <div class="line2">{{ projShort(s.project) }}</div>
           </div>
@@ -162,7 +163,7 @@ async function focus(id: string) {
               @click.stop="unsnooze(s.id)"
             >恢复</button>
             <button
-              v-else-if="s.alive && s.status === 'waitingForInput'"
+              v-else-if="s.alive && (s.status === 'waitingForInput' || s.status === 'waitingForReply')"
               class="snooze-btn"
               title="搁置（暂时不管）"
               @click.stop="snooze(s.id)"
@@ -255,6 +256,15 @@ async function focus(id: string) {
   background: color-mix(in srgb, var(--status-permission) 16%, transparent);
 }
 
+/* WaitingForReply 行（非搁置）：左侧 2px 黄边框 + 浅黄背景（过程中提问，次紧急）*/
+.row.reply-row {
+  border-left-color: var(--status-reply);
+  background: color-mix(in srgb, var(--status-reply) 12%, transparent);
+}
+.row.reply-row:hover {
+  background: color-mix(in srgb, var(--status-reply) 18%, transparent);
+}
+
 /* dead 行半透明 */
 .row.dead {
   opacity: 0.45;
@@ -297,6 +307,10 @@ async function focus(id: string) {
 /* needsPermission 状态文字染橙（与 Overlay 一致，强调最紧急） */
 .status-zh.perm {
   color: var(--status-permission);
+}
+/* waitingForReply 状态文字染黄（次紧急，过程中提问） */
+.status-zh.reply {
+  color: var(--status-reply);
 }
 .line2 {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);

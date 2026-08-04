@@ -214,7 +214,7 @@ onMounted(async () => {
                   :class="{ hl: seg.hl }"
                 >{{ seg.text }}</span>
               </span>
-              <span class="status-zh" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
+              <span class="status-zh" :class="{ perm: s.status === 'needsPermission', reply: s.status === 'waitingForReply' }">{{ STATUS_ZH[s.status] }}</span>
             </div>
             <div class="line2">
               <span
@@ -236,7 +236,7 @@ onMounted(async () => {
               @click.stop="unsnooze(s.id)"
             >恢复</button>
             <button
-              v-else-if="s.alive && s.status === 'waitingForInput'"
+              v-else-if="s.alive && (s.status === 'waitingForInput' || s.status === 'waitingForReply')"
               class="act-btn snooze"
               title="搁置（暂时不管）"
               @click.stop="snooze(s.id)"
@@ -269,6 +269,7 @@ onMounted(async () => {
                 dead: !s.alive,
                 snoozed: s.snoozed,
                 perm: s.status === 'needsPermission' && !s.snoozed,
+                reply: s.status === 'waitingForReply' && !s.snoozed,
               }"
               role="button"
               tabindex="0"
@@ -281,7 +282,7 @@ onMounted(async () => {
               <div class="info">
                 <div class="line1">
                   <span class="name">{{ s.name || s.project }}</span>
-                  <span class="status-zh" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
+                  <span class="status-zh" :class="{ perm: s.status === 'needsPermission', reply: s.status === 'waitingForReply' }">{{ STATUS_ZH[s.status] }}</span>
                 </div>
                 <div class="line2">{{ projShort(s.project) }}</div>
               </div>
@@ -297,7 +298,7 @@ onMounted(async () => {
                   @click.stop="unsnooze(s.id)"
                 >恢复</button>
                 <button
-                  v-else-if="s.alive && s.status === 'waitingForInput'"
+                  v-else-if="s.alive && (s.status === 'waitingForInput' || s.status === 'waitingForReply')"
                   class="act-btn snooze"
                   title="搁置（暂时不管）"
                   @click.stop="snooze(s.id)"
@@ -461,6 +462,14 @@ onMounted(async () => {
 .row.perm:hover {
   background: color-mix(in srgb, var(--status-permission) 16%, transparent);
 }
+/* WaitingForReply 行（非搁置）：左侧 2px 黄边框 + 浅黄背景（次紧急，过程中提问） */
+.row.reply {
+  border-left-color: var(--status-reply);
+  background: color-mix(in srgb, var(--status-reply) 12%, transparent);
+}
+.row.reply:hover {
+  background: color-mix(in srgb, var(--status-reply) 18%, transparent);
+}
 
 /* dead 行半透明 */
 .row.dead {
@@ -503,6 +512,10 @@ onMounted(async () => {
 /* needsPermission 状态中文标橙（行已橙边，文字也橙，双重视觉提示） */
 .status-zh.perm {
   color: var(--status-permission);
+}
+/* waitingForReply 状态中文标黄（次紧急） */
+.status-zh.reply {
+  color: var(--status-reply);
 }
 .line2 {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);

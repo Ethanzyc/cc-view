@@ -14,7 +14,7 @@ impl Notifier {
         }
     }
 
-    /// 返回本次新迁移到 NeedsPermission/WaitingInput 的 (name, status)。纯逻辑。
+    /// 返回本次新迁移到 NeedsPermission/WaitingForReply/WaitingInput 的 (name, status)。纯逻辑。
     /// 首轮 observe 只初始化 `last` 不发通知——避免启动时多个 idle session 触发通知轰炸。
     pub fn observe(&mut self, sessions: &[Session]) -> Vec<(String, Status)> {
         let mut cur = HashMap::new();
@@ -29,8 +29,11 @@ impl Notifier {
         }
         let mut to_notify = Vec::new();
         for s in sessions {
-            // 仅活 session 且状态为 NeedsPermission/WaitingInput 且未搁置(!snoozed) 时判定通知
-            if s.alive && !s.snoozed && matches!(s.status, Status::NeedsPermission | Status::WaitingForInput) {
+            // 活 session 且未搁置且状态为需介入（权限/提问/等输入）时判定通知
+            if s.alive
+                && !s.snoozed
+                && matches!(s.status, Status::NeedsPermission | Status::WaitingForReply | Status::WaitingForInput)
+            {
                 if self.last.get(&s.id) != Some(&s.status) {
                     to_notify.push((s.name.clone(), s.status.clone()));
                 }
