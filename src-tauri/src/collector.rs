@@ -61,14 +61,12 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
 
 /// 扫 ~/.claude/sessions/*.json，每个文件名是 pid；解析 + 校验存活。
 /// 单文件解析失败隔离（skip），不拖垮整体。
-/// 每 3s 调用一次：PermissionChecker::from_settings 在循环外创建，复用一次磁盘读 settings.json。
+/// 每 3s 调用一次：权限配置按 session cwd 在循环内读三层 settings（user+project+local）。
 pub fn collect_sessions() -> Vec<Session> {
     let Some(home) = dirs::home_dir() else { return vec![] };
     let dir = home.join(".claude/sessions");
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(&dir) else { return vec![] };
-    // 循环外读一次 settings.json：单次 collect_sessions 内所有 session 复用同一份 permission 配置
-    let pc = crate::permission::PermissionChecker::from_settings();
     // 循环外刷新一次 System：避免每个活 session 各触发一次全量 refresh（N=5 时 8-17% CPU 纯冗余）
     // with_exe(Always) 确保父进程链爬到的 p.exe() 可用
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
@@ -103,6 +101,9 @@ pub fn collect_sessions() -> Vec<Session> {
                     let tail_text = read_jsonl_tail_text(&s.id, &s.cwd);
                     let pending = tail_text.as_deref().and_then(parse_pending_from_str);
                     let is_compacting = tail_text.as_deref().map(detect_compacting).unwrap_or(false);
+                    // 权限配置按 session cwd 读三层（user + project + local）：
+                    // 不同项目 local allow 不同（如 Skill(gstack) 仅 life-planner 有）
+                    let pc = crate::permission::PermissionChecker::from_settings_for_cwd(Some(Path::new(&s.cwd)));
                     let needs_perm = matches!(&pc, Some(pc) if matches!(&pending, Some(p) if pc.needs_permission(&p.name, p.bash_command.as_deref())));
                     // 优先级：permission > compact > 原 status（parse_session_file 已得的 Working/Shell/Waiting）
                     // 注：compact 与 permission 实际互斥（compact 是阻塞操作），此处冗余 guard 保 safety net
