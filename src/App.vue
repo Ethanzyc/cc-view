@@ -16,6 +16,9 @@ const isPrefs = computed(() => getCurrentWebviewWindow().label === 'prefs');
 /* 设计 token（dark 默认 + light 覆盖）——全局变量供 Overlay 使用 */
 :root {
   --color-bg: transparent;
+  /* overlay 专用 tint：叠在 vibrancy 之上提亮 + 托住文字渲染（transparent 会让半透明背景上字发虚）。
+     prefs 窗口本身不透明，仍用 transparent。0.45 保留透过感、不至于变成实色块。 */
+  --color-bg-overlay: rgba(28, 28, 30, 0.45);
   --color-fg: #E5E5E7;
   --color-muted: #AEAEB2;
   --color-tertiary: #8E8E93;
@@ -47,18 +50,15 @@ const isPrefs = computed(() => getCurrentWebviewWindow().label === 'prefs');
 @media (prefers-color-scheme: light) {
   :root {
     --color-fg: #1D1D1F;
+    --color-bg-overlay: rgba(255, 255, 255, 0.55);
     --color-border: rgba(0, 0, 0, 0.08);
     --color-hover: rgba(0, 0, 0, 0.06);
     --color-muted: #6E6E73;
     --color-tertiary: #6E6E73;
   }
 }
-@keyframes breathe {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.5; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .status-icon--working { animation: none !important; }
+  .status-icon--spinning { animation: none !important; }
 }
 * { box-sizing: border-box; }
 html, body {

@@ -410,11 +410,15 @@ onMounted(async () => {
 
 <style scoped>
 .overlay {
-  background: var(--color-bg);
+  background: var(--color-bg-overlay);
   color: var(--color-fg);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* tint 是铺满窗口的矩形，不加圆角会用四角的 tint 盖住 vibrancy view 的圆角 → 看着变直角。
+     这里裁成圆角与后端 radius 对齐（lib.rs set_effects radius=12 == --radius-overlay），overflow hidden 裁子内容。 */
+  border-radius: var(--radius-overlay);
+  overflow: hidden;
 }
 
 /* 搜索栏：顶部贴边，不随列表滚动。可拖动改用 data-tauri-drag-region（见 template）。 */
@@ -589,13 +593,10 @@ onMounted(async () => {
 .row.perm:hover {
   background: color-mix(in srgb, var(--status-permission) 16%, transparent);
 }
-/* WaitingForReply 行（非搁置）：左侧 2px 黄边框 + 浅黄背景（次紧急，过程中提问） */
+/* WaitingForReply 行（非搁置）：左侧 2px 黄边框。
+   原本还叠了黄底+黄字，三黄糊一片不直观——去掉背景，靠左边框+问号图标表达。 */
 .row.reply {
   border-left-color: var(--status-reply);
-  background: color-mix(in srgb, var(--status-reply) 12%, transparent);
-}
-.row.reply:hover {
-  background: color-mix(in srgb, var(--status-reply) 18%, transparent);
 }
 
 /* dead 行半透明 */
@@ -640,10 +641,7 @@ onMounted(async () => {
 .status-zh.perm {
   color: var(--status-permission);
 }
-/* waitingForReply 状态中文标黄（次紧急） */
-.status-zh.reply {
-  color: var(--status-reply);
-}
+/* waitingForReply：不单独标色（黄字在黄底上糊），用默认 muted，靠图标+左边框表达 */
 .line2 {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   color: var(--color-muted);

@@ -20,7 +20,7 @@ const COLOR: Record<Status, string> = {
   <svg
     :width="16" :height="16" viewBox="0 0 16 16"
     :style="{ color: COLOR[props.status] }"
-    :class="{ 'status-icon--working': status === 'working' }"
+    :class="{ 'status-icon--spinning': status === 'working' }"
     fill="none"
     stroke="currentColor"
     stroke-width="1.5"
@@ -29,24 +29,25 @@ const COLOR: Record<Status, string> = {
     class="status-icon"
     aria-hidden="true"
   >
-    <!-- 闪电 bolt: Working -->
-    <path v-if="status === 'working'" d="M9 1.5 L3.5 9 L7.5 9 L7 14.5 L12.5 7 L8.5 7 Z" />
+    <!-- spinner：约 90° 弧顺时针旋转（loading 语义，替代原闪电）。
+         circle 默认从 3 点钟起笔 dash，rotate(-90) 移到 12 点；dasharray 9≈94° 显示段，gap 100 远大于周长保证只一段。 -->
+    <circle v-if="status === 'working'" cx="8" cy="8" r="5.5"
+      stroke-dasharray="9 100"
+      transform="rotate(-90 8 8)" />
 
-    <!-- 对话气泡 + 三点: WaitingForInput -->
+    <!-- 三点：WaitingForInput（轮到你打字）。圆润横向、视觉最安静——
+         waitingForInput 是最高频的常态待操作，不该抢眼（"等输入"文字标签消歧）。 -->
     <g v-else-if="status === 'waitingForInput'">
-      <path d="M3.5 3 H12.5 A1.5 1.5 0 0 1 14 4.5 V9 A1.5 1.5 0 0 1 12.5 10.5 H7.5 L5 13 V10.5 H3.5 A1.5 1.5 0 0 1 2 9 V4.5 A1.5 1.5 0 0 1 3.5 3 Z" />
-      <circle cx="5.3" cy="6.75" r="0.55" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="6.75" r="0.55" fill="currentColor" stroke="none" />
-      <circle cx="10.7" cy="6.75" r="0.55" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="8" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="8" r="1.3" fill="currentColor" stroke="none" />
     </g>
 
-    <!-- 对话气泡 + 问号: WaitingForReply（过程中提问，必须回答才能继续）-->
+    <!-- 问号：WaitingForReply（过程中提问）。去掉气泡外壳，纯符号更简洁；
+         Lucide help-circle 问号缩放。黄色 + 行左边框已足够表达"需回答"。 -->
     <g v-else-if="status === 'waitingForReply'">
-      <path d="M3.5 3 H12.5 A1.5 1.5 0 0 1 14 4.5 V9 A1.5 1.5 0 0 1 12.5 10.5 H7.5 L5 13 V10.5 H3.5 A1.5 1.5 0 0 1 2 9 V4.5 A1.5 1.5 0 0 1 3.5 3 Z" />
-      <!-- 问号上半钩弧 -->
-      <path d="M6.2 7 A1.8 1.8 0 1 1 8 8.8" />
-      <!-- 问号点 -->
-      <circle cx="8" cy="10.1" r="0.5" fill="currentColor" stroke="none" />
+      <path d="M6.06 6 a2 2 0 0 1 3.89 0.67 c0 1.33 -2 2 -2 2" />
+      <circle cx="8" cy="11.3" r="0.6" fill="currentColor" stroke="none" />
     </g>
 
     <!-- 挂锁: NeedsPermission -->
@@ -62,15 +63,12 @@ const COLOR: Record<Status, string> = {
       <path d="M9 10.5 H11.5" />
     </g>
 
-    <!-- 向内收敛箭头: Compacting -->
+    <!-- 向内收敛箭头：Compacting（压缩上下文，向中心收敛语义）。静态，
+         与 working spinner（弧形旋转）在形状+动效上完全区分。 -->
     <g v-else-if="status === 'compacting'">
-      <!-- 上箭头朝下 -->
       <path d="M8 2.5 V6 M6.2 4.3 L8 6 L9.8 4.3" />
-      <!-- 右箭头朝左 -->
       <path d="M13.5 8 H10 M11.7 6.2 L10 8 L11.7 9.8" />
-      <!-- 下箭头朝上 -->
       <path d="M8 13.5 V10 M6.2 11.7 L8 10 L9.8 11.7" />
-      <!-- 左箭头朝右 -->
       <path d="M2.5 8 H6 M4.3 6.2 L6 8 L4.3 9.8" />
     </g>
   </svg>
@@ -81,8 +79,12 @@ const COLOR: Record<Status, string> = {
   flex-shrink: 0;
   display: block;
 }
-/* signature：Working 呼吸（其余状态静止）；reduced-motion 由 App.vue 全局降级 */
-.status-icon.status-icon--working {
-  animation: breathe 2400ms ease-in-out infinite;
+/* signature：working 旋转（loading），其余静止；reduced-motion 由 App.vue 全局降级 */
+.status-icon.status-icon--spinning {
+  transform-origin: center;
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(1turn); }
 }
 </style>

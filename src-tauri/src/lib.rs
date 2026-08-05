@@ -702,12 +702,12 @@ pub fn run() {
             // on_window_event 闭包签名是 Fn(&WindowEvent)（单参），拿不到 window 引用——
             // 外层 clone WebviewWindow（Tauri 2 派生 Clone，是廉价 handle 非拥有资源）
             // 再 move 进闭包，失焦时调 hide()。仅 overlay 有此行为。
-            // 同时套同款 Popover vibrancy——与 overlay 视觉一致；radius 12，命令面板观感更柔和。
-            // EffectState::Active 保证失焦时仍保持毛玻璃（不灰化）。
+            // vibrancy material：Menu（Spotlight / 系统菜单同档），比 Popover 更亮、模糊更细腻——
+            // 解决"暗糙"。EffectState::Active 保证失焦时仍保持毛玻璃（不灰化）；radius 12 命令面板观感更柔。
             if let Some(overlay) = app.get_webview_window("overlay") {
                 let _ = overlay.set_effects(
                     EffectsBuilder::new()
-                        .effect(Effect::Popover)
+                        .effect(Effect::Menu)
                         .state(EffectState::Active)
                         .radius(12.)
                         .build(),
