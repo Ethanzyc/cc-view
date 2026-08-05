@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { Session } from '../types';
 import StatusIcon from './StatusIcon.vue';
-import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleReply, hlParts } from '../utils/session';
+import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts } from '../utils/session';
 
 const all = ref<Session[]>([]);
 const q = ref('');
@@ -22,8 +22,8 @@ const showHidden = ref(false);
 const pinned = ref(false);
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
 const copiedId = ref<string | null>(null);
-// now tick：后端 sessions emit 有 hash 去重（数据不变不 emit），isStaleReply 依赖时间，
-// 必须前端定期刷新，否则晾着的等回答跨过 30min 阈值时不会自动变超时。60s 对 30min 阈值够用。
+// now tick：后端 sessions emit 有 hash 去重（数据不变不 emit），isStaleInput 依赖时间，
+// 必须前端定期刷新，否则晾着的等输入跨过 30min 阈值时不会自动变闲置。60s 对 30min 阈值够用。
 const now = ref(Date.now());
 let nowTimer: number | undefined;
 const searchRef = ref<HTMLInputElement>();
@@ -34,10 +34,10 @@ const visible = computed(() =>
 );
 // 全集排序：rank → project 字母序 → statusUpdatedAt 降序（最近变更靠前）
 const sorted = computed(() => {
-  const n = now.value; // 依赖 now：60s tick 触发重算，让超时判定随时间刷新
+  const n = now.value; // 依赖 now：60s tick 触发重算，让闲置判定随时间刷新
   return [...visible.value].sort((a, b) => {
-    const sa = isStaleReply(a, n), sb = isStaleReply(b, n);
-    if (sa !== sb) return sa ? 1 : -1; // 超时等回答沉底
+    const sa = isStaleInput(a, n), sb = isStaleInput(b, n);
+    if (sa !== sb) return sa ? 1 : -1; // 闲置等输入沉底
     const ra = statusRank(a), rb = statusRank(b);
     if (ra !== rb) return ra - rb;
     const pc = a.project.localeCompare(b.project);
@@ -90,11 +90,11 @@ const groups = computed<Section[]>(() => {
   const result: Section[] = [];
   if (active.length) {
     const n = now.value; // 依赖 now，随 tick 重算
-    // 全超时 project（组内 every isStaleReply）沉到 active section 底部；
+    // 全闲置 project（组内 every isStaleInput）沉到 active section 底部；
     // 其余保持 byProj 的字母序（Array.sort ES2019+ 稳定，同档不动）。
     const activeProjs = byProj(active).sort((a, b) => {
-      const aStale = a[1].every(s => isStaleReply(s, n));
-      const bStale = b[1].every(s => isStaleReply(s, n));
+      const aStale = a[1].every(s => isStaleInput(s, n));
+      const bStale = b[1].every(s => isStaleInput(s, n));
       if (aStale !== bStale) return aStale ? 1 : -1;
       return 0;
     });
@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
             snoozed: s.snoozed,
             perm: s.status === 'needsPermission' && !s.snoozed,
             'is-hidden': hidden.has(s.id),
-            stale: isStaleReply(s, now),
+            idle: isStaleInput(s, now),
           }"
           role="button"
           tabindex="0"
@@ -327,7 +327,7 @@ onBeforeUnmount(() => {
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
             <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
-            <span v-if="isStaleReply(s, now)" class="stale-tag">超时</span>
+            <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
           </span>
           <div class="actions">
             <button
@@ -377,7 +377,7 @@ onBeforeUnmount(() => {
                 perm: s.status === 'needsPermission' && !s.snoozed,
                 reply: s.status === 'waitingForReply' && !s.snoozed,
                 'is-hidden': hidden.has(s.id),
-                stale: isStaleReply(s, now),
+                idle: isStaleInput(s, now),
               }"
               role="button"
               tabindex="0"
@@ -397,7 +397,7 @@ onBeforeUnmount(() => {
                 <span v-if="isFresh(s)" class="fresh-dot" />
                 {{ agoF(s.statusUpdatedAt) }}
                 <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
-                <span v-if="isStaleReply(s, now)" class="stale-tag">超时</span>
+                <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
               </span>
               <div class="actions">
                 <button
@@ -635,12 +635,12 @@ onBeforeUnmount(() => {
 .row.snoozed {
   opacity: 0.5;
 }
-/* 超时等回答：灰显（同 snoozed 档），不丢失但视觉降级。
-   is-hidden（opacity 0.35）源序在后，会覆盖 stale（0.5）——hidden 语义更强。 */
-.row.stale {
+/* 闲置等输入：灰显（同 snoozed 档），不丢失但视觉降级。
+   is-hidden（opacity 0.35）源序在后，会覆盖 idle（0.5）——hidden 语义更强。 */
+.row.idle {
   opacity: 0.5;
 }
-.stale-tag {
+.idle-tag {
   font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
   color: var(--color-tertiary);
   margin-left: var(--gap-xs);
