@@ -46,6 +46,18 @@ export function isFresh(s: Session): boolean {
     Date.now() - s.statusUpdatedAt < 120_000;
 }
 
+// 等回答超时阈值：超过此时长未处理的等回答在 overlay 降级（灰显 + 排后）。
+export const STALE_REPLY_MS = 30 * 60 * 1000;
+
+// 等回答晾置超时：waitingForReply + 非搁置 + 距 statusUpdatedAt 超阈值。
+// now 由调用方传入（响应式 now ref），让前端能定期重算——后端 emit 有 hash 去重，
+// 不传时间晾着的等回答跨阈值时不会自动触发。仅对等回答（等输入是正常间隔，等权限太重要）。
+export function isStaleReply(s: Session, now: number): boolean {
+  return s.status === 'waitingForReply'
+    && !s.snoozed
+    && now - s.statusUpdatedAt > STALE_REPLY_MS;
+}
+
 // 高亮 span 拆分（搜索匹配高亮，不用 v-html 防 XSS）。k='' 或未匹配返回单段无高亮。
 export type HlSeg = { text: string; hl: boolean };
 export function hlParts(text: string, k: string): HlSeg[] {
