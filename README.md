@@ -8,11 +8,13 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ## 截图
 
-| 命令面板（⌥Space 呼出） | 偏好设置 | menubar 图标（含 badge） |
-|---|---|---|
-| <img src="docs/screenshots/overlay.png" width="280"> | <img src="docs/screenshots/preferences.png" width="280"> | <img src="docs/screenshots/tray.png" width="280"> |
+**命令面板（⌥Space 呼出）**
 
-> 截图待补：运行 cc-view 后 ⌥Space 呼出 overlay / tray 菜单「偏好设置」/ menubar 图标，截图放 `docs/screenshots/`。
+![命令面板](docs/screenshots/overlay.png)
+
+**偏好设置**
+
+![偏好设置](docs/screenshots/preferences.png)
 
 ## 功能
 
