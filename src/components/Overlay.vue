@@ -5,13 +5,13 @@
 // 搜索态：扁平列表 + span 拆分高亮 + 计数；非搜索态：分组（同 HUD）。
 // 隐藏列表：showHidden off→过滤；on→全显示（行内可 hide/unhide，顶栏 toggle 控制显隐）。
 // 搁置/恢复：成功后直接改 all.value 里对应 session.snoozed（Overlay 自管乐观更新，不等 poll）。
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { Session } from '../types';
 import StatusIcon from './StatusIcon.vue';
-import { STATUS_ZH, statusRank, projShort, agoF, isFresh, hlParts } from '../utils/session';
+import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleReply, hlParts } from '../utils/session';
 
 const all = ref<Session[]>([]);
 const q = ref('');
@@ -22,6 +22,10 @@ const showHidden = ref(false);
 const pinned = ref(false);
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
 const copiedId = ref<string | null>(null);
+// now tick：后端 sessions emit 有 hash 去重（数据不变不 emit），isStaleReply 依赖时间，
+// 必须前端定期刷新，否则晾着的等回答跨过 30min 阈值时不会自动变超时。60s 对 30min 阈值够用。
+const now = ref(Date.now());
+let nowTimer: number | undefined;
 const searchRef = ref<HTMLInputElement>();
 
 // visible：按 showHidden toggle 过滤 hidden。off→只未隐藏；on→全显示。
@@ -29,15 +33,18 @@ const visible = computed(() =>
   showHidden.value ? all.value : all.value.filter(s => !hidden.value.has(s.id)),
 );
 // 全集排序：rank → project 字母序 → statusUpdatedAt 降序（最近变更靠前）
-const sorted = computed(() =>
-  [...visible.value].sort((a, b) => {
+const sorted = computed(() => {
+  const n = now.value; // 依赖 now：60s tick 触发重算，让超时判定随时间刷新
+  return [...visible.value].sort((a, b) => {
+    const sa = isStaleReply(a, n), sb = isStaleReply(b, n);
+    if (sa !== sb) return sa ? 1 : -1; // 超时等回答沉底
     const ra = statusRank(a), rb = statusRank(b);
     if (ra !== rb) return ra - rb;
     const pc = a.project.localeCompare(b.project);
     if (pc !== 0) return pc;
     return b.statusUpdatedAt - a.statusUpdatedAt;
-  }),
-);
+  });
+});
 
 // 搜索：trim 非空即激活；filter name + projShort（大小写不敏感）
 const searchActive = computed(() => q.value.trim().length > 0);
@@ -216,6 +223,12 @@ onMounted(async () => {
       searchRef.value.select();
     }
   });
+
+  nowTimer = window.setInterval(() => { now.value = Date.now(); }, 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (nowTimer) clearInterval(nowTimer);
 });
 </script>
 
