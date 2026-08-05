@@ -88,7 +88,18 @@ const groups = computed<Section[]>(() => {
     return [...m.entries()];
   };
   const result: Section[] = [];
-  if (active.length) result.push({ key: 'active', label: '待介入', total: active.length, projs: byProj(active), hidden: 0 });
+  if (active.length) {
+    const n = now.value; // 依赖 now，随 tick 重算
+    // 全超时 project（组内 every isStaleReply）沉到 active section 底部；
+    // 其余保持 byProj 的字母序（Array.sort ES2019+ 稳定，同档不动）。
+    const activeProjs = byProj(active).sort((a, b) => {
+      const aStale = a[1].every(s => isStaleReply(s, n));
+      const bStale = b[1].every(s => isStaleReply(s, n));
+      if (aStale !== bStale) return aStale ? 1 : -1;
+      return 0;
+    });
+    result.push({ key: 'active', label: '待介入', total: active.length, projs: activeProjs, hidden: 0 });
+  }
   if (snoozedAlive.length) result.push({ key: 'snoozed', label: '已搁置', total: snoozedAlive.length, projs: byProj(snoozedAlive), hidden: 0 });
   if (dead.length) result.push({ key: 'dead', label: '已退出', total: dead.length, projs: byProj(dead), hidden: deadHidden });
   return result;
