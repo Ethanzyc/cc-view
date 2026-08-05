@@ -294,6 +294,7 @@ onBeforeUnmount(() => {
             snoozed: s.snoozed,
             perm: s.status === 'needsPermission' && !s.snoozed,
             'is-hidden': hidden.has(s.id),
+            stale: isStaleReply(s, now),
           }"
           role="button"
           tabindex="0"
@@ -326,6 +327,7 @@ onBeforeUnmount(() => {
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
             <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
+            <span v-if="isStaleReply(s, now)" class="stale-tag">超时</span>
           </span>
           <div class="actions">
             <button
@@ -375,6 +377,7 @@ onBeforeUnmount(() => {
                 perm: s.status === 'needsPermission' && !s.snoozed,
                 reply: s.status === 'waitingForReply' && !s.snoozed,
                 'is-hidden': hidden.has(s.id),
+                stale: isStaleReply(s, now),
               }"
               role="button"
               tabindex="0"
@@ -394,6 +397,7 @@ onBeforeUnmount(() => {
                 <span v-if="isFresh(s)" class="fresh-dot" />
                 {{ agoF(s.statusUpdatedAt) }}
                 <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
+                <span v-if="isStaleReply(s, now)" class="stale-tag">超时</span>
               </span>
               <div class="actions">
                 <button
@@ -630,6 +634,16 @@ onBeforeUnmount(() => {
 /* 搁置行灰显沉底（与 dead 区分：0.5 vs 0.45） */
 .row.snoozed {
   opacity: 0.5;
+}
+/* 超时等回答：灰显（同 snoozed 档），不丢失但视觉降级。
+   is-hidden（opacity 0.35）源序在后，会覆盖 stale（0.5）——hidden 语义更强。 */
+.row.stale {
+  opacity: 0.5;
+}
+.stale-tag {
+  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
+  color: var(--color-tertiary);
+  margin-left: var(--gap-xs);
 }
 
 .icon { flex-shrink: 0; }
