@@ -3,7 +3,7 @@ mod badge;
 mod collector;
 mod discovery;
 mod focus;
-mod hidden;
+mod archived;
 mod overlay_position;
 mod prefs;
 mod liveness;
@@ -203,42 +203,42 @@ fn start_poll_loop(handle: tauri::AppHandle) {
 
 /// 把会话加入隐藏列表并持久化。
 #[tauri::command]
-fn hide_session(state: tauri::State<'_, Mutex<hidden::HiddenList>>, id: String) {
+fn archive_session(state: tauri::State<'_, Mutex<archived::ArchivedList>>, id: String) {
     match state.lock() {
         Ok(mut h) => {
             h.add(&id);
             h.save();
         }
-        Err(_) => eprintln!("hide_session: hidden state lock poisoned"),
+        Err(_) => eprintln!("archive_session: archived state lock poisoned"),
     }
 }
 
 /// 从隐藏列表移除会话并持久化。
 #[tauri::command]
-fn unhide_session(state: tauri::State<'_, Mutex<hidden::HiddenList>>, id: String) {
+fn unarchive_session(state: tauri::State<'_, Mutex<archived::ArchivedList>>, id: String) {
     match state.lock() {
         Ok(mut h) => {
             h.remove(&id);
             h.save();
         }
-        Err(_) => eprintln!("unhide_session: hidden state lock poisoned"),
+        Err(_) => eprintln!("unarchive_session: archived state lock poisoned"),
     }
 }
 
 /// 返回当前隐藏会话 id 列表（前端据此 filter）。
 #[tauri::command]
-fn list_hidden(state: tauri::State<'_, Mutex<hidden::HiddenList>>) -> Vec<String> {
+fn list_archived(state: tauri::State<'_, Mutex<archived::ArchivedList>>) -> Vec<String> {
     state
         .lock()
         .map(|h| h.to_vec())
         .unwrap_or_else(|_| {
-            eprintln!("list_hidden: hidden state lock poisoned");
+            eprintln!("list_archived: archived state lock poisoned");
             vec![]
         })
 }
 
 // --- Tauri commands：搁置/取消搁置/查询搁置表 ---
-// 镜像 hide_session/unhide_session/list_hidden，但存时间戳（is_effectively_snoozed 需要）。
+// 镜像 archive_session/unarchive_session/list_archived，但存时间戳（is_effectively_snoozed 需要）。
 
 /// 标记会话搁置（记当前时间戳），持久化。前端乐观更新后由 poll_loop 对齐。
 #[tauri::command]
@@ -652,7 +652,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .manage(Mutex::new(hidden::HiddenList::load()))
+        .manage(Mutex::new(archived::ArchivedList::load()))
         .manage(Mutex::new(snoozed::SnoozeMap::load()))
         .manage(Mutex::new(Vec::<models::Session>::new()))
         .manage(Mutex::new(
@@ -663,9 +663,9 @@ pub fn run() {
         .manage(std::sync::atomic::AtomicU64::new(poll_secs))
         .manage(Mutex::new(loaded_prefs))
         .invoke_handler(tauri::generate_handler![
-            hide_session,
-            unhide_session,
-            list_hidden,
+            archive_session,
+            unarchive_session,
+            list_archived,
             focus_session,
             get_sessions,
             get_overlay_pinned,

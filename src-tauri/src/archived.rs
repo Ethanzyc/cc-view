@@ -1,12 +1,12 @@
-// 会话隐藏列表（可逆）：load/save 读写 ~/.claude/cc-view/hidden.json。
-// 纯逻辑：filter 只在内存里筛除 hidden id，不修改原始数据。
+// 会话归档列表（可逆）：load/save 读写 ~/.claude/cc-view/archived.json。
+// 纯逻辑：filter 只在内存里筛除 archived id，不修改原始数据。
 use crate::models::Session;
 
-pub struct HiddenList {
+pub struct ArchivedList {
     ids: Vec<String>,
 }
 
-impl HiddenList {
+impl ArchivedList {
     pub fn empty() -> Self {
         Self { ids: vec![] }
     }
@@ -15,14 +15,17 @@ impl HiddenList {
         let Some(home) = dirs::home_dir() else {
             return Self::empty();
         };
-        let path = home.join(".claude/cc-view/hidden.json");
-        let Ok(json) = std::fs::read_to_string(&path) else {
-            eprintln!("hidden load: failed to read ~/.claude/cc-view/hidden.json");
+        let dir = home.join(".claude/cc-view");
+        // 优先读 archived.json；不存在则 fallback 读旧 hidden.json（hide→archive 改名前数据迁移）。
+        // save() 始终写 archived.json，下次保存后旧 hidden.json 即孤立（不主动删，留作备份）。
+        let json = std::fs::read_to_string(dir.join("archived.json"))
+            .or_else(|_| std::fs::read_to_string(dir.join("hidden.json")));
+        let Ok(json) = json else {
             return Self::empty();
         };
         Self {
             ids: serde_json::from_str(&json).unwrap_or_else(|e| {
-                eprintln!("hidden load: invalid hidden json, ignoring: {}", e);
+                eprintln!("archived load: invalid json, ignoring: {e}");
                 vec![]
             }),
         }
@@ -33,32 +36,32 @@ impl HiddenList {
         };
         let dir = home.join(".claude/cc-view");
         let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("hidden.json");
+        let path = dir.join("archived.json");
         if let Ok(json) = serde_json::to_string(&self.ids) {
             let _ = std::fs::write(path, json);
         }
     }
 
     // --- 纯逻辑：基于 ids 集合做判断与变更 ---
-    pub fn is_hidden(&self, id: &str) -> bool {
+    pub fn is_archived(&self, id: &str) -> bool {
         self.ids.iter().any(|x| x == id)
     }
     pub fn add(&mut self, id: &str) {
-        if !self.is_hidden(id) {
+        if !self.is_archived(id) {
             self.ids.push(id.into());
         }
     }
     pub fn remove(&mut self, id: &str) {
         self.ids.retain(|x| x != id);
     }
-    /// 暴露隐藏 id 列表副本（外部只读访问，保护 add() 的去重不变量）
+    /// 暴露归档 id 列表副本（外部只读访问，保护 add() 的去重不变量）
     pub fn to_vec(&self) -> Vec<String> {
         self.ids.clone()
     }
-    /// 过滤掉已隐藏的 session（保留备用：当前前端按 list_hidden 过滤）
+    /// 过滤掉已归档的 session（保留备用：当前前端按 list_archived 过滤）
     #[allow(dead_code)]
     pub fn filter<'a>(&self, sessions: &'a [Session]) -> Vec<&'a Session> {
-        sessions.iter().filter(|s| !self.is_hidden(&s.id)).collect()
+        sessions.iter().filter(|s| !self.is_archived(&s.id)).collect()
     }
 }
 
@@ -85,27 +88,27 @@ mod tests {
     }
 
     #[test]
-    fn add_and_is_hidden() {
-        let mut h = HiddenList::empty();
+    fn add_and_is_archived() {
+        let mut h = ArchivedList::empty();
         h.add("a");
-        assert!(h.is_hidden("a"));
-        assert!(!h.is_hidden("b"));
+        assert!(h.is_archived("a"));
+        assert!(!h.is_archived("b"));
         h.add("a"); // 去重
         assert_eq!(h.ids.len(), 1);
     }
 
     #[test]
-    fn remove_unhides() {
-        let mut h = HiddenList::empty();
+    fn remove_unarchives() {
+        let mut h = ArchivedList::empty();
         h.add("a");
         h.remove("a");
-        assert!(!h.is_hidden("a"));
+        assert!(!h.is_archived("a"));
     }
 
     #[test]
-    fn filter_excludes_hidden() {
+    fn filter_excludes_archived() {
         let h = {
-            let mut x = HiddenList::empty();
+            let mut x = ArchivedList::empty();
             x.add("a");
             x
         };

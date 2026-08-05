@@ -3,7 +3,7 @@
 // 数据自管——直接 listen "sessions" event（与 HUD 同事件，互不干扰）。
 // 排序/分组/ago/isFresh 算法与分组逻辑一致（MVP 重复可接受；不抽 composable）。
 // 搜索态：扁平列表 + span 拆分高亮 + 计数；非搜索态：分组（同 HUD）。
-// 隐藏列表：showHidden off→过滤；on→全显示（行内可 hide/unhide，顶栏 toggle 控制显隐）。
+// 归档列表：showArchived off→过滤；on→全显示（行内可 archive/unarchive，顶栏 toggle 控制显隐）。
 // 搁置/恢复：成功后直接改 all.value 里对应 session.snoozed（Overlay 自管乐观更新，不等 poll）。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
@@ -15,9 +15,9 @@ import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts 
 
 const all = ref<Session[]>([]);
 const q = ref('');
-// 隐藏列表 + 显示已隐藏 toggle（从 App.vue HUD 分支迁入）。visible 按 toggle 过滤。
-const hidden = ref<Set<string>>(new Set());
-const showHidden = ref(false);
+// 归档列表 + 显示已归档 toggle（从 App.vue HUD 分支迁入）。visible 按 toggle 过滤。
+const archived = ref<Set<string>>(new Set());
+const showArchived = ref(false);
 // 图钉（pin = 失焦不收起）：后端 command + overlay_position.json 驱动。
 const pinned = ref(false);
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
@@ -28,9 +28,9 @@ const now = ref(Date.now());
 let nowTimer: number | undefined;
 const searchRef = ref<HTMLInputElement>();
 
-// visible：按 showHidden toggle 过滤 hidden。off→只未隐藏；on→全显示。
+// visible：按 showArchived toggle 过滤 hidden。off→只未归档；on→全显示。
 const visible = computed(() =>
-  showHidden.value ? all.value : all.value.filter(s => !hidden.value.has(s.id)),
+  showArchived.value ? all.value : all.value.filter(s => !archived.value.has(s.id)),
 );
 // 全集排序：rank → project 字母序 → statusUpdatedAt 降序（最近变更靠前）
 const sorted = computed(() => {
@@ -180,26 +180,26 @@ async function togglePin() {
   }
 }
 
-// 刷新隐藏列表（hide/unhide 成功后调，让 visible 立即反映）。
-async function refreshHidden() {
-  hidden.value = new Set(await invoke<string[]>('list_hidden'));
+// 刷新归档列表（archive/unarchive 成功后调，让 visible 立即反映）。
+async function refreshArchived() {
+  archived.value = new Set(await invoke<string[]>('list_archived'));
 }
 
-// 隐藏/取消隐藏：成功后刷新 hidden 列表，visible 立即反映。
-async function hide(id: string) {
+// 归档/取消归档：成功后刷新 hidden 列表，visible 立即反映。
+async function archive(id: string) {
   try {
-    await invoke('hide_session', { id });
-    await refreshHidden();
+    await invoke('archive_session', { id });
+    await refreshArchived();
   } catch (e) {
-    console.error('hide failed', e);
+    console.error('archive failed', e);
   }
 }
-async function unhide(id: string) {
+async function unarchive(id: string) {
   try {
-    await invoke('unhide_session', { id });
-    await refreshHidden();
+    await invoke('unarchive_session', { id });
+    await refreshArchived();
   } catch (e) {
-    console.error('unhide failed', e);
+    console.error('unarchive failed', e);
   }
 }
 
@@ -211,9 +211,9 @@ onMounted(async () => {
     console.error('get_sessions on mount failed', e);
   }
   try {
-    hidden.value = new Set(await invoke<string[]>('list_hidden'));
+    archived.value = new Set(await invoke<string[]>('list_archived'));
   } catch (e) {
-    console.error('list_hidden on mount failed', e);
+    console.error('list_archived on mount failed', e);
   }
   try {
     pinned.value = await invoke<boolean>('get_overlay_pinned');
@@ -262,8 +262,8 @@ onBeforeUnmount(() => {
       <!-- 计数：搜索态→结果数；非搜索态→待介入数 -->
       <span class="overlay-count">{{ overlayCount }}</span>
       <label class="toggle" data-tauri-drag-region="false">
-        <input type="checkbox" v-model="showHidden" />
-        <span>显示已隐藏</span>
+        <input type="checkbox" v-model="showArchived" />
+        <span>显示已归档</span>
       </label>
       <button
         class="pin-btn"
@@ -293,7 +293,7 @@ onBeforeUnmount(() => {
             dead: !s.alive,
             snoozed: s.snoozed,
             perm: s.status === 'needsPermission' && !s.snoozed,
-            'is-hidden': hidden.has(s.id),
+            'is-archived': archived.has(s.id),
             idle: isStaleInput(s, now),
           }"
           role="button"
@@ -326,7 +326,7 @@ onBeforeUnmount(() => {
           <span class="ago" :class="{ fresh: isFresh(s) }">
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
-            <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
+            <span v-if="archived.has(s.id)" class="archived-tag">已归档</span>
             <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
           </span>
           <div class="actions">
@@ -343,10 +343,10 @@ onBeforeUnmount(() => {
               @click.stop="snooze(s.id)"
             >搁置</button>
             <button
-              class="act-btn hide"
-              :title="hidden.has(s.id) ? '取消隐藏' : '隐藏'"
-              @click.stop="hidden.has(s.id) ? unhide(s.id) : hide(s.id)"
-            >{{ hidden.has(s.id) ? '取消隐藏' : '隐藏' }}</button>
+              class="act-btn archive"
+              :title="archived.has(s.id) ? '取消归档' : '归档'"
+              @click.stop="archived.has(s.id) ? unarchive(s.id) : archive(s.id)"
+            >{{ archived.has(s.id) ? '取消归档' : '归档' }}</button>
             <button
               class="act-btn copy"
               :class="{ done: copiedId === s.id }"
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
                 snoozed: s.snoozed,
                 perm: s.status === 'needsPermission' && !s.snoozed,
                 reply: s.status === 'waitingForReply' && !s.snoozed,
-                'is-hidden': hidden.has(s.id),
+                'is-archived': archived.has(s.id),
                 idle: isStaleInput(s, now),
               }"
               role="button"
@@ -396,7 +396,7 @@ onBeforeUnmount(() => {
               <span class="ago" :class="{ fresh: isFresh(s) }">
                 <span v-if="isFresh(s)" class="fresh-dot" />
                 {{ agoF(s.statusUpdatedAt) }}
-                <span v-if="hidden.has(s.id)" class="hidden-tag">已隐藏</span>
+                <span v-if="archived.has(s.id)" class="archived-tag">已归档</span>
                 <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
               </span>
               <div class="actions">
@@ -413,10 +413,10 @@ onBeforeUnmount(() => {
                   @click.stop="snooze(s.id)"
                 >搁置</button>
                 <button
-                  class="act-btn hide"
-                  :title="hidden.has(s.id) ? '取消隐藏' : '隐藏'"
-                  @click.stop="hidden.has(s.id) ? unhide(s.id) : hide(s.id)"
-                >{{ hidden.has(s.id) ? '取消隐藏' : '隐藏' }}</button>
+                  class="act-btn archive"
+                  :title="archived.has(s.id) ? '取消归档' : '归档'"
+                  @click.stop="archived.has(s.id) ? unarchive(s.id) : archive(s.id)"
+                >{{ archived.has(s.id) ? '取消归档' : '归档' }}</button>
                 <button
                   class="act-btn copy"
                   :class="{ done: copiedId === s.id }"
@@ -427,7 +427,7 @@ onBeforeUnmount(() => {
             </li>
           </template>
           <li v-if="section.hidden > 0" class="dead-more">
-            +{{ section.hidden }} 个更早的已隐藏
+            +{{ section.hidden }} 个更早的已省略
           </li>
         </template>
       </ul>
@@ -481,7 +481,7 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-/* 显示已隐藏 toggle（从 App.vue HUD 迁入） */
+/* 显示已归档 toggle（从 App.vue HUD 迁入） */
 .toggle {
   display: inline-flex;
   align-items: center;
@@ -749,15 +749,15 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
-/* 已隐藏行更淡（比 dead/snoozed 更淡，强化"被收起"语义） */
-.row.is-hidden { opacity: 0.35; }
-.hidden-tag {
+/* 已归档行更淡（比 dead/snoozed 更淡，强化"被收起"语义） */
+.row.is-archived { opacity: 0.35; }
+.archived-tag {
   font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
   color: var(--color-tertiary);
   margin-left: var(--gap-xs);
 }
 
-/* 复制 常驻显示（用户反馈：hover 切换有问题，要求一直可见，与搁置/隐藏一致） */
+/* 复制 常驻显示（用户反馈：hover 切换有问题，要求一直可见，与搁置/归档一致） */
 
 .empty {
   padding: var(--space-empty) var(--pad-x);
