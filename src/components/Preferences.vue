@@ -149,6 +149,7 @@ async function downloadAndInstall() {
       <p v-if="installError" class="error">⚠ {{ installError }}</p>
     </section>
     <p v-if="error" class="error">⚠ {{ error }}</p>
+    <p class="repo"><a href="https://github.com/Ethanzyc/cc-view" target="_blank" rel="noopener">GitHub →</a></p>
   </div>
 </template>
 
@@ -181,4 +182,7 @@ h1 { font-size: 18px; font-weight: 700; margin: 0 0 20px; }
 .update-detail { margin-top: 12px; padding: 12px; background: var(--color-hover); border-radius: 8px; }
 .update-detail pre { white-space: pre-wrap; margin: 8px 0; font-size: 12px; }
 .muted { color: var(--color-muted); margin-top: 8px; font-size: var(--fs-body); }
+.repo { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); text-align: center; }
+.repo a { color: var(--color-primary); text-decoration: none; font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body); }
+.repo a:hover { text-decoration: underline; }
 </style>
