@@ -130,7 +130,7 @@ fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64)
     let app_handle = app.clone();
     std::thread::spawn(move || {
         // spinner 总时长 ≈ 50ms（就位）+ 150ms = 200ms 露目标视图。
-        std::thread::sleep(std::time::Duration::from_millis(150));
+        std::thread::sleep(std::time::Duration::from_millis(50));
         ANIMATING.store(false, std::sync::atomic::Ordering::Relaxed);
         // 通知前端动画结束：精确退出过渡态（比前端兜底 setTimeout 准）。
         let _ = app_handle.emit("animate_done", ());
