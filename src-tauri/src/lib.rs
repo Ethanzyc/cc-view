@@ -78,39 +78,57 @@ fn resident_layout_width(layout: prefs::ResidentLayout) -> f64 {
 const PANEL_W: f64 = 560.0;
 const PANEL_H: f64 = 420.0;
 
-/// ease-out cubic：开始快、结束慢，窗口缩放自然。
-fn ease_out_cubic(t: f64) -> f64 { 1.0 - (1.0 - t).powi(3) }
-fn lerp(a: f64, b: f64, t: f64) -> f64 { a + (b - a) * t }
+/// macOS 几何类型（手 impl Encode，避免拉 objc2-foundation 整包）。
+/// 64 位 NSRect = CGRect（同布局），@encode 名用 CGRect（与系统一致）。
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CGPoint { x: f64, y: f64 }
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CGSize { width: f64, height: f64 }
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CGRect { origin: CGPoint, size: CGSize }
+// SAFETY: repr(C)，encoding 与系统 CGRect 一致（见 objc2 encode_core_graphics 示例）。
+unsafe impl objc2::encode::Encode for CGPoint {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGPoint", &[f64::ENCODING, f64::ENCODING]);
+}
+unsafe impl objc2::encode::Encode for CGSize {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]);
+}
+unsafe impl objc2::encode::Encode for CGRect {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGRect", &[CGPoint::ENCODING, CGSize::ENCODING]);
+}
 
 /// 模式切换动画进行中标志：set_resident_height 期间跳过，避免与动画 set_size 冲突。
 static ANIMATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// 按帧插值 set_size + set_position，窗口平滑缩放/移动到目标（12 帧 ~170ms，ease-out）。
-/// 动画期间 set_resident_height 跳过（读 ANIMATING）；结束后窗口稳定，前端 ResizeObserver 重触发校正高度。
+/// 用 macOS 原生 setFrame:display:animate: 做窗口缩放/移动动画（Core Animation，渲染层平滑）。
+/// 手动逐帧 set_size + set_position 每帧两次 NSWindow setFrame + webview reflow，顿挫明显；
+/// 原生动画一次 setFrame、系统在渲染层插值，顺很多。系统动画异步（~0.25s），ANIMATING 在
+/// 估计时长后清除，期间 set_resident_height 跳过；清除后 ResizeObserver 重触发校正高度。
+#[cfg(target_os = "macos")]
 fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64) {
+    use objc2::{msg_send, runtime::AnyObject};
     let Some(w) = app.get_webview_window("overlay") else { return };
-    let sf = w.scale_factor().ok().unwrap_or(1.0);
-    let (cw, ch) = w.outer_size()
-        .map(|s| (s.to_logical::<f64>(sf).width, s.to_logical::<f64>(sf).height))
-        .unwrap_or((tw, th));
-    let (cx, cy) = w.outer_position()
-        .map(|p| (p.x as f64 / sf, p.y as f64 / sf))
-        .unwrap_or((tx, ty));
+    // Cocoa 坐标原点在屏幕左下：NS y = 屏幕高度(logical) - Tauri y - 窗口高。
+    let screen_h = w.current_monitor().ok().flatten()
+        .map(|m| m.size().height as f64 / m.scale_factor())
+        .unwrap_or(800.0);
+    let rect = CGRect {
+        origin: CGPoint { x: tx, y: screen_h - ty - th },
+        size: CGSize { width: tw, height: th },
+    };
+    let Ok(ptr) = w.ns_window() else { return };
+    let obj = ptr as *mut AnyObject;
 
     ANIMATING.store(true, std::sync::atomic::Ordering::Relaxed);
-    let app_handle = app.clone();
-    std::thread::spawn(move || {
-        const FRAMES: u64 = 12;
-        const FRAME_MS: u64 = 14;
-        for i in 1..=FRAMES {
-            let t = i as f64 / FRAMES as f64;
-            let e = ease_out_cubic(t);
-            if let Some(win) = app_handle.get_webview_window("overlay") {
-                let _ = win.set_size(tauri::LogicalSize::new(lerp(cw, tw, e), lerp(ch, th, e)));
-                let _ = win.set_position(tauri::LogicalPosition::new(lerp(cx, tx, e), lerp(cy, ty, e)));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(FRAME_MS));
-        }
+    unsafe {
+        let yes = objc2::runtime::Bool::YES;
+        let _: () = msg_send![obj, setFrame: rect, display: yes, animate: yes];
+    }
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(320));
         ANIMATING.store(false, std::sync::atomic::Ordering::Relaxed);
     });
 }
