@@ -180,6 +180,15 @@ async function togglePin() {
   }
 }
 
+// 收起成常驻模式：调后端 set_mode，后端 emit mode_changed → App.vue 切 ResidentView。
+async function collapseToResident() {
+  try {
+    await invoke('set_mode', { mode: 'resident' });
+  } catch (e) {
+    console.error('set_mode(resident) failed', e);
+  }
+}
+
 // 刷新归档列表（archive/unarchive 成功后调，让 visible 立即反映）。
 async function refreshArchived() {
   archived.value = new Set(await invoke<string[]>('list_archived'));
@@ -278,6 +287,21 @@ onBeforeUnmount(() => {
         <svg width="13" height="13" viewBox="0 0 24 24" :fill="pinned ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="17" x2="12" y2="22" />
           <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+        </svg>
+      </button>
+      <button
+        class="collapse-btn"
+        title="收起成常驻（精简面板）"
+        aria-label="收起成常驻（精简面板）"
+        data-tauri-drag-region="false"
+        @click="collapseToResident"
+      >
+        <!-- 四角向内：收起/最小化语义 -->
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+          <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+          <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+          <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
         </svg>
       </button>
     </div>
@@ -521,6 +545,27 @@ onBeforeUnmount(() => {
 .pin-btn.pinned { color: var(--color-primary); }
 .pin-btn:hover { color: var(--color-fg); background: var(--color-hover); }
 .pin-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* 收起成常驻：样式同 pin-btn（tertiary → hover fg + hover bg） */
+.collapse-btn {
+  background: none;
+  border: none;
+  color: var(--color-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color var(--motion-duration) var(--motion-easing),
+              background var(--motion-duration) var(--motion-easing);
+}
+.collapse-btn:hover { color: var(--color-fg); background: var(--color-hover); }
+.collapse-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }

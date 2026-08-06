@@ -1,15 +1,41 @@
 <script setup lang="ts">
-// 多视图单入口：overlay 承载命令面板，prefs 承载偏好设置。按 window label 分发。
-import { computed } from 'vue';
+// 多视图单入口：
+//   prefs 窗口 → Preferences
+//   overlay 窗口 → 按 mode 分发 PanelView（命令面板）/ ResidentView（常驻精简）
+// mode 初值取 get_prefs；set_mode 成功后端 emit "mode_changed"，App 更新 ref 即时切视图。
+import { ref, onMounted, computed } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import Overlay from './components/Overlay.vue';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import PanelView from './components/PanelView.vue';
+import ResidentView from './components/ResidentView.vue';
 import Preferences from './components/Preferences.vue';
+import type { OverlayMode } from './types';
+
 const isPrefs = computed(() => getCurrentWebviewWindow().label === 'prefs');
+// overlay 模式 ref（prefs 窗口不用，但 ref 无害；listen 仅 overlay 窗口有意义）。
+const mode = ref<OverlayMode>('resident');
+
+onMounted(async () => {
+  if (isPrefs.value) return;
+  try {
+    const p = await invoke<{ mode: OverlayMode }>('get_prefs');
+    mode.value = p.mode;
+  } catch (e) {
+    console.error('get_prefs mode failed', e);
+  }
+  try {
+    await listen<OverlayMode>('mode_changed', e => { mode.value = e.payload; });
+  } catch (e) {
+    console.error('listen mode_changed failed', e);
+  }
+});
 </script>
 
 <template>
   <Preferences v-if="isPrefs" />
-  <Overlay v-else />
+  <PanelView v-else-if="mode === 'panel'" />
+  <ResidentView v-else />
 </template>
 
 <style>
