@@ -19,6 +19,8 @@ export interface Session {
 export type OverlayMode = 'resident' | 'panel';
 // 常驻布局（与后端 prefs::ResidentLayout serde lowercase 对齐）
 export type ResidentLayout = 'b' | 'a';
+// 外观主题（与后端 prefs::Theme serde lowercase 对齐）
+export type Theme = 'light' | 'dark';
 
 // get_prefs 返回的完整偏好（与 Rust Prefs 字段一一对应）
 export interface Prefs {
@@ -30,4 +32,5 @@ export interface Prefs {
   resident_show_snoozed: boolean;
   resident_show_idle: boolean;
   resident_opacity: number;
+  theme: Theme;
 }
