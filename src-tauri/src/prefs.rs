@@ -11,6 +11,7 @@ fn default_mode() -> OverlayMode { OverlayMode::Panel }
 fn default_layout() -> ResidentLayout { ResidentLayout::B }
 fn default_show() -> bool { true }
 fn default_opacity() -> u8 { 55 }
+fn default_theme() -> Theme { Theme::Light }
 
 /// 允许的快捷键预设（"off" = 禁用）。
 pub const ALLOWED_SHORTCUTS: &[&str] = &["alt+space", "cmd+alt+space", "ctrl+space", "off"];
@@ -31,6 +32,14 @@ pub enum ResidentLayout {
     A,
 }
 
+/// 外观主题：浅色 / 深色。serde lowercase（json 里 "light"/"dark"）。默认 Light，不跟随系统。
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    Light,
+    Dark,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Prefs {
     #[serde(default = "default_true")]
@@ -49,6 +58,8 @@ pub struct Prefs {
     pub resident_show_idle: bool,
     #[serde(default = "default_opacity")]
     pub resident_opacity: u8,
+    #[serde(default = "default_theme")]
+    pub theme: Theme,
 }
 
 impl Default for Prefs {
@@ -62,6 +73,7 @@ impl Default for Prefs {
             resident_show_snoozed: default_show(),
             resident_show_idle: default_show(),
             resident_opacity: default_opacity(),
+            theme: default_theme(),
         }
     }
 }
@@ -107,6 +119,7 @@ mod tests {
         assert!(p.resident_show_snoozed);
         assert!(p.resident_show_idle);
         assert_eq!(p.resident_opacity, 55);
+        assert_eq!(p.theme, Theme::Light);
     }
 
     #[test]
@@ -139,6 +152,7 @@ mod tests {
             resident_show_snoozed: false,
             resident_show_idle: false,
             resident_opacity: 80,
+            theme: Theme::Dark,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();
@@ -166,6 +180,13 @@ mod tests {
         let l: ResidentLayout = serde_json::from_str("\"a\"").unwrap();
         assert_eq!(l, ResidentLayout::A);
         assert_eq!(serde_json::to_string(&ResidentLayout::B).unwrap(), "\"b\"");
+    }
+
+    #[test]
+    fn theme_serde_lowercase() {
+        let t: Theme = serde_json::from_str("\"dark\"").unwrap();
+        assert_eq!(t, Theme::Dark);
+        assert_eq!(serde_json::to_string(&Theme::Light).unwrap(), "\"light\"");
     }
 
     #[test]
