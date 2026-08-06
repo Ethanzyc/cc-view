@@ -574,6 +574,26 @@ fn set_mode(
     Ok(())
 }
 
+/// 校正常驻窗口高度为内容实际高度（前端量得渲染高度后调用）。
+/// 仅当前 mode==resident 时生效——避免面板模式被误改。宽度按当前 resident_layout。
+#[tauri::command]
+fn set_resident_height(
+    height: f64,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    let (mode, layout) = state
+        .lock()
+        .map(|p| (p.mode, p.resident_layout))
+        .unwrap_or((prefs::OverlayMode::Resident, prefs::ResidentLayout::B));
+    if mode != prefs::OverlayMode::Resident {
+        return;
+    }
+    let width = resident_layout_width(layout);
+    let Some(w) = app.get_webview_window("overlay") else { return };
+    let _ = w.set_size(tauri::LogicalSize::new(width, height));
+}
+
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
 /// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
@@ -823,7 +843,8 @@ pub fn run() {
             set_resident_show_snoozed,
             set_resident_show_idle,
             set_resident_opacity,
-            set_mode
+            set_mode,
+            set_resident_height
         ])
         .setup(|app| {
             // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
