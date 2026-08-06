@@ -10,19 +10,19 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 **命令面板（⌥Space 呼出）— 混合状态**
 
-![命令面板](docs/screenshots/overlay.png)
+![命令面板](doc/screenshots/overlay.png)
 
 **等权限突出（橙边提醒）**
 
-![等权限](docs/screenshots/overlay-permission.png)
+![等权限](doc/screenshots/overlay-permission.png)
 
 **闲置降级（灰显 + 下沉）**
 
-![闲置](docs/screenshots/overlay-idle.png)
+![闲置](doc/screenshots/overlay-idle.png)
 
 **偏好设置**
 
-![偏好设置](docs/screenshots/preferences.png)
+![偏好设置](doc/screenshots/preferences.png)
 
 ## 功能
 
@@ -61,7 +61,7 @@ npm run tauri dev     # 开发
 npm run tauri build   # 产出 .app / dmg / updater artifacts
 ```
 
-**技术栈**：Tauri 2（Rust）+ Vue 3 + TypeScript。后端每 3s 采集 → 状态机 reduce → 通知 → hash 去重 → emit `sessions` 事件；前端 Vue 监听渲染。设计文档与实现计划见 [docs/superpowers/](docs/superpowers/)。
+**技术栈**：Tauri 2（Rust）+ Vue 3 + TypeScript。后端每 3s 采集 → 状态机 reduce → 通知 → hash 去重 → emit `sessions` 事件；前端 Vue 监听渲染。
 
 ## 已知限制
 

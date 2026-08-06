@@ -27,3 +27,4 @@ dist-ssr
 .superpowers/
 src-tauri/target/
 .gstack/
+docs/
