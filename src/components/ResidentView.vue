@@ -3,6 +3,8 @@
 // 数据自管（listen sessions），排序/分组/ago 复用 utils/session.ts（MVP 与 PanelView 重复可接受）。
 // 展开入口（右上角）调 set_mode(panel) → App.vue 切 PanelView。
 // B 布局：分组 + 项目标题 + 图标+名称+状态；A 极简：扁平列表，仅图标+名称。
+// 透明度作用于 --resident-bg（仅常驻；面板模式用 --color-bg-overlay 不受影响）。
+// 高度自适应：内容变化 → ResizeObserver → set_resident_height 校正窗口高度。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
@@ -20,6 +22,8 @@ const layout = ref<ResidentLayout>('b');
 // 显示开关：搁置 / 闲置（等输入超时）的会话是否在常驻列表显示。onMounted 从 prefs 读。
 const showSnoozed = ref(true);
 const showIdle = ref(true);
+// 背景透明度（20–100）。applyOpacity 写入 --resident-bg 的 alpha。
+const opacity = ref(55);
 
 // 非搜索态分组（与 PanelView 一致算法，MVP 重复）：待介入 / 已搁置；常驻只看活会话。
 type Section = { key: string; label: string; total: number; projs: [string, Session[]][] };
@@ -88,16 +92,47 @@ async function expandToPanel() {
   }
 }
 
+// 透明度：按系统深浅色选 rgb，写入 --resident-bg 的 alpha（仅常驻视图用此变量）。
+function applyOpacity() {
+  const a = (opacity.value / 100).toFixed(3);
+  const light = window.matchMedia('(prefers-color-scheme: light)').matches;
+  const rgb = light ? '255, 255, 255' : '28, 28, 30';
+  document.documentElement.style.setProperty('--resident-bg', `rgba(${rgb}, ${a})`);
+}
+
+// 高度自适应：内容变化后量 rootEl 实际渲染高度（受 max-height:60vh 裁剪），通知后端
+// set_resident_height 校正窗口高度。仅 mode==resident 时后端生效。rAF 节流避免高频 set_size。
+let resizeRaf = 0;
+let ro: ResizeObserver | undefined;
+function syncHeight() {
+  cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(async () => {
+    const el = rootEl.value;
+    if (!el) return;
+    const h = Math.round(el.getBoundingClientRect().height);
+    if (h > 0) {
+      try {
+        await invoke('set_resident_height', { height: h });
+      } catch (e) {
+        console.error('set_resident_height failed', e);
+      }
+    }
+  });
+}
+
 onMounted(async () => {
   try {
     const p = await invoke<{
       resident_layout: ResidentLayout;
       resident_show_snoozed: boolean;
       resident_show_idle: boolean;
+      resident_opacity: number;
     }>('get_prefs');
     layout.value = p.resident_layout;
     showSnoozed.value = p.resident_show_snoozed;
     showIdle.value = p.resident_show_idle;
+    opacity.value = p.resident_opacity;
+    applyOpacity();
   } catch (e) {
     console.error('get_prefs resident config failed', e);
   }
@@ -112,10 +147,19 @@ onMounted(async () => {
     console.error('resident listen sessions failed', e);
   }
   nowTimer = window.setInterval(() => { now.value = Date.now(); }, 60_000);
+
+  // 监听内容尺寸变化 → 校正窗口高度（sessions/布局/过滤变化都会触发）。
+  if (rootEl.value) {
+    ro = new ResizeObserver(() => syncHeight());
+    ro.observe(rootEl.value);
+  }
+  syncHeight(); // 首次量一次
 });
 
 onBeforeUnmount(() => {
   if (nowTimer) clearInterval(nowTimer);
+  if (ro) ro.disconnect();
+  cancelAnimationFrame(resizeRaf);
 });
 </script>
 
@@ -194,7 +238,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .resident {
   position: relative;
-  background: var(--color-bg-overlay);
+  background: var(--resident-bg);
   color: var(--color-fg);
   min-height: 100vh;
   max-height: 60vh;

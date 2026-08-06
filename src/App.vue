@@ -45,6 +45,7 @@ onMounted(async () => {
   /* overlay 专用 tint：叠在 vibrancy 之上提亮 + 托住文字渲染（transparent 会让半透明背景上字发虚）。
      prefs 窗口本身不透明，仍用 transparent。0.45 保留透过感、不至于变成实色块。 */
   --color-bg-overlay: rgba(28, 28, 30, 0.45);
+  --resident-bg: rgba(28, 28, 30, 0.55);
   --color-fg: #E5E5E7;
   --color-muted: #AEAEB2;
   --color-tertiary: #8E8E93;
@@ -77,6 +78,7 @@ onMounted(async () => {
   :root {
     --color-fg: #1D1D1F;
     --color-bg-overlay: rgba(255, 255, 255, 0.55);
+    --resident-bg: rgba(255, 255, 255, 0.55);
     --color-border: rgba(0, 0, 0, 0.08);
     --color-hover: rgba(0, 0, 0, 0.06);
     --color-muted: #6E6E73;
