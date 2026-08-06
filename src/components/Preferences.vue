@@ -1,19 +1,20 @@
 <script setup lang="ts">
-// 偏好设置：开机自启动 / 通知 / 全局快捷键 / 轮询间隔 / 默认形态 / 常驻面板（框起来）。
-// 形态 + 常驻布局用真实风格 mini mock（半透毛玻璃 + 分组 + 项目 + 状态图标 + 会话名 + 状态）。
+// 偏好设置：开机自启动 / 通知 / 全局快捷键 / 轮询间隔 / 外观 / 常驻面板（框起来）。
+// 选择类控件统一可点击按钮组（非下拉）；常驻布局配文字说明区别。
 // 透明度自定义 slider（0–100）+ 实时预览。常驻专属配置用边框框起来。
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import type { Prefs, OverlayMode, ResidentLayout } from '../types';
+import type { Prefs, ResidentLayout, Theme } from '../types';
+import { applyTheme } from '../utils/theme';
 
 const notify = ref(true);
 const shortcut = ref('alt+space');
 const interval = ref(3);
 const autostart = ref(false);
-const mode = ref<OverlayMode>('panel');
+const theme = ref<Theme>('light');
 const residentLayout = ref<ResidentLayout>('b');
 const showSnoozed = ref(true);
 const showIdle = ref(true);
@@ -40,7 +41,7 @@ onMounted(async () => {
     notify.value = p.notify;
     shortcut.value = p.shortcut;
     interval.value = p.poll_interval;
-    mode.value = p.mode;
+    theme.value = p.theme;
     residentLayout.value = p.resident_layout;
     showSnoozed.value = p.resident_show_snoozed;
     showIdle.value = p.resident_show_idle;
@@ -76,7 +77,11 @@ const onNotify = (v: boolean) => wrap('notify', async () => { await invoke('set_
 const onAutostart = (v: boolean) => wrap('autostart', async () => { await invoke('toggle_autostart', { enable: v }); autostart.value = v; });
 const onShortcut = (v: string) => wrap('shortcut', async () => { await invoke('set_shortcut', { shortcut: v }); shortcut.value = v; });
 const onInterval = (v: number) => wrap('interval', async () => { await invoke('set_interval', { seconds: v }); interval.value = v; });
-const onMode = (v: OverlayMode) => wrap('mode', async () => { await invoke('set_mode', { mode: v }); mode.value = v; });
+const onTheme = (v: Theme) => wrap('theme', async () => {
+  await invoke('set_theme', { theme: v });
+  theme.value = v;
+  applyTheme(v);
+});
 const onLayout = (v: ResidentLayout) => wrap('layout', async () => { await invoke('set_resident_layout', { layout: v }); residentLayout.value = v; });
 const onShowSnoozed = (v: boolean) => wrap('showSnoozed', async () => { await invoke('set_resident_show_snoozed', { show: v }); showSnoozed.value = v; });
 const onShowIdle = (v: boolean) => wrap('showIdle', async () => { await invoke('set_resident_show_idle', { show: v }); showIdle.value = v; });
@@ -123,8 +128,7 @@ function onSliderDown(e: PointerEvent) {
 }
 
 const previewBg = computed(() => {
-  const light = window.matchMedia('(prefers-color-scheme: light)').matches;
-  const rgb = light ? '255, 255, 255' : '28, 28, 30';
+  const rgb = theme.value === 'light' ? '255, 255, 255' : '28, 28, 30';
   return `rgba(${rgb}, ${(opacity.value / 100).toFixed(3)})`;
 });
 
@@ -176,13 +180,16 @@ async function downloadAndInstall() {
         <input type="checkbox" :checked="notify" :disabled="saving === 'notify'"
                @change="onNotify(($event.target as HTMLInputElement).checked)" />
       </label>
-      <label class="row">
-        <span>全局快捷键</span>
-        <select :value="shortcut" :disabled="saving === 'shortcut'"
-                @change="onShortcut(($event.target as HTMLSelectElement).value)">
-          <option v-for="s in shortcuts" :key="s.value" :value="s.value">{{ s.label }}</option>
-        </select>
-      </label>
+      <div class="field">
+        <span class="field-label">全局快捷键</span>
+        <div class="opt-group">
+          <button v-for="s in shortcuts" :key="s.value" type="button"
+                  class="opt-btn" :class="{ active: shortcut === s.value }"
+                  :disabled="saving === 'shortcut'" @click="onShortcut(s.value)">
+            <span class="opt-title">{{ s.label }}</span>
+          </button>
+        </div>
+      </div>
       <label class="row">
         <span>轮询间隔（秒，1–30）</span>
         <input type="number" min="1" max="30" :value="interval" :disabled="saving === 'interval'"
@@ -191,39 +198,16 @@ async function downloadAndInstall() {
     </section>
 
     <section>
-      <h2 class="section-title">默认形态</h2>
-      <p class="hint">⌥Space 呼出时显示哪种形态。两者可随时互切。</p>
-      <div class="choice-cards">
-        <button type="button" class="choice-card" :class="{ active: mode === 'panel' }" :disabled="saving === 'mode'" @click="onMode('panel')">
-          <div class="mock mock-panel">
-            <div class="m-search"><span class="m-search-ico">⌕</span><span>搜索会话…</span></div>
-            <div class="m-group">待介入 <span class="m-cnt">3</span></div>
-            <div class="m-proj">~/ai/cc-view</div>
-            <div class="m-row m-perm">
-              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
-              <span class="m-name">refactor</span><span class="m-st">等权限</span>
-            </div>
-            <div class="m-row">
-              <svg width="8" height="8" viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.4" fill="#0A84FF"/><circle cx="8" cy="8" r="1.4" fill="#0A84FF"/><circle cx="12" cy="8" r="1.4" fill="#0A84FF"/></svg>
-              <span class="m-name">session-2</span><span class="m-st">等输入</span>
-            </div>
-          </div>
-          <span class="card-label">面板（全功能）</span>
+      <h2 class="section-title">外观</h2>
+      <div class="opt-group">
+        <button type="button" class="opt-btn" :class="{ active: theme === 'light' }"
+                :disabled="saving === 'theme'" @click="onTheme('light')">
+          <span class="opt-title">浅色</span>
+          <span class="opt-desc">默认</span>
         </button>
-        <button type="button" class="choice-card" :class="{ active: mode === 'resident' }" :disabled="saving === 'mode'" @click="onMode('resident')">
-          <div class="mock mock-resident">
-            <div class="m-group">待介入 <span class="m-cnt">2</span></div>
-            <div class="m-proj">~/ai/cc-view</div>
-            <div class="m-row m-perm">
-              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
-              <span class="m-name">refactor</span>
-            </div>
-            <div class="m-row">
-              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#30D158" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)"/></svg>
-              <span class="m-name">build</span>
-            </div>
-          </div>
-          <span class="card-label">常驻（精简）</span>
+        <button type="button" class="opt-btn" :class="{ active: theme === 'dark' }"
+                :disabled="saving === 'theme'" @click="onTheme('dark')">
+          <span class="opt-title">深色</span>
         </button>
       </div>
     </section>
@@ -233,36 +217,16 @@ async function downloadAndInstall() {
 
       <div class="field">
         <span class="field-label">常驻布局</span>
-        <div class="choice-cards">
-          <button type="button" class="choice-card" :class="{ active: residentLayout === 'b' }" :disabled="saving === 'layout'" @click="onLayout('b')">
-            <div class="mock mock-layout">
-              <div class="m-group">待介入</div>
-              <div class="m-proj">~/ai/x</div>
-              <div class="m-row m-perm">
-                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
-                <span class="m-name">fix-bug</span><span class="m-st">等权限</span>
-              </div>
-              <div class="m-row">
-                <svg width="8" height="8" viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.4" fill="#0A84FF"/><circle cx="8" cy="8" r="1.4" fill="#0A84FF"/><circle cx="12" cy="8" r="1.4" fill="#0A84FF"/></svg>
-                <span class="m-name">test</span><span class="m-st">等输入</span>
-              </div>
-            </div>
-            <span class="card-label">B 精简</span>
+        <div class="opt-group">
+          <button type="button" class="opt-btn" :class="{ active: residentLayout === 'b' }"
+                  :disabled="saving === 'layout'" @click="onLayout('b')">
+            <span class="opt-title">B 精简</span>
+            <span class="opt-desc">每行带状态文字（等权限 / 等输入）</span>
           </button>
-          <button type="button" class="choice-card" :class="{ active: residentLayout === 'a' }" :disabled="saving === 'layout'" @click="onLayout('a')">
-            <div class="mock mock-layout">
-              <div class="m-group">待介入</div>
-              <div class="m-proj">~/ai/x</div>
-              <div class="m-row m-perm">
-                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
-                <span class="m-name">fix-bug</span>
-              </div>
-              <div class="m-row">
-                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#30D158" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)"/></svg>
-                <span class="m-name">build</span>
-              </div>
-            </div>
-            <span class="card-label">A 极简</span>
+          <button type="button" class="opt-btn" :class="{ active: residentLayout === 'a' }"
+                  :disabled="saving === 'layout'" @click="onLayout('a')">
+            <span class="opt-title">A 极简</span>
+            <span class="opt-desc">仅图标和名称，不含状态文字，更紧凑</span>
           </button>
         </div>
       </div>
@@ -324,7 +288,6 @@ async function downloadAndInstall() {
 h1 { font-size: 18px; font-weight: 700; margin: 0 0 20px; }
 section { margin-top: 20px; }
 .section-title { font-size: 13px; font-weight: 700; margin: 0 0 4px; color: var(--color-muted); letter-spacing: 0.03em; display: flex; align-items: center; gap: 8px; }
-.hint { font-size: 11px; color: var(--color-tertiary); margin: 0 0 10px; }
 .tag { font-size: 10px; font-weight: 600; color: var(--color-primary); border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent); border-radius: 8px; padding: 1px 7px; letter-spacing: 0; }
 
 .row {
@@ -333,7 +296,7 @@ section { margin-top: 20px; }
   font-size: var(--fs-body);
 }
 .row input[type="checkbox"] { width: 18px; height: 18px; }
-.row select, .row input[type="number"] {
+.row input[type="number"] {
   font-size: var(--fs-control); padding: 4px 8px;
   background: var(--color-bg); color: var(--color-fg);
   border: 1px solid var(--color-border); border-radius: 6px;
@@ -346,52 +309,25 @@ section { margin-top: 20px; }
 }
 .resident-box .section-title { margin-top: 12px; }
 
-/* 卡片式选择 */
-.choice-cards { display: flex; gap: 10px; }
-.choice-card {
-  flex: 1; background: var(--color-hover);
+/* 可点击按钮组（快捷键 / 常驻布局 / 外观）：去 mock 缩略图、去 select 下拉 */
+.opt-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.opt-btn {
+  flex: 1 1 120px; min-width: 0;
+  background: var(--color-hover);
   border: 1.5px solid var(--color-border); border-radius: 8px;
-  padding: 10px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 10px 12px; cursor: pointer; text-align: left;
   font-family: inherit; color: var(--color-fg);
   transition: border-color var(--motion-duration) var(--motion-easing),
               background var(--motion-duration) var(--motion-easing);
 }
-.choice-card.active {
+.opt-btn.active {
   border-color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-hover));
 }
-.choice-card:not(:disabled):hover { border-color: var(--color-primary); }
-.choice-card:disabled { opacity: 0.5; cursor: default; }
-.card-label { font-size: var(--fs-caption); color: var(--color-muted); text-align: center; }
-.choice-card.active .card-label { color: var(--color-fg); }
-
-/* mock 真实风格 mini（半透毛玻璃 + 分组 + 项目 + 状态图标 + 会话名 + 状态） */
-.mock {
-  border-radius: 6px; padding: 6px;
-  background: rgba(28, 28, 30, 0.72);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  color: #E5E5E7;
-  display: flex; flex-direction: column; gap: 2px;
-  box-sizing: border-box;
-}
-.mock-panel { width: 100%; height: 92px; }
-.mock-resident { width: 60%; align-self: center; height: 74px; }
-.mock-layout { width: 100%; height: 74px; }
-
-.m-search { display: flex; align-items: center; gap: 4px; padding: 2px 5px; background: rgba(255,255,255,0.07); border-radius: 3px; font-size: 7px; color: #8E8E93; margin-bottom: 2px; }
-.m-search-ico { font-size: 8px; }
-.m-group { font-size: 6px; text-transform: uppercase; letter-spacing: 0.08em; color: #AEAEB2; padding: 3px 1px 1px; display: flex; gap: 3px; align-items: center; }
-.m-cnt { background: rgba(255,255,255,0.12); border-radius: 5px; padding: 0 4px; font-size: 5px; line-height: 8px; color: #8E8E93; }
-.m-proj { font-size: 7px; color: #AEAEB2; font-family: ui-monospace, "SF Mono", monospace; padding: 1px 1px; }
-.m-row { display: flex; align-items: center; gap: 5px; padding: 2px 4px; border-left: 1.5px solid transparent; }
-.m-row.m-perm { border-left-color: #FF9F0A; background: rgba(255,159,10,0.12); border-radius: 0 3px 3px 0; }
-.m-row svg { flex-shrink: 0; }
-.m-name { flex: 1; font-size: 8px; color: #E5E5E7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.m-st { font-size: 6px; color: #AEAEB2; flex-shrink: 0; }
-.m-row.m-perm .m-st { color: #FF9F0A; }
+.opt-btn:not(:disabled):hover { border-color: var(--color-primary); }
+.opt-btn:disabled { opacity: 0.5; cursor: default; }
+.opt-btn .opt-title { font-size: var(--fs-body); font-weight: 700; display: block; }
+.opt-btn .opt-desc { font-size: var(--fs-caption); color: var(--color-muted); font-weight: 400; margin-top: 3px; display: block; }
 
 /* 常驻专属字段 */
 .field { padding: 14px 0; border-bottom: 1px solid var(--color-border); }
