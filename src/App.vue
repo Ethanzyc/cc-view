@@ -32,7 +32,9 @@ onMounted(async () => {
     await listen<OverlayMode>('mode_changed', e => {
       mode.value = e.payload;
       transitioning.value = true;
-      setTimeout(() => { transitioning.value = false; }, 400);
+      // spinner 先就位 100ms（窗口未动），再触发后端窗口动画。
+      setTimeout(() => { invoke('do_animate'); }, 100);
+      setTimeout(() => { transitioning.value = false; }, 1200); // 兜底防卡死
     });
   } catch (e) {
     console.error('listen mode_changed failed', e);

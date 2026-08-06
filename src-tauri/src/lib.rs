@@ -616,19 +616,28 @@ fn set_mode(
     state: tauri::State<'_, Mutex<prefs::Prefs>>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    // 一次 lock：写 mode + 持久化 + 读 layout（供 apply_mode_window 定宽），避免两次 lock。
-    let layout = state
-        .lock()
-        .map(|mut p| {
-            p.mode = mode;
-            p.save();
-            p.resident_layout
-        })
-        .unwrap_or(prefs::ResidentLayout::B);
-    apply_mode_window(&app, mode, layout);
+    // 存 mode + emit；不立即动画——前端 mode_changed 先显示 spinner 100ms（窗口未动），
+    // 再 invoke do_animate 触发窗口动画，避免 spinner 和动画同时出现、spinner 在变窗口里闪。
+    if let Ok(mut p) = state.lock() {
+        p.mode = mode;
+        p.save();
+    }
     let _ = app.emit("mode_changed", mode);
     let _ = app.emit("prefs_changed", ());
     Ok(())
+}
+
+/// 前端 spinner 就位后调（mode_changed 后 100ms）：按当前 mode 启动窗口缩放动画。
+#[tauri::command]
+fn do_animate(
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    let (mode, layout) = state
+        .lock()
+        .map(|p| (p.mode, p.resident_layout))
+        .unwrap_or((prefs::OverlayMode::Resident, prefs::ResidentLayout::B));
+    apply_mode_window(&app, mode, layout);
 }
 
 /// 校正常驻窗口高度为内容实际高度（前端量得渲染高度后调用）。
@@ -912,6 +921,7 @@ pub fn run() {
             set_resident_show_idle,
             set_resident_opacity,
             set_mode,
+            do_animate,
             set_resident_height
         ])
         .setup(|app| {
