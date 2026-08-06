@@ -772,16 +772,22 @@ fn show_overlay(app: &tauri::AppHandle) {
                 if !win.is_visible().unwrap_or(false) { break; }
                 let current_front = frontmost_bundle_id();
                 if current_front != stable_front {
+                    // 常驻模式不收起；面板模式按 pin 决定。
+                    let mode = app_handle
+                        .state::<Mutex<prefs::Prefs>>()
+                        .lock()
+                        .map(|p| p.mode)
+                        .unwrap_or(prefs::OverlayMode::Resident);
                     let pinned = app_handle
                         .state::<Mutex<bool>>()
                         .lock()
                         .map(|g| *g)
                         .unwrap_or(false);
-                    if !pinned {
+                    if mode != prefs::OverlayMode::Resident && !pinned {
                         let _ = win.hide();
                         break;
                     }
-                    // pinned: 静默 continue（钉住时常驻，不收起、不刷屏）
+                    // resident 或 pinned：静默 continue（不收起）
                 }
             }
         });
@@ -903,13 +909,18 @@ pub fn run() {
                         overlay_position::OverlayPosition::save(p.x, p.y);
                     }
                     tauri::WindowEvent::Focused(false) => {
-                        // 钉住时失焦不收起；未钉才 hide。
+                        // 常驻模式 = always-pinned（失焦不收起）；面板模式按 pin 决定。
+                        let mode = app_handle
+                            .state::<Mutex<prefs::Prefs>>()
+                            .lock()
+                            .map(|p| p.mode)
+                            .unwrap_or(prefs::OverlayMode::Resident);
                         let pinned = app_handle
                             .state::<Mutex<bool>>()
                             .lock()
                             .map(|g| *g)
                             .unwrap_or(false);
-                        if !pinned {
+                        if mode != prefs::OverlayMode::Resident && !pinned {
                             let _ = w.hide();
                         }
                     }
