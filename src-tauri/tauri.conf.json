@@ -31,7 +31,7 @@
         "url": "index.html",
         "visible": false,
         "decorations": true,
-        "resizable": false,
+        "resizable": true,
         "width": 480,
         "height": 460,
         "center": true,

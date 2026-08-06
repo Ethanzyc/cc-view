@@ -1,40 +1,34 @@
 <script setup lang="ts">
 // 常驻模式视图：精简会话列表，贴桌面常驻、失焦不收起（后端控制）。
-// 数据自管（listen sessions），排序/分组/ago 复用 utils/session.ts（MVP 与 PanelView 重复可接受）。
-// 展开入口（右上角）调 set_mode(panel) → App.vue 切 PanelView。
-// B 布局：分组 + 项目标题 + 图标+名称+状态；A 极简：扁平列表，仅图标+名称。
-// 透明度作用于 --resident-bg（仅常驻；面板模式用 --color-bg-overlay 不受影响）。
-// 高度自适应：内容变化 → ResizeObserver → 量 scrollHeight → set_resident_height 校正窗口高度。
+// A/B 都按项目分组（项目名作二级标题，醒目）；B 行带状态文字，A 行不带（极简）。
+// 展开入口（右上角，四角向外 maximize 图标，与面板收起 minimize 成对）调 set_mode(panel)。
+// 透明度作用于 --resident-bg；高度自适应 ResizeObserver → set_resident_height。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { Session, ResidentLayout } from '../types';
 import StatusIcon from './StatusIcon.vue';
-import { STATUS_ZH, projShort, isStaleInput, statusRank } from '../utils/session';
+import { STATUS_ZH, projShort, isStaleInput } from '../utils/session';
 
 const all = ref<Session[]>([]);
 // now tick：isStaleInput 依赖时间，需前端定期刷新（后端 emit 有 hash 去重不随时间触发）。
 const now = ref(Date.now());
 let nowTimer: number | undefined;
 const rootEl = ref<HTMLElement>();
-// 常驻布局：B 精简（分组+状态）/ A 极简（仅图标+名称）。onMounted 从 prefs 读。
 const layout = ref<ResidentLayout>('b');
-// 显示开关：搁置 / 闲置（等输入超时）的会话是否在常驻列表显示。onMounted 从 prefs 读。
 const showSnoozed = ref(true);
 const showIdle = ref(true);
-// 背景透明度（20–100）。applyOpacity 写入 --resident-bg 的 alpha。
 const opacity = ref(55);
-// listen 返回的 unlisten，onBeforeUnmount 调（避免切模式累积 listener）。
 let unlistenSessions: (() => void) | undefined;
 let unlistenPrefs: (() => void) | undefined;
 
-// 非搜索态分组（与 PanelView 一致算法，MVP 重复）：待介入 / 已搁置；常驻只看活会话。
+// 分组（待介入 / 已搁置）→ 项目聚类 → 行。A/B 共用，行状态文字按 layout 显隐。
 type Section = { key: string; label: string; total: number; projs: [string, Session[]][] };
 const groups = computed<Section[]>(() => {
   const list = all.value
-    .filter(s => s.alive) // 常驻只看活会话
-    .filter(s => showSnoozed.value || !s.snoozed) // 关闭搁置 → 排除 snoozed
-    .filter(s => showIdle.value || !isStaleInput(s, now.value)); // 关闭闲置 → 排除闲置
+    .filter(s => s.alive)
+    .filter(s => showSnoozed.value || !s.snoozed)
+    .filter(s => showIdle.value || !isStaleInput(s, now.value));
   const active = list.filter(s => !s.snoozed);
   const snoozedAlive = list.filter(s => s.snoozed);
   const byProj = (rows: Session[]): [string, Session[]][] => {
@@ -49,7 +43,7 @@ const groups = computed<Section[]>(() => {
   const result: Section[] = [];
   if (active.length) {
     const n = now.value;
-    // 全闲置 project 沉底（与 PanelView 一致）
+    // 全闲置 project 沉底
     const activeProjs = byProj(active).sort((a, b) => {
       const aStale = a[1].every(s => isStaleInput(s, n));
       const bStale = b[1].every(s => isStaleInput(s, n));
@@ -64,20 +58,6 @@ const groups = computed<Section[]>(() => {
   return result;
 });
 
-// A 布局扁平列表：活会话按 rank 排（等权限优先），闲置/搁置由 .dim 表达。
-const flatRows = computed(() => {
-  const n = now.value;
-  return [...all.value]
-    .filter(s => s.alive)
-    .filter(s => showSnoozed.value || !s.snoozed)
-    .filter(s => showIdle.value || !isStaleInput(s, n))
-    .sort((a, b) => {
-      const sa = isStaleInput(a, n), sb = isStaleInput(b, n);
-      if (sa !== sb) return sa ? 1 : -1;
-      return statusRank(a) - statusRank(b);
-    });
-});
-
 async function focusSession(id: string) {
   try {
     await invoke('focus_session', { id });
@@ -86,7 +66,6 @@ async function focusSession(id: string) {
   }
 }
 
-// 展开成面板模式：后端 set_mode + emit mode_changed → App 切 PanelView。
 async function expandToPanel() {
   try {
     await invoke('set_mode', { mode: 'panel' });
@@ -95,7 +74,6 @@ async function expandToPanel() {
   }
 }
 
-// 透明度：按系统深浅色选 rgb，写入 --resident-bg 的 alpha（仅常驻视图用此变量）。
 function applyOpacity() {
   const a = (opacity.value / 100).toFixed(3);
   const light = window.matchMedia('(prefers-color-scheme: light)').matches;
@@ -103,9 +81,6 @@ function applyOpacity() {
   document.documentElement.style.setProperty('--resident-bg', `rgba(${rgb}, ${a})`);
 }
 
-// 高度自适应：量 scrollHeight（内容全高，不受 max-height 裁剪）→ 窗口高独立于当前窗口高，
-// 不与 max-height:100vh 形成反馈循环。上限 = 屏幕可用高 60%（固定，不随窗口），超出则窗口
-// 卡上限 + 列表内部滚动。rAF 节流避免高频 set_size。
 let resizeRaf = 0;
 let ro: ResizeObserver | undefined;
 function syncHeight() {
@@ -152,7 +127,6 @@ onMounted(async () => {
     console.error('resident listen sessions failed', e);
   }
   try {
-    // 配置变化（通常来自偏好设置窗口 set_resident_* / set_mode）→ 重读并应用 layout/显隐/透明度。
     unlistenPrefs = await listen('prefs_changed', async () => {
       try {
         const p = await invoke<{
@@ -175,12 +149,11 @@ onMounted(async () => {
   }
   nowTimer = window.setInterval(() => { now.value = Date.now(); }, 60_000);
 
-  // 监听内容尺寸变化 → 校正窗口高度（sessions/布局/过滤变化都会触发）。
   if (rootEl.value) {
     ro = new ResizeObserver(() => syncHeight());
     ro.observe(rootEl.value);
   }
-  syncHeight(); // 首次量一次
+  syncHeight();
 });
 
 onBeforeUnmount(() => {
@@ -201,66 +174,44 @@ onBeforeUnmount(() => {
       data-tauri-drag-region="false"
       @click="expandToPanel"
     >
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5 11 L11 5" /><path d="M6 5 H11 V10" />
+      <!-- 四角向外（maximize），与面板收起的 minimize（四角向内）成对 -->
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 8V5a2 2 0 0 1 2-2h3" />
+        <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+        <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+        <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
       </svg>
     </button>
-    <!-- A 极简：扁平列表，仅图标+名称 -->
-    <template v-if="layout === 'a'">
-      <div
-        v-for="s in flatRows"
-        :key="s.id"
-        class="row"
-        :class="{
-          perm: s.status === 'needsPermission' && !s.snoozed,
-          reply: s.status === 'waitingForReply' && !s.snoozed,
-          dim: s.snoozed || isStaleInput(s, now),
-        }"
-        role="button"
-        tabindex="0"
-        :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
-        data-tauri-drag-region="false"
-        @click="focusSession(s.id)"
-        @keydown.enter.prevent="focusSession(s.id)"
-      >
-        <StatusIcon :status="s.status" class="icon" />
-        <span class="name">{{ s.name || s.project }}<span class="proj-inline"> · {{ projShort(s.project) }}</span></span>
+    <template v-for="(section, si) in groups" :key="section.key">
+      <div v-if="si > 0" class="group-sep" />
+      <div class="group-head">
+        {{ section.label }} <span class="cnt">{{ section.total }}</span>
       </div>
-      <div v-if="!flatRows.length" class="empty">暂无会话</div>
-    </template>
-    <!-- B 精简：分组 + 项目标题 + 图标+名称+状态 -->
-    <template v-else>
-      <template v-for="(section, si) in groups" :key="section.key">
-        <div v-if="si > 0" class="group-sep" />
-        <div class="group-head">
-          {{ section.label }} <span class="cnt">{{ section.total }}</span>
+      <template v-for="[proj, rows] in section.projs" :key="section.key + '|' + proj">
+        <div class="proj-head">{{ projShort(proj) }}</div>
+        <div
+          v-for="s in rows"
+          :key="s.id"
+          class="row"
+          :class="{
+            perm: s.status === 'needsPermission' && !s.snoozed,
+            reply: s.status === 'waitingForReply' && !s.snoozed,
+            dim: s.snoozed || isStaleInput(s, now),
+          }"
+          role="button"
+          tabindex="0"
+          :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
+          data-tauri-drag-region="false"
+          @click="focusSession(s.id)"
+          @keydown.enter.prevent="focusSession(s.id)"
+        >
+          <StatusIcon :status="s.status" class="icon" />
+          <span class="name">{{ s.name || s.project }}</span>
+          <span v-if="layout === 'b'" class="st" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
         </div>
-        <template v-for="[proj, rows] in section.projs" :key="section.key + '|' + proj">
-          <div
-            v-for="s in rows"
-            :key="s.id"
-            class="row"
-            :class="{
-              perm: s.status === 'needsPermission' && !s.snoozed,
-              reply: s.status === 'waitingForReply' && !s.snoozed,
-              dim: s.snoozed || isStaleInput(s, now),
-            }"
-            role="button"
-            tabindex="0"
-            :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
-            data-tauri-drag-region="false"
-            @click="focusSession(s.id)"
-            @keydown.enter.prevent="focusSession(s.id)"
-          >
-            <StatusIcon :status="s.status" class="icon" />
-            <span class="name">{{ s.name || s.project }}</span>
-            <span class="proj">{{ projShort(s.project) }}</span>
-            <span class="st" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
-          </div>
-        </template>
       </template>
-      <div v-if="!groups.length" class="empty">暂无会话</div>
     </template>
+    <div v-if="!groups.length" class="empty">暂无会话</div>
   </div>
 </template>
 
@@ -269,9 +220,6 @@ onBeforeUnmount(() => {
   position: relative;
   background: var(--resident-bg);
   color: var(--color-fg);
-  /* 不设 min-height：让元素高度由内容决定，syncHeight 才能量到真实内容高收缩窗口。
-     max-height:100vh = 窗口高（syncHeight 把窗口设为 min(内容, 屏幕60%)，稳定不反馈），
-     内容超高时元素卡窗口高 + 内部滚动。 */
   max-height: 100vh;
   overflow-y: auto;
   border-radius: var(--radius-overlay);
@@ -339,18 +287,6 @@ onBeforeUnmount(() => {
   color: var(--color-muted);
 }
 .st.perm { color: var(--status-permission); }
-/* B 布局行内项目名（独立列，可缩省略） */
-.proj {
-  flex: 0 1 6em; min-width: 0;
-  font: 400 10px/1 var(--font-body);
-  color: var(--color-tertiary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* A 布局项目名（嵌入会话名后，· 分隔） */
-.proj-inline {
-  font: 400 10px/1 var(--font-body);
-  color: var(--color-tertiary);
-}
 
 .empty {
   padding: 32px 12px; text-align: center;
