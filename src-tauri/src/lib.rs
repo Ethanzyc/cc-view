@@ -608,6 +608,31 @@ fn set_resident_opacity(
     Ok(())
 }
 
+/// 设置外观主题（light/dark）：存 prefs + 强制 overlay/prefs 窗口 appearance + emit prefs_changed。
+/// theme 参数为 prefs::Theme，非法值（非 light/dark）由 serde deserialize 失败自动返回 Err（fail fast）。
+#[tauri::command]
+fn set_theme(
+    theme: prefs::Theme,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    if let Ok(mut p) = state.lock() {
+        p.theme = theme;
+        p.save();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(w) = app.get_webview_window("overlay") {
+            apply_theme_to_window(&w, theme);
+        }
+        if let Some(w) = app.get_webview_window("prefs") {
+            apply_theme_to_window(&w, theme);
+        }
+    }
+    let _ = app.emit("prefs_changed", ());
+    Ok(())
+}
+
 /// 切换 overlay 模式（panel / resident）：存 prefs + resize 窗口 + 重新定位 + emit mode_changed
 /// 让前端（overlay 窗口）切换视图；同时 emit prefs_changed 让 ResidentView 重读配置。
 /// prefs 窗口的 set_mode 调用同样 emit，overlay 会响应。
@@ -704,6 +729,29 @@ fn set_activation_policy(policy: i64) {
     unsafe {
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         let _: () = msg_send![app, setActivationPolicy: policy as objc2::ffi::NSInteger];
+    }
+}
+
+/// 强制窗口外观为 light/dark（NSAppearance），让 vibrancy 跟 theme 走而非系统。
+/// light → NSAppearanceNameAqua，dark → NSAppearanceNameDarkAqua。
+/// 用 NSString stringWithUTF8String: 把 C 字符串转 NSString（项目无 objc2-foundation，不加依赖）。
+#[cfg(target_os = "macos")]
+fn apply_theme_to_window(w: &tauri::WebviewWindow, theme: prefs::Theme) {
+    use objc2::{class, msg_send, runtime::AnyObject};
+    use std::ffi::CString;
+    let Ok(ptr) = w.ns_window() else { return };
+    let ns_window = ptr as *mut AnyObject;
+    let name = match theme {
+        prefs::Theme::Light => "NSAppearanceNameAqua",
+        prefs::Theme::Dark => "NSAppearanceNameDarkAqua",
+    };
+    let Ok(cstr) = CString::new(name) else { return };
+    unsafe {
+        let nsstr: *mut AnyObject =
+            msg_send![class!(NSString), stringWithUTF8String: cstr.as_ptr()];
+        let appearance: *mut AnyObject =
+            msg_send![class!(NSAppearance), appearanceNamed: nsstr];
+        let _: () = msg_send![ns_window, setAppearance: appearance];
     }
 }
 
@@ -921,6 +969,7 @@ pub fn run() {
             set_resident_show_snoozed,
             set_resident_show_idle,
             set_resident_opacity,
+            set_theme,
             set_mode,
             do_animate,
             set_resident_height
@@ -929,6 +978,13 @@ pub fn run() {
             // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
             // cc-view 平时 accessory（无 dock）——启动显式 set Accessory；打开偏好设置时切 Regular。
             let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // 启动按当前 theme 强制窗口 appearance（让 vibrancy 跟 theme 而非系统）。
+            let startup_theme = app
+                .state::<Mutex<prefs::Prefs>>()
+                .lock()
+                .map(|p| p.theme)
+                .unwrap_or(prefs::Theme::Light);
 
             // 通知权限请求块——保留以兼容未来插件版本。
             // 上游限制（tauri-plugin-notification v2.3.3）：桌面端 request_permission() /
@@ -957,6 +1013,9 @@ pub fn run() {
                         .radius(12.)
                         .build(),
                 );
+
+                #[cfg(target_os = "macos")]
+                apply_theme_to_window(&overlay, startup_theme);
 
                 // 跨 Space / 全屏可见：overlay 需在全屏 app 下也能弹出（Spotlight/Raycast 行为）
                 #[cfg(target_os = "macos")]
@@ -1003,6 +1062,9 @@ pub fn run() {
 
             // prefs 窗口：关闭即转回 accessory（dock 消失）+ hide（不销毁，下次复用）。
             if let Some(prefs_win) = app.get_webview_window("prefs") {
+                #[cfg(target_os = "macos")]
+                apply_theme_to_window(&prefs_win, startup_theme);
+
                 let prefs_handle = app.handle().clone();
                 prefs_win.on_window_event(move |e| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = e {
