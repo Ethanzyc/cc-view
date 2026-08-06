@@ -63,6 +63,63 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
 /// include_bytes 编译期嵌入，运行时无需读盘；改图后需重新编译。
 const TRAY_PNG: &[u8] = include_bytes!("../icons/tray.png");
 
+/// 常驻窗口宽度（logical px）。A 极简最窄，B 精简需容纳"名称 + 状态中文"。
+const RESIDENT_WIDTH_A: f64 = 150.0;
+const RESIDENT_WIDTH_B: f64 = 212.0;
+
+fn resident_layout_width(layout: prefs::ResidentLayout) -> f64 {
+    match layout {
+        prefs::ResidentLayout::A => RESIDENT_WIDTH_A,
+        prefs::ResidentLayout::B => RESIDENT_WIDTH_B,
+    }
+}
+
+/// 面板模式窗口尺寸（logical px，与 tauri.conf.json overlay width/height 一致）。
+const PANEL_W: f64 = 560.0;
+const PANEL_H: f64 = 420.0;
+
+/// 把 overlay 窗口尺寸 + 位置切到目标模式。
+/// - panel：560×420；位置用 overlay-position.json 记忆，无则 center。
+/// - resident：宽度按 layout（高度先沿用当前值，随后前端量内容 invoke set_resident_height 校正）；
+///   位置用记忆，无记忆则屏幕右上角（menubar 下方约 28+4 logical 边距）。
+/// menubar 高度按 28 logical 估算（retina 实测 ~24–37）；如不准可改用 NSScreen visibleFrame。
+fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: prefs::ResidentLayout) {
+    let Some(w) = app.get_webview_window("overlay") else { return };
+
+    match mode {
+        prefs::OverlayMode::Panel => {
+            let _ = w.set_size(tauri::LogicalSize::new(PANEL_W, PANEL_H));
+            if let Some(pos) = overlay_position::OverlayPosition::load() {
+                let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+            } else {
+                let _ = w.center();
+            }
+        }
+        prefs::OverlayMode::Resident => {
+            let width = resident_layout_width(layout);
+            // 高度先沿用当前（面板 420 或上次常驻值），前端量内容后 set_resident_height 校正。
+            let cur_h = w
+                .outer_size()
+                .and_then(|s| w.scale_factor().map(|sf| s.to_logical::<f64>(sf).height))
+                .unwrap_or(PANEL_H);
+            let _ = w.set_size(tauri::LogicalSize::new(width, cur_h));
+
+            if let Some(pos) = overlay_position::OverlayPosition::load() {
+                let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+            } else {
+                // 右上角：screen 右 - 窗口宽 - 8；top + menubar(28) + 4。
+                if let Ok(Some(mon)) = w.current_monitor() {
+                    let sf = mon.scale_factor();
+                    let screen_w = mon.size().width as f64 / sf;
+                    let x = mon.position().x as f64 / sf + screen_w - width - 8.0;
+                    let y = mon.position().y as f64 / sf + 28.0 + 4.0;
+                    let _ = w.set_position(tauri::LogicalPosition::new(x, y));
+                }
+            }
+        }
+    }
+}
+
 /// 后台线程：每 3s collect → reduce → notify → hash 去重 → 仅变化时 emit("sessions")。
 /// 同时每轮聚合 need_attention/working 计数 → tray.set_tooltip + set_icon。
 fn start_poll_loop(handle: tauri::AppHandle) {
@@ -494,6 +551,29 @@ fn set_resident_opacity(
     Ok(())
 }
 
+/// 切换 overlay 模式（panel / resident）：存 prefs + resize 窗口 + 重新定位 + emit mode_changed
+/// 让前端（overlay 窗口）切换视图；同时 emit prefs_changed 让 ResidentView 重读配置。
+/// prefs 窗口的 set_mode 调用同样 emit，overlay 会响应。
+#[tauri::command]
+fn set_mode(
+    mode: prefs::OverlayMode,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let layout = state
+        .lock()
+        .map(|p| p.resident_layout)
+        .unwrap_or(prefs::ResidentLayout::B);
+    if let Ok(mut p) = state.lock() {
+        p.mode = mode;
+        p.save();
+    }
+    apply_mode_window(&app, mode, layout);
+    let _ = app.emit("mode_changed", mode);
+    let _ = app.emit("prefs_changed", ());
+    Ok(())
+}
+
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
 /// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
@@ -742,7 +822,8 @@ pub fn run() {
             set_resident_layout,
             set_resident_show_snoozed,
             set_resident_show_idle,
-            set_resident_opacity
+            set_resident_opacity,
+            set_mode
         ])
         .setup(|app| {
             // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
