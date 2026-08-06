@@ -19,6 +19,7 @@ const layout = ref<ResidentLayout>('b');
 const showSnoozed = ref(true);
 const showIdle = ref(true);
 const opacity = ref(55);
+const theme = ref<'light' | 'dark'>('light');
 let unlistenSessions: (() => void) | undefined;
 let unlistenPrefs: (() => void) | undefined;
 
@@ -133,8 +134,7 @@ async function expandToPanel() {
 
 function applyOpacity() {
   const a = (opacity.value / 100).toFixed(3);
-  const light = window.matchMedia('(prefers-color-scheme: light)').matches;
-  const rgb = light ? '255, 255, 255' : '28, 28, 30';
+  const rgb = theme.value === 'light' ? '255, 255, 255' : '28, 28, 30';
   document.documentElement.style.setProperty('--resident-bg', `rgba(${rgb}, ${a})`);
 }
 
@@ -164,11 +164,13 @@ onMounted(async () => {
       resident_show_snoozed: boolean;
       resident_show_idle: boolean;
       resident_opacity: number;
+      theme: 'light' | 'dark';
     }>('get_prefs');
     layout.value = p.resident_layout;
     showSnoozed.value = p.resident_show_snoozed;
     showIdle.value = p.resident_show_idle;
     opacity.value = p.resident_opacity;
+    theme.value = p.theme;
     applyOpacity();
   } catch (e) {
     console.error('get_prefs resident config failed', e);
@@ -196,11 +198,13 @@ onMounted(async () => {
           resident_show_snoozed: boolean;
           resident_show_idle: boolean;
           resident_opacity: number;
+          theme: 'light' | 'dark';
         }>('get_prefs');
         layout.value = p.resident_layout;
         showSnoozed.value = p.resident_show_snoozed;
         showIdle.value = p.resident_show_idle;
         opacity.value = p.resident_opacity;
+        theme.value = p.theme;
         applyOpacity();
       } catch (e) {
         console.error('prefs_changed reload failed', e);
@@ -229,9 +233,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="resident" ref="rootEl" data-tauri-drag-region="deep"
-    :class="{ 'flash-border': flashBorder }"
-    :style="flashStatus ? { '--flash-color': flashColor(flashStatus) } : undefined">
+  <div class="resident" ref="rootEl" data-tauri-drag-region="deep">
+    <!-- 整块闪 overlay（框阶段）：脉动状态色铺满，pointer-events 透传 -->
+    <div class="flash-tint" :class="{ on: flashBorder }"
+      :style="flashStatus ? { '--flash-color': flashColor(flashStatus) } : undefined"></div>
     <button
       class="expand-btn"
       title="展开成命令面板"
@@ -351,11 +356,15 @@ onBeforeUnmount(() => {
   0%, 100% {}
   50% { background: color-mix(in srgb, var(--flash-color) 30%, transparent); box-shadow: inset 2px 0 0 var(--flash-color); }
 }
-/* 整窗内描边 glow：和行同色同节奏，让状态变化余光可见（行精确定位 + 框整体醒目） */
-.resident.flash-border { animation: border-flash 380ms cubic-bezier(.4, 0, .2, 1) 3; }
-@keyframes border-flash {
-  0%, 100% { box-shadow: none; }
-  50% { box-shadow: inset 0 0 0 2px var(--flash-color), inset 0 0 22px color-mix(in srgb, var(--flash-color) 38%, transparent); }
+/* 整块闪 overlay（框阶段）：脉动状态色铺满窗口，和行同色同节奏 */
+.flash-tint {
+  position: absolute; inset: 0; border-radius: var(--radius-overlay);
+  pointer-events: none; background: transparent;
+}
+.flash-tint.on { animation: tint-flash 380ms cubic-bezier(.4, 0, .2, 1) 3; }
+@keyframes tint-flash {
+  0%, 100% { background: transparent; }
+  50% { background: color-mix(in srgb, var(--flash-color) 26%, transparent); }
 }
 
 .icon { flex-shrink: 0; }
@@ -381,6 +390,6 @@ onBeforeUnmount(() => {
 }
 @media (prefers-reduced-motion: reduce) {
   .row.flash,
-  .resident.flash-border { animation: none; }
+  .flash-tint.on { animation: none; }
 }
 </style>
