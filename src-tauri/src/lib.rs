@@ -434,6 +434,66 @@ fn set_interval(
     Ok(())
 }
 
+/// 设置常驻布局（B 精简 / A 极简）：存 prefs + emit prefs_changed 让 overlay 窗口响应。
+#[tauri::command]
+fn set_resident_layout(
+    layout: prefs::ResidentLayout,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.resident_layout = layout;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 切换常驻模式是否显示搁置的会话：存 prefs + emit prefs_changed。
+#[tauri::command]
+fn set_resident_show_snoozed(
+    show: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.resident_show_snoozed = show;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 切换常驻模式是否显示闲置（等输入超时）的会话：存 prefs + emit prefs_changed。
+#[tauri::command]
+fn set_resident_show_idle(
+    show: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.resident_show_idle = show;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 设置常驻背景透明度（20–100）：校验失败返回 Err（fail fast），合法则存 prefs + emit。
+#[tauri::command]
+fn set_resident_opacity(
+    opacity: u8,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    if !prefs::Prefs::is_valid_opacity(opacity) {
+        return Err(format!("opacity must be 20-100, got {}", opacity));
+    }
+    if let Ok(mut p) = state.lock() {
+        p.resident_opacity = opacity;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+    Ok(())
+}
+
 /// 让 overlay 窗口加入所有 Space（含全屏 app 独占 Space）。
 /// macOS 全屏应用占据独立 Space，普通 NSWindow 默认不跨 Space → 弹到桌面 Space 用户看不到。
 /// Spotlight/Raycast 解法：设 NSWindowCollectionBehavior 的两个 flag：
@@ -678,7 +738,11 @@ pub fn run() {
             toggle_autostart,
             get_autostart,
             set_shortcut,
-            set_interval
+            set_interval,
+            set_resident_layout,
+            set_resident_show_snoozed,
+            set_resident_show_idle,
+            set_resident_opacity
         ])
         .setup(|app| {
             // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
