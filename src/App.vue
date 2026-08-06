@@ -33,7 +33,7 @@ onMounted(async () => {
       mode.value = e.payload;
       transitioning.value = true;
       // spinner 先就位 100ms（窗口未动），再触发后端窗口动画。
-      setTimeout(() => { invoke('do_animate'); }, 100);
+      setTimeout(() => { invoke('do_animate'); }, 50);
       setTimeout(() => { transitioning.value = false; }, 1200); // 兜底防卡死
     });
   } catch (e) {
