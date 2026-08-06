@@ -64,8 +64,8 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
 const TRAY_PNG: &[u8] = include_bytes!("../icons/tray.png");
 
 /// 常驻窗口宽度（logical px）。A 极简最窄，B 精简需容纳"名称 + 状态中文"。
-const RESIDENT_WIDTH_A: f64 = 150.0;
-const RESIDENT_WIDTH_B: f64 = 212.0;
+const RESIDENT_WIDTH_A: f64 = 180.0;
+const RESIDENT_WIDTH_B: f64 = 285.0;
 
 fn resident_layout_width(layout: prefs::ResidentLayout) -> f64 {
     match layout {
@@ -88,12 +88,10 @@ fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: p
 
     match mode {
         prefs::OverlayMode::Panel => {
+            // 切到面板总居中：不沿用常驻的右上角坐标（560 宽放右上角右边整块超出屏幕，
+            // 看着像"闪一下消失"）。面板的位置记忆走 ⌥Space show_overlay 的 load 路径。
             let _ = w.set_size(tauri::LogicalSize::new(PANEL_W, PANEL_H));
-            if let Some(pos) = overlay_position::OverlayPosition::load() {
-                let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-            } else {
-                let _ = w.center();
-            }
+            let _ = w.center();
         }
         prefs::OverlayMode::Resident => {
             let width = resident_layout_width(layout);
@@ -104,17 +102,14 @@ fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: p
                 .unwrap_or(PANEL_H);
             let _ = w.set_size(tauri::LogicalSize::new(width, cur_h));
 
-            if let Some(pos) = overlay_position::OverlayPosition::load() {
-                let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-            } else {
-                // 右上角：screen 右 - 窗口宽 - 8；top + menubar(28) + 4。
-                if let Ok(Some(mon)) = w.current_monitor() {
-                    let sf = mon.scale_factor();
-                    let screen_w = mon.size().width as f64 / sf;
-                    let x = mon.position().x as f64 / sf + screen_w - width - 8.0;
-                    let y = mon.position().y as f64 / sf + 28.0 + 4.0;
-                    let _ = w.set_position(tauri::LogicalPosition::new(x, y));
-                }
+            // 切到常驻总定位右上角（不沿用面板的居中位置——常驻要贴角少占空间）。
+            // 位置记忆走 ⌥Space show_overlay 的 load 路径。
+            if let Ok(Some(mon)) = w.current_monitor() {
+                let sf = mon.scale_factor();
+                let screen_w = mon.size().width as f64 / sf;
+                let x = mon.position().x as f64 / sf + screen_w - width - 8.0;
+                let y = mon.position().y as f64 / sf + 28.0 + 4.0;
+                let _ = w.set_position(tauri::LogicalPosition::new(x, y));
             }
         }
     }

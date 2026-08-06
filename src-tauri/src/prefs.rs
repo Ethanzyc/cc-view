@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 fn default_true() -> bool { true }
 fn default_shortcut() -> String { "alt+space".into() }
 fn default_interval() -> u64 { 3 }
-fn default_mode() -> OverlayMode { OverlayMode::Resident }
+fn default_mode() -> OverlayMode { OverlayMode::Panel }
 fn default_layout() -> ResidentLayout { ResidentLayout::B }
 fn default_show() -> bool { true }
 fn default_opacity() -> u8 { 55 }
@@ -102,12 +102,7 @@ mod tests {
         assert!(p.notify);
         assert_eq!(p.shortcut, "alt+space");
         assert_eq!(p.poll_interval, 3);
-    }
-
-    #[test]
-    fn empty_json_uses_resident_defaults() {
-        let p: Prefs = serde_json::from_str("{}").unwrap();
-        assert_eq!(p.mode, OverlayMode::Resident);
+        assert_eq!(p.mode, OverlayMode::Panel);
         assert_eq!(p.resident_layout, ResidentLayout::B);
         assert!(p.resident_show_snoozed);
         assert!(p.resident_show_idle);
@@ -128,7 +123,7 @@ mod tests {
         let p: Prefs =
             serde_json::from_str(r#"{"notify":false,"shortcut":"ctrl+space"}"#).unwrap();
         assert!(!p.notify);
-        assert_eq!(p.mode, OverlayMode::Resident);
+        assert_eq!(p.mode, OverlayMode::Panel);
         assert_eq!(p.resident_layout, ResidentLayout::B);
         assert_eq!(p.resident_opacity, 55);
     }

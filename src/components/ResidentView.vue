@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
         @keydown.enter.prevent="focusSession(s.id)"
       >
         <StatusIcon :status="s.status" class="icon" />
-        <span class="name">{{ s.name || s.project }}</span>
+        <span class="name">{{ s.name || s.project }}<span class="proj-inline"> · {{ projShort(s.project) }}</span></span>
       </div>
       <div v-if="!flatRows.length" class="empty">暂无会话</div>
     </template>
@@ -236,7 +236,6 @@ onBeforeUnmount(() => {
           {{ section.label }} <span class="cnt">{{ section.total }}</span>
         </div>
         <template v-for="[proj, rows] in section.projs" :key="section.key + '|' + proj">
-          <div class="proj-head">{{ projShort(proj) }}</div>
           <div
             v-for="s in rows"
             :key="s.id"
@@ -255,6 +254,7 @@ onBeforeUnmount(() => {
           >
             <StatusIcon :status="s.status" class="icon" />
             <span class="name">{{ s.name || s.project }}</span>
+            <span class="proj">{{ projShort(s.project) }}</span>
             <span class="st" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
           </div>
         </template>
@@ -339,6 +339,18 @@ onBeforeUnmount(() => {
   color: var(--color-muted);
 }
 .st.perm { color: var(--status-permission); }
+/* B 布局行内项目名（独立列，可缩省略） */
+.proj {
+  flex: 0 1 6em; min-width: 0;
+  font: 400 10px/1 var(--font-body);
+  color: var(--color-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A 布局项目名（嵌入会话名后，· 分隔） */
+.proj-inline {
+  font: 400 10px/1 var(--font-body);
+  color: var(--color-tertiary);
+}
 
 .empty {
   padding: 32px 12px; text-align: center;
