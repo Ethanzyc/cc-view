@@ -8,9 +8,17 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ## 截图
 
-**命令面板（⌥Space 呼出）**
+**命令面板（⌥Space 呼出）— 混合状态**
 
 ![命令面板](docs/screenshots/overlay.png)
+
+**等权限突出（橙边提醒）**
+
+![等权限](docs/screenshots/overlay-permission.png)
+
+**闲置降级（灰显 + 下沉）**
+
+![闲置](docs/screenshots/overlay-idle.png)
 
 **偏好设置**
 
