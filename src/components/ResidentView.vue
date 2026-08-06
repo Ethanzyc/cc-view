@@ -146,6 +146,28 @@ onMounted(async () => {
   } catch (e) {
     console.error('resident listen sessions failed', e);
   }
+  try {
+    // 配置变化（通常来自偏好设置窗口 set_resident_* / set_mode）→ 重读并应用 layout/显隐/透明度。
+    await listen('prefs_changed', async () => {
+      try {
+        const p = await invoke<{
+          resident_layout: ResidentLayout;
+          resident_show_snoozed: boolean;
+          resident_show_idle: boolean;
+          resident_opacity: number;
+        }>('get_prefs');
+        layout.value = p.resident_layout;
+        showSnoozed.value = p.resident_show_snoozed;
+        showIdle.value = p.resident_show_idle;
+        opacity.value = p.resident_opacity;
+        applyOpacity();
+      } catch (e) {
+        console.error('prefs_changed reload failed', e);
+      }
+    });
+  } catch (e) {
+    console.error('listen prefs_changed failed', e);
+  }
   nowTimer = window.setInterval(() => { now.value = Date.now(); }, 60_000);
 
   // 监听内容尺寸变化 → 校正窗口高度（sessions/布局/过滤变化都会触发）。
