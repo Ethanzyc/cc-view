@@ -1003,12 +1003,13 @@ pub fn run() {
             // on_window_event 闭包签名是 Fn(&WindowEvent)（单参），拿不到 window 引用——
             // 外层 clone WebviewWindow（Tauri 2 派生 Clone，是廉价 handle 非拥有资源）
             // 再 move 进闭包，失焦时调 hide()。仅 overlay 有此行为。
-            // vibrancy material：Menu（Spotlight / 系统菜单同档），比 Popover 更亮、模糊更细腻——
-            // 解决"暗糙"。EffectState::Active 保证失焦时仍保持毛玻璃（不灰化）；radius 12 命令面板观感更柔。
+            // vibrancy material：UnderWindowBackground（中性偏深）——浅色下不如 Menu 刺白、深色下更深，
+            // 一次解决"透明度 0 露出突兀白块"与"深色文字发糊"（Menu 偏亮、深色 tint 压不住）。
+            // 配合 set_theme 强制的 NSAppearance，浅/深行为可控。EffectState::Active 失焦仍保持毛玻璃；radius 12 观感更柔。
             if let Some(overlay) = app.get_webview_window("overlay") {
                 let _ = overlay.set_effects(
                     EffectsBuilder::new()
-                        .effect(Effect::Menu)
+                        .effect(Effect::UnderWindowBackground)
                         .state(EffectState::Active)
                         .radius(12.)
                         .build(),
