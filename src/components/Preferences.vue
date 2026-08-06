@@ -83,7 +83,23 @@ const onMode = (v: OverlayMode) => wrap('mode', async () => { await invoke('set_
 const onLayout = (v: ResidentLayout) => wrap('layout', async () => { await invoke('set_resident_layout', { layout: v }); residentLayout.value = v; });
 const onShowSnoozed = (v: boolean) => wrap('showSnoozed', async () => { await invoke('set_resident_show_snoozed', { show: v }); showSnoozed.value = v; });
 const onShowIdle = (v: boolean) => wrap('showIdle', async () => { await invoke('set_resident_show_idle', { show: v }); showIdle.value = v; });
-const onOpacity = (v: number) => wrap('opacity', async () => { await invoke('set_resident_opacity', { opacity: v }); opacity.value = v; });
+// 透明度拖动高频：本地乐观更新（slider 即时响应）+ debounce 150ms 持久化，
+// 避免每次 @input 都触发 set_resident_opacity → prefs_changed → ResidentView get_prefs 风暴。
+let opacityTimer: number | undefined;
+const onOpacity = (v: number) => {
+  opacity.value = v;
+  clearTimeout(opacityTimer);
+  opacityTimer = window.setTimeout(async () => {
+    saving.value = 'opacity';
+    try {
+      await invoke('set_resident_opacity', { opacity: v });
+    } catch (e: unknown) {
+      error.value = typeof e === 'string' ? e : (e as Error)?.message ?? '保存失败';
+    } finally {
+      saving.value = null;
+    }
+  }, 150);
+};
 
 // 检查更新：check() 返回 Update（有更新）或 null（已是最新）
 async function checkForUpdates() {

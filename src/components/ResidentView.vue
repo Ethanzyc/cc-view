@@ -4,7 +4,7 @@
 // 展开入口（右上角）调 set_mode(panel) → App.vue 切 PanelView。
 // B 布局：分组 + 项目标题 + 图标+名称+状态；A 极简：扁平列表，仅图标+名称。
 // 透明度作用于 --resident-bg（仅常驻；面板模式用 --color-bg-overlay 不受影响）。
-// 高度自适应：内容变化 → ResizeObserver → set_resident_height 校正窗口高度。
+// 高度自适应：内容变化 → ResizeObserver → 量 scrollHeight → set_resident_height 校正窗口高度。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
@@ -24,6 +24,9 @@ const showSnoozed = ref(true);
 const showIdle = ref(true);
 // 背景透明度（20–100）。applyOpacity 写入 --resident-bg 的 alpha。
 const opacity = ref(55);
+// listen 返回的 unlisten，onBeforeUnmount 调（避免切模式累积 listener）。
+let unlistenSessions: (() => void) | undefined;
+let unlistenPrefs: (() => void) | undefined;
 
 // 非搜索态分组（与 PanelView 一致算法，MVP 重复）：待介入 / 已搁置；常驻只看活会话。
 type Section = { key: string; label: string; total: number; projs: [string, Session[]][] };
@@ -100,8 +103,9 @@ function applyOpacity() {
   document.documentElement.style.setProperty('--resident-bg', `rgba(${rgb}, ${a})`);
 }
 
-// 高度自适应：内容变化后量 rootEl 实际渲染高度（受 max-height:60vh 裁剪），通知后端
-// set_resident_height 校正窗口高度。仅 mode==resident 时后端生效。rAF 节流避免高频 set_size。
+// 高度自适应：量 scrollHeight（内容全高，不受 max-height 裁剪）→ 窗口高独立于当前窗口高，
+// 不与 max-height:100vh 形成反馈循环。上限 = 屏幕可用高 60%（固定，不随窗口），超出则窗口
+// 卡上限 + 列表内部滚动。rAF 节流避免高频 set_size。
 let resizeRaf = 0;
 let ro: ResizeObserver | undefined;
 function syncHeight() {
@@ -109,7 +113,8 @@ function syncHeight() {
   resizeRaf = requestAnimationFrame(async () => {
     const el = rootEl.value;
     if (!el) return;
-    const h = Math.round(el.getBoundingClientRect().height);
+    const maxCap = Math.round(window.screen.availHeight * 0.6);
+    const h = Math.min(Math.round(el.scrollHeight), maxCap);
     if (h > 0) {
       try {
         await invoke('set_resident_height', { height: h });
@@ -142,13 +147,13 @@ onMounted(async () => {
     console.error('get_sessions on mount failed', e);
   }
   try {
-    await listen<Session[]>('sessions', e => { all.value = e.payload; });
+    unlistenSessions = await listen<Session[]>('sessions', e => { all.value = e.payload; });
   } catch (e) {
     console.error('resident listen sessions failed', e);
   }
   try {
     // 配置变化（通常来自偏好设置窗口 set_resident_* / set_mode）→ 重读并应用 layout/显隐/透明度。
-    await listen('prefs_changed', async () => {
+    unlistenPrefs = await listen('prefs_changed', async () => {
       try {
         const p = await invoke<{
           resident_layout: ResidentLayout;
@@ -181,6 +186,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (nowTimer) clearInterval(nowTimer);
   if (ro) ro.disconnect();
+  if (unlistenSessions) unlistenSessions();
+  if (unlistenPrefs) unlistenPrefs();
   cancelAnimationFrame(resizeRaf);
 });
 </script>
@@ -262,8 +269,10 @@ onBeforeUnmount(() => {
   position: relative;
   background: var(--resident-bg);
   color: var(--color-fg);
-  min-height: 100vh;
-  max-height: 60vh;
+  /* 不设 min-height：让元素高度由内容决定，syncHeight 才能量到真实内容高收缩窗口。
+     max-height:100vh = 窗口高（syncHeight 把窗口设为 min(内容, 屏幕60%)，稳定不反馈），
+     内容超高时元素卡窗口高 + 内部滚动。 */
+  max-height: 100vh;
   overflow-y: auto;
   border-radius: var(--radius-overlay);
   font-family: var(--font-body);

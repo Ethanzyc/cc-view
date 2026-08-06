@@ -26,6 +26,8 @@ const copiedId = ref<string | null>(null);
 // 必须前端定期刷新，否则晾着的等输入跨过 30min 阈值时不会自动变闲置。60s 对 30min 阈值够用。
 const now = ref(Date.now());
 let nowTimer: number | undefined;
+// listen 返回的 unlisten，onBeforeUnmount 调（避免反复 mount 累积 listener）。
+let unlistenSessions: (() => void) | undefined;
 const searchRef = ref<HTMLInputElement>();
 
 // visible：按 showArchived toggle 过滤 hidden。off→只未归档；on→全显示。
@@ -230,7 +232,7 @@ onMounted(async () => {
     console.error('get_overlay_pinned on mount failed', e);
   }
   try {
-    await listen<Session[]>('sessions', e => { all.value = e.payload; });
+    unlistenSessions = await listen<Session[]>('sessions', e => { all.value = e.payload; });
   } catch (e) {
     console.error('overlay listen sessions failed', e);
   }
@@ -249,6 +251,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (nowTimer) clearInterval(nowTimer);
+  if (unlistenSessions) unlistenSessions();
 });
 </script>
 

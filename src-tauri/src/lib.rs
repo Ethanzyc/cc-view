@@ -560,14 +560,15 @@ fn set_mode(
     state: tauri::State<'_, Mutex<prefs::Prefs>>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
+    // 一次 lock：写 mode + 持久化 + 读 layout（供 apply_mode_window 定宽），避免两次 lock。
     let layout = state
         .lock()
-        .map(|p| p.resident_layout)
+        .map(|mut p| {
+            p.mode = mode;
+            p.save();
+            p.resident_layout
+        })
         .unwrap_or(prefs::ResidentLayout::B);
-    if let Ok(mut p) = state.lock() {
-        p.mode = mode;
-        p.save();
-    }
     apply_mode_window(&app, mode, layout);
     let _ = app.emit("mode_changed", mode);
     let _ = app.emit("prefs_changed", ());
