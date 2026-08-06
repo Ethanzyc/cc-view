@@ -78,41 +78,81 @@ fn resident_layout_width(layout: prefs::ResidentLayout) -> f64 {
 const PANEL_W: f64 = 560.0;
 const PANEL_H: f64 = 420.0;
 
-/// 把 overlay 窗口尺寸 + 位置切到目标模式。
-/// - panel：560×420；位置用 overlay-position.json 记忆，无则 center。
-/// - resident：宽度按 layout（高度先沿用当前值，随后前端量内容 invoke set_resident_height 校正）；
-///   位置用记忆，无记忆则屏幕右上角（menubar 下方约 28+4 logical 边距）。
-/// menubar 高度按 28 logical 估算（retina 实测 ~24–37）；如不准可改用 NSScreen visibleFrame。
+/// ease-out cubic：开始快、结束慢，窗口缩放自然。
+fn ease_out_cubic(t: f64) -> f64 { 1.0 - (1.0 - t).powi(3) }
+fn lerp(a: f64, b: f64, t: f64) -> f64 { a + (b - a) * t }
+
+/// 模式切换动画进行中标志：set_resident_height 期间跳过，避免与动画 set_size 冲突。
+static ANIMATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 按帧插值 set_size + set_position，窗口平滑缩放/移动到目标（12 帧 ~170ms，ease-out）。
+/// 动画期间 set_resident_height 跳过（读 ANIMATING）；结束后窗口稳定，前端 ResizeObserver 重触发校正高度。
+fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64) {
+    let Some(w) = app.get_webview_window("overlay") else { return };
+    let sf = w.scale_factor().ok().unwrap_or(1.0);
+    let (cw, ch) = w.outer_size()
+        .map(|s| (s.to_logical::<f64>(sf).width, s.to_logical::<f64>(sf).height))
+        .unwrap_or((tw, th));
+    let (cx, cy) = w.outer_position()
+        .map(|p| (p.x as f64 / sf, p.y as f64 / sf))
+        .unwrap_or((tx, ty));
+
+    ANIMATING.store(true, std::sync::atomic::Ordering::Relaxed);
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        const FRAMES: u64 = 12;
+        const FRAME_MS: u64 = 14;
+        for i in 1..=FRAMES {
+            let t = i as f64 / FRAMES as f64;
+            let e = ease_out_cubic(t);
+            if let Some(win) = app_handle.get_webview_window("overlay") {
+                let _ = win.set_size(tauri::LogicalSize::new(lerp(cw, tw, e), lerp(ch, th, e)));
+                let _ = win.set_position(tauri::LogicalPosition::new(lerp(cx, tx, e), lerp(cy, ty, e)));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(FRAME_MS));
+        }
+        ANIMATING.store(false, std::sync::atomic::Ordering::Relaxed);
+    });
+}
+
+/// 把 overlay 窗口尺寸 + 位置（动画）切到目标模式。
+/// - panel：560×420，居中。
+/// - resident：宽度按 layout，高度沿用当前（动画结束后前端 set_resident_height 校正到内容高度），右上角。
 fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: prefs::ResidentLayout) {
     let Some(w) = app.get_webview_window("overlay") else { return };
+    let sf = w.scale_factor().ok().unwrap_or(1.0);
+    let mon = w.current_monitor().ok().flatten();
 
-    match mode {
+    let (tw, th, tx, ty) = match mode {
         prefs::OverlayMode::Panel => {
-            // 切到面板总居中：不沿用常驻的右上角坐标（560 宽放右上角右边整块超出屏幕，
-            // 看着像"闪一下消失"）。面板的位置记忆走 ⌥Space show_overlay 的 load 路径。
-            let _ = w.set_size(tauri::LogicalSize::new(PANEL_W, PANEL_H));
-            let _ = w.center();
+            let (cx, cy) = mon
+                .map(|m| {
+                    let mw = m.size().width as f64 / sf;
+                    let mh = m.size().height as f64 / sf;
+                    let mx = m.position().x as f64 / sf;
+                    let my = m.position().y as f64 / sf;
+                    (mx + (mw - PANEL_W) / 2.0, my + (mh - PANEL_H) / 2.0)
+                })
+                .unwrap_or((0.0, 0.0));
+            (PANEL_W, PANEL_H, cx, cy)
         }
         prefs::OverlayMode::Resident => {
             let width = resident_layout_width(layout);
-            // 高度先沿用当前（面板 420 或上次常驻值），前端量内容后 set_resident_height 校正。
-            let cur_h = w
-                .outer_size()
-                .and_then(|s| w.scale_factor().map(|sf| s.to_logical::<f64>(sf).height))
+            let cur_h = w.outer_size()
+                .and_then(|s| w.scale_factor().map(|sf2| s.to_logical::<f64>(sf2).height))
                 .unwrap_or(PANEL_H);
-            let _ = w.set_size(tauri::LogicalSize::new(width, cur_h));
-
-            // 切到常驻总定位右上角（不沿用面板的居中位置——常驻要贴角少占空间）。
-            // 位置记忆走 ⌥Space show_overlay 的 load 路径。
-            if let Ok(Some(mon)) = w.current_monitor() {
-                let sf = mon.scale_factor();
-                let screen_w = mon.size().width as f64 / sf;
-                let x = mon.position().x as f64 / sf + screen_w - width - 8.0;
-                let y = mon.position().y as f64 / sf + 28.0 + 4.0;
-                let _ = w.set_position(tauri::LogicalPosition::new(x, y));
-            }
+            let (rx, ry) = mon
+                .map(|m| {
+                    let mw = m.size().width as f64 / sf;
+                    let mx = m.position().x as f64 / sf;
+                    let my = m.position().y as f64 / sf;
+                    (mx + mw - width - 8.0, my + 28.0 + 4.0)
+                })
+                .unwrap_or((0.0, 0.0));
+            (width, cur_h, rx, ry)
         }
-    }
+    };
+    animate_window_to(app, tw, th, tx, ty);
 }
 
 /// 后台线程：每 3s collect → reduce → notify → hash 去重 → 仅变化时 emit("sessions")。
@@ -578,6 +618,11 @@ fn set_resident_height(
     state: tauri::State<'_, Mutex<prefs::Prefs>>,
     app: tauri::AppHandle,
 ) {
+    // 模式切换动画进行中：跳过高度校正，避免与 animate_window_to 的 set_size 冲突；
+    // 动画结束后窗口尺寸稳定，前端 ResizeObserver 会重新触发 syncHeight。
+    if ANIMATING.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
     let (mode, layout) = state
         .lock()
         .map(|p| (p.mode, p.resident_layout))
