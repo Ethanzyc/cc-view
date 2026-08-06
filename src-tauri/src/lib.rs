@@ -528,7 +528,7 @@ fn set_resident_show_idle(
     let _ = app.emit("prefs_changed", ());
 }
 
-/// 设置常驻背景透明度（20–100）：校验失败返回 Err（fail fast），合法则存 prefs + emit。
+/// 设置常驻背景透明度（0–100）：校验失败返回 Err（fail fast），合法则存 prefs + emit。
 #[tauri::command]
 fn set_resident_opacity(
     opacity: u8,
@@ -536,7 +536,7 @@ fn set_resident_opacity(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     if !prefs::Prefs::is_valid_opacity(opacity) {
-        return Err(format!("opacity must be 20-100, got {}", opacity));
+        return Err(format!("opacity must be 0-100, got {}", opacity));
     }
     if let Ok(mut p) = state.lock() {
         p.resident_opacity = opacity;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 偏好设置：开机自启动 / 通知 / 全局快捷键 / 轮询间隔 / 常驻面板（形态/布局/显隐/透明度）。
-// 形态 + 布局用 mock 数据的迷你真实 UI 选择；透明度用自定义 slider（pointer capture，
-// 拖出条外仍跟踪）+ 下方实时预览。常驻专属配置（布局/显隐/透明度）标注「仅常驻模式」。
+// 偏好设置：开机自启动 / 通知 / 全局快捷键 / 轮询间隔 / 默认形态 / 常驻面板（框起来）。
+// 形态 + 常驻布局用真实风格 mini mock（半透毛玻璃 + 分组 + 项目 + 状态图标 + 会话名 + 状态）。
+// 透明度自定义 slider（0–100）+ 实时预览。常驻专属配置用边框框起来。
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
@@ -81,7 +81,6 @@ const onLayout = (v: ResidentLayout) => wrap('layout', async () => { await invok
 const onShowSnoozed = (v: boolean) => wrap('showSnoozed', async () => { await invoke('set_resident_show_snoozed', { show: v }); showSnoozed.value = v; });
 const onShowIdle = (v: boolean) => wrap('showIdle', async () => { await invoke('set_resident_show_idle', { show: v }); showIdle.value = v; });
 
-// 透明度本地乐观（slider/预览即时）+ debounce 150ms 持久化。
 let opacityTimer: number | undefined;
 const onOpacity = (v: number) => {
   opacity.value = v;
@@ -98,15 +97,15 @@ const onOpacity = (v: number) => {
   }, 150);
 };
 
-// 自定义 slider：div + pointer 事件。range input 在 WKWebView 拖动不稳，自己掌控。
+// 自定义 slider（div + pointer），范围 0–100。
 const sliderTrack = ref<HTMLElement>();
-const sliderPct = computed(() => ((opacity.value - 20) / 80) * 100);
+const sliderPct = computed(() => opacity.value);
 function setFromClientX(clientX: number) {
   const el = sliderTrack.value;
   if (!el) return;
   const rect = el.getBoundingClientRect();
   const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-  onOpacity(Math.round(20 + ratio * 80));
+  onOpacity(Math.round(ratio * 100));
 }
 function onSliderDown(e: PointerEvent) {
   e.preventDefault();
@@ -196,50 +195,72 @@ async function downloadAndInstall() {
       <p class="hint">⌥Space 呼出时显示哪种形态。两者可随时互切。</p>
       <div class="choice-cards">
         <button type="button" class="choice-card" :class="{ active: mode === 'panel' }" :disabled="saving === 'mode'" @click="onMode('panel')">
-          <!-- 面板 mock：搜索条 + 3 行（状态点 + 文字线） -->
           <div class="mock mock-panel">
-            <div class="mock-search"></div>
-            <div class="mock-row"><span class="dot working"></span><span class="mock-text"></span></div>
-            <div class="mock-row"><span class="dot perm"></span><span class="mock-text"></span></div>
-            <div class="mock-row"><span class="dot input"></span><span class="mock-text"></span></div>
+            <div class="m-search"><span class="m-search-ico">⌕</span><span>搜索会话…</span></div>
+            <div class="m-group">待介入 <span class="m-cnt">3</span></div>
+            <div class="m-proj">~/ai/cc-view</div>
+            <div class="m-row m-perm">
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
+              <span class="m-name">refactor</span><span class="m-st">等权限</span>
+            </div>
+            <div class="m-row">
+              <svg width="8" height="8" viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.4" fill="#0A84FF"/><circle cx="8" cy="8" r="1.4" fill="#0A84FF"/><circle cx="12" cy="8" r="1.4" fill="#0A84FF"/></svg>
+              <span class="m-name">session-2</span><span class="m-st">等输入</span>
+            </div>
           </div>
           <span class="card-label">面板（全功能）</span>
         </button>
         <button type="button" class="choice-card" :class="{ active: mode === 'resident' }" :disabled="saving === 'mode'" @click="onMode('resident')">
-          <!-- 常驻 mock：窄 + 分组条 + 2 行 -->
           <div class="mock mock-resident">
-            <div class="mock-group-bar"></div>
-            <div class="mock-row"><span class="dot perm"></span><span class="mock-text"></span></div>
-            <div class="mock-row"><span class="dot working"></span><span class="mock-text"></span></div>
+            <div class="m-group">待介入 <span class="m-cnt">2</span></div>
+            <div class="m-proj">~/ai/cc-view</div>
+            <div class="m-row m-perm">
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
+              <span class="m-name">refactor</span>
+            </div>
+            <div class="m-row">
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#30D158" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)"/></svg>
+              <span class="m-name">build</span>
+            </div>
           </div>
           <span class="card-label">常驻（精简）</span>
         </button>
       </div>
     </section>
 
-    <section class="resident-only">
+    <section class="resident-box">
       <h2 class="section-title">常驻面板 <span class="tag">仅常驻模式</span></h2>
 
       <div class="field">
         <span class="field-label">常驻布局</span>
         <div class="choice-cards">
           <button type="button" class="choice-card" :class="{ active: residentLayout === 'b' }" :disabled="saving === 'layout'" @click="onLayout('b')">
-            <!-- B 精简 mock：分组 + 项目标题 + 行（带状态文字短线） -->
             <div class="mock mock-layout">
-              <div class="mock-group-bar"></div>
-              <div class="mock-proj-bar"></div>
-              <div class="mock-row"><span class="dot perm"></span><span class="mock-text"></span><span class="mock-status"></span></div>
-              <div class="mock-row"><span class="dot input"></span><span class="mock-text"></span><span class="mock-status"></span></div>
+              <div class="m-group">待介入</div>
+              <div class="m-proj">~/ai/x</div>
+              <div class="m-row m-perm">
+                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
+                <span class="m-name">fix-bug</span><span class="m-st">等权限</span>
+              </div>
+              <div class="m-row">
+                <svg width="8" height="8" viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.4" fill="#0A84FF"/><circle cx="8" cy="8" r="1.4" fill="#0A84FF"/><circle cx="12" cy="8" r="1.4" fill="#0A84FF"/></svg>
+                <span class="m-name">test</span><span class="m-st">等输入</span>
+              </div>
             </div>
             <span class="card-label">B 精简</span>
           </button>
           <button type="button" class="choice-card" :class="{ active: residentLayout === 'a' }" :disabled="saving === 'layout'" @click="onLayout('a')">
-            <!-- A 极简 mock：分组 + 项目标题 + 行（无状态文字） -->
             <div class="mock mock-layout">
-              <div class="mock-group-bar"></div>
-              <div class="mock-proj-bar"></div>
-              <div class="mock-row"><span class="dot perm"></span><span class="mock-text"></span></div>
-              <div class="mock-row"><span class="dot working"></span><span class="mock-text"></span></div>
+              <div class="m-group">待介入</div>
+              <div class="m-proj">~/ai/x</div>
+              <div class="m-row m-perm">
+                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25"/><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7"/></svg>
+                <span class="m-name">fix-bug</span>
+              </div>
+              <div class="m-row">
+                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="#30D158" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)"/></svg>
+                <span class="m-name">build</span>
+              </div>
             </div>
             <span class="card-label">A 极简</span>
           </button>
@@ -318,6 +339,13 @@ section { margin-top: 20px; }
   border: 1px solid var(--color-border); border-radius: 6px;
 }
 
+/* 常驻专属配置框起来 */
+.resident-box {
+  border: 1px solid var(--color-border); border-radius: 10px;
+  padding: 4px 14px 4px; margin-top: 24px;
+}
+.resident-box .section-title { margin-top: 12px; }
+
 /* 卡片式选择 */
 .choice-cards { display: flex; gap: 10px; }
 .choice-card {
@@ -338,27 +366,32 @@ section { margin-top: 20px; }
 .card-label { font-size: var(--fs-caption); color: var(--color-muted); text-align: center; }
 .choice-card.active .card-label { color: var(--color-fg); }
 
-/* mock 迷你 UI（照真实组件简化） */
+/* mock 真实风格 mini（半透毛玻璃 + 分组 + 项目 + 状态图标 + 会话名 + 状态） */
 .mock {
-  height: 64px; border-radius: 5px; padding: 6px;
-  background: rgba(28, 28, 30, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  display: flex; flex-direction: column; gap: 4px;
-  box-sizing: border-box; overflow: hidden;
+  border-radius: 6px; padding: 6px;
+  background: rgba(28, 28, 30, 0.72);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  color: #E5E5E7;
+  display: flex; flex-direction: column; gap: 2px;
+  box-sizing: border-box;
 }
-.mock-panel { width: 100%; }
-.mock-resident { width: 52%; align-self: center; }
-.mock-layout { width: 100%; }
-.mock-search { height: 6px; background: rgba(255, 255, 255, 0.18); border-radius: 2px; margin-bottom: 2px; }
-.mock-group-bar { height: 3px; width: 34px; background: rgba(255, 255, 255, 0.32); border-radius: 1px; }
-.mock-proj-bar { height: 2px; width: 46%; background: rgba(255, 255, 255, 0.24); border-radius: 1px; }
-.mock-row { display: flex; align-items: center; gap: 5px; }
-.dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-.dot.working { background: #30D158; }
-.dot.perm { background: #FF9F0A; }
-.dot.input { background: #0A84FF; }
-.mock-text { flex: 1; height: 3px; background: rgba(255, 255, 255, 0.22); border-radius: 1px; }
-.mock-status { width: 26px; height: 3px; background: rgba(255, 255, 255, 0.14); border-radius: 1px; flex-shrink: 0; }
+.mock-panel { width: 100%; height: 92px; }
+.mock-resident { width: 60%; align-self: center; height: 74px; }
+.mock-layout { width: 100%; height: 74px; }
+
+.m-search { display: flex; align-items: center; gap: 4px; padding: 2px 5px; background: rgba(255,255,255,0.07); border-radius: 3px; font-size: 7px; color: #8E8E93; margin-bottom: 2px; }
+.m-search-ico { font-size: 8px; }
+.m-group { font-size: 6px; text-transform: uppercase; letter-spacing: 0.08em; color: #AEAEB2; padding: 3px 1px 1px; display: flex; gap: 3px; align-items: center; }
+.m-cnt { background: rgba(255,255,255,0.12); border-radius: 5px; padding: 0 4px; font-size: 5px; line-height: 8px; color: #8E8E93; }
+.m-proj { font-size: 7px; color: #AEAEB2; font-family: ui-monospace, "SF Mono", monospace; padding: 1px 1px; }
+.m-row { display: flex; align-items: center; gap: 5px; padding: 2px 4px; border-left: 1.5px solid transparent; }
+.m-row.m-perm { border-left-color: #FF9F0A; background: rgba(255,159,10,0.12); border-radius: 0 3px 3px 0; }
+.m-row svg { flex-shrink: 0; }
+.m-name { flex: 1; font-size: 8px; color: #E5E5E7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-st { font-size: 6px; color: #AEAEB2; flex-shrink: 0; }
+.m-row.m-perm .m-st { color: #FF9F0A; }
 
 /* 常驻专属字段 */
 .field { padding: 14px 0; border-bottom: 1px solid var(--color-border); }

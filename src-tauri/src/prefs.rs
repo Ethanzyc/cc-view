@@ -88,8 +88,8 @@ impl Prefs {
         }
     }
     pub fn is_valid_shortcut(s: &str) -> bool { ALLOWED_SHORTCUTS.contains(&s) }
-    /// 常驻背景透明度合法范围 20–100（百分比）。
-    pub fn is_valid_opacity(n: u8) -> bool { (20..=100).contains(&n) }
+    /// 常驻背景透明度合法范围 0–100（百分比；0=完全透明，vibrancy 仍托底窗口可见）。
+    pub fn is_valid_opacity(n: u8) -> bool { (0..=100).contains(&n) }
 }
 
 #[cfg(test)]
@@ -170,8 +170,8 @@ mod tests {
 
     #[test]
     fn is_valid_opacity_bounds() {
-        assert!(!Prefs::is_valid_opacity(0));
-        assert!(!Prefs::is_valid_opacity(19));
+        // 0 允许（完全透明，vibrancy 仍托底）；上限 100。
+        assert!(Prefs::is_valid_opacity(0));
         assert!(Prefs::is_valid_opacity(20));
         assert!(Prefs::is_valid_opacity(55));
         assert!(Prefs::is_valid_opacity(100));
