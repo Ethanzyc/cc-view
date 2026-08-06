@@ -17,11 +17,17 @@ let nowTimer: number | undefined;
 const rootEl = ref<HTMLElement>();
 // 常驻布局：B 精简（分组+状态）/ A 极简（仅图标+名称）。onMounted 从 prefs 读。
 const layout = ref<ResidentLayout>('b');
+// 显示开关：搁置 / 闲置（等输入超时）的会话是否在常驻列表显示。onMounted 从 prefs 读。
+const showSnoozed = ref(true);
+const showIdle = ref(true);
 
 // 非搜索态分组（与 PanelView 一致算法，MVP 重复）：待介入 / 已搁置；常驻只看活会话。
 type Section = { key: string; label: string; total: number; projs: [string, Session[]][] };
 const groups = computed<Section[]>(() => {
-  const list = all.value.filter(s => s.alive); // 常驻只看活会话
+  const list = all.value
+    .filter(s => s.alive) // 常驻只看活会话
+    .filter(s => showSnoozed.value || !s.snoozed) // 关闭搁置 → 排除 snoozed
+    .filter(s => showIdle.value || !isStaleInput(s, now.value)); // 关闭闲置 → 排除闲置
   const active = list.filter(s => !s.snoozed);
   const snoozedAlive = list.filter(s => s.snoozed);
   const byProj = (rows: Session[]): [string, Session[]][] => {
@@ -56,6 +62,8 @@ const flatRows = computed(() => {
   const n = now.value;
   return [...all.value]
     .filter(s => s.alive)
+    .filter(s => showSnoozed.value || !s.snoozed)
+    .filter(s => showIdle.value || !isStaleInput(s, n))
     .sort((a, b) => {
       const sa = isStaleInput(a, n), sb = isStaleInput(b, n);
       if (sa !== sb) return sa ? 1 : -1;
@@ -82,10 +90,16 @@ async function expandToPanel() {
 
 onMounted(async () => {
   try {
-    const p = await invoke<{ resident_layout: ResidentLayout }>('get_prefs');
+    const p = await invoke<{
+      resident_layout: ResidentLayout;
+      resident_show_snoozed: boolean;
+      resident_show_idle: boolean;
+    }>('get_prefs');
     layout.value = p.resident_layout;
+    showSnoozed.value = p.resident_show_snoozed;
+    showIdle.value = p.resident_show_idle;
   } catch (e) {
-    console.error('get_prefs resident_layout failed', e);
+    console.error('get_prefs resident config failed', e);
   }
   try {
     all.value = await invoke<Session[]>('get_sessions');
