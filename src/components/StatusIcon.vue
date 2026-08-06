@@ -7,7 +7,7 @@ const props = defineProps<{ status: Status }>();
 
 // 状态色板（读 :root token，macOS system colors 风格）
 const COLOR: Record<Status, string> = {
-  working:         'var(--status-working)',
+  working:         'var(--status-working-ink)',
   waitingForInput: 'var(--status-waiting)',
   waitingForReply: 'var(--status-reply)',
   needsPermission: 'var(--status-permission)',

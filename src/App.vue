@@ -71,8 +71,10 @@ onMounted(async () => {
   --color-border: rgba(255, 255, 255, 0.08);
   --color-hover: rgba(255, 255, 255, 0.08);
   --status-working: #30D158;
+  --status-working-ink: #3FB950; /* 工作中文字色：比图标 #30D158 收敛，避免荧光刺眼 */
   --status-waiting: #0A84FF;
   --status-reply: #FFD60A;
+  --status-reply-ink: #FFD60A; /* 等回答文字色：亮色降为 #FFB300 提对比（图标/背景仍用 --status-reply） */
   --status-permission: #FF9F0A;
   --status-shell: #BF5AF2;
   --status-compacting: #64D2FF;
@@ -100,6 +102,8 @@ onMounted(async () => {
     --color-hover: rgba(0, 0, 0, 0.06);
     --color-muted: #6E6E73;
     --color-tertiary: #6E6E73;
+    --status-reply-ink: #FFB300;
+    --status-working-ink: #1A7F37;
   }
 }
 @media (prefers-reduced-motion: reduce) {

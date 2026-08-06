@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
                   :class="{ hl: seg.hl }"
                 >{{ seg.text }}</span>
               </span>
-              <span class="status-zh" :class="{ perm: s.status === 'needsPermission', reply: s.status === 'waitingForReply' }">{{ STATUS_ZH[s.status] }}</span>
+              <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
             </div>
             <div class="line2">
               <span
@@ -417,7 +417,7 @@ onBeforeUnmount(() => {
               <div class="info">
                 <div class="line1">
                   <span class="name">{{ s.name || s.project }}</span>
-                  <span class="status-zh" :class="{ perm: s.status === 'needsPermission', reply: s.status === 'waitingForReply' }">{{ STATUS_ZH[s.status] }}</span>
+                  <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
                 </div>
               </div>
               <span class="ago" :class="{ fresh: isFresh(s) }">
@@ -669,10 +669,13 @@ onBeforeUnmount(() => {
 .row.perm:hover {
   background: color-mix(in srgb, var(--status-permission) 16%, transparent);
 }
-/* WaitingForReply 行（非搁置）：左侧 2px 黄边框。
-   原本还叠了黄底+黄字，三黄糊一片不直观——去掉背景，靠左边框+问号图标表达。 */
+/* WaitingForReply 行（非搁置）：黄左边框 + 黄背景，与 needsPermission 对称。 */
 .row.reply {
   border-left-color: var(--status-reply);
+  background: color-mix(in srgb, var(--status-reply) 10%, transparent);
+}
+.row.reply:hover {
+  background: color-mix(in srgb, var(--status-reply) 16%, transparent);
 }
 
 /* dead 行半透明 */
@@ -723,11 +726,10 @@ onBeforeUnmount(() => {
   color: var(--color-muted);
   flex-shrink: 0;
 }
-/* needsPermission 状态中文标橙（行已橙边，文字也橙，双重视觉提示） */
-.status-zh.perm {
-  color: var(--status-permission);
-}
-/* waitingForReply：不单独标色（黄字在黄底上糊），用默认 muted，靠图标+左边框表达 */
+/* working / 待介入 文字上色：各用状态色。等回答走 --status-reply-ink（亮色降 #FFB300 提对比）。 */
+.status-zh.work { color: var(--status-working-ink); }
+.status-zh.reply { color: var(--status-reply-ink); }
+.status-zh.perm { color: var(--status-permission); }
 .line2 {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   color: var(--color-muted);
