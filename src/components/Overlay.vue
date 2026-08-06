@@ -77,7 +77,7 @@ const groups = computed<Section[]>(() => {
     deadHidden = dead.length - DEAD_LIMIT;
     dead = dead.slice(0, DEAD_LIMIT);
   }
-  // 同组按 project 聚类（Map 保留首次出现顺序 = 字母序，因 sorted 已按 project 排）
+  // 同组按 project 聚类（Map 保留首次出现顺序 = 各 project 首个非闲置项的次序（sorted 第一键 isStaleInput，非纯字母序））
   const byProj = (rows: Session[]): [string, Session[]][] => {
     const m = new Map<string, Session[]>();
     for (const s of rows) {
