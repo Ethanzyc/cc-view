@@ -2,19 +2,21 @@
 // 常驻模式视图：精简会话列表，贴桌面常驻、失焦不收起（后端控制）。
 // 数据自管（listen sessions），排序/分组/ago 复用 utils/session.ts（MVP 与 PanelView 重复可接受）。
 // 展开入口（右上角）调 set_mode(panel) → App.vue 切 PanelView。
-// 本骨架先做 B 布局（分组 + 项目标题 + 图标+名称+状态）；A 布局/过滤/透明度/高度后续 task 接入。
+// B 布局：分组 + 项目标题 + 图标+名称+状态；A 极简：扁平列表，仅图标+名称。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import type { Session } from '../types';
+import type { Session, ResidentLayout } from '../types';
 import StatusIcon from './StatusIcon.vue';
-import { STATUS_ZH, projShort, isStaleInput } from '../utils/session';
+import { STATUS_ZH, projShort, isStaleInput, statusRank } from '../utils/session';
 
 const all = ref<Session[]>([]);
 // now tick：isStaleInput 依赖时间，需前端定期刷新（后端 emit 有 hash 去重不随时间触发）。
 const now = ref(Date.now());
 let nowTimer: number | undefined;
 const rootEl = ref<HTMLElement>();
+// 常驻布局：B 精简（分组+状态）/ A 极简（仅图标+名称）。onMounted 从 prefs 读。
+const layout = ref<ResidentLayout>('b');
 
 // 非搜索态分组（与 PanelView 一致算法，MVP 重复）：待介入 / 已搁置；常驻只看活会话。
 type Section = { key: string; label: string; total: number; projs: [string, Session[]][] };
@@ -49,6 +51,18 @@ const groups = computed<Section[]>(() => {
   return result;
 });
 
+// A 布局扁平列表：活会话按 rank 排（等权限优先），闲置/搁置由 .dim 表达。
+const flatRows = computed(() => {
+  const n = now.value;
+  return [...all.value]
+    .filter(s => s.alive)
+    .sort((a, b) => {
+      const sa = isStaleInput(a, n), sb = isStaleInput(b, n);
+      if (sa !== sb) return sa ? 1 : -1;
+      return statusRank(a) - statusRank(b);
+    });
+});
+
 async function focusSession(id: string) {
   try {
     await invoke('focus_session', { id });
@@ -67,6 +81,12 @@ async function expandToPanel() {
 }
 
 onMounted(async () => {
+  try {
+    const p = await invoke<{ resident_layout: ResidentLayout }>('get_prefs');
+    layout.value = p.resident_layout;
+  } catch (e) {
+    console.error('get_prefs resident_layout failed', e);
+  }
   try {
     all.value = await invoke<Session[]>('get_sessions');
   } catch (e) {
@@ -98,36 +118,62 @@ onBeforeUnmount(() => {
         <path d="M5 11 L11 5" /><path d="M6 5 H11 V10" />
       </svg>
     </button>
-    <template v-for="(section, si) in groups" :key="section.key">
-      <div v-if="si > 0" class="group-sep" />
-      <div class="group-head">
-        {{ section.label }} <span class="cnt">{{ section.total }}</span>
+    <!-- A 极简：扁平列表，仅图标+名称 -->
+    <template v-if="layout === 'a'">
+      <div
+        v-for="s in flatRows"
+        :key="s.id"
+        class="row"
+        :class="{
+          perm: s.status === 'needsPermission' && !s.snoozed,
+          reply: s.status === 'waitingForReply' && !s.snoozed,
+          dim: s.snoozed || isStaleInput(s, now),
+        }"
+        role="button"
+        tabindex="0"
+        :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
+        data-tauri-drag-region="false"
+        @click="focusSession(s.id)"
+        @keydown.enter.prevent="focusSession(s.id)"
+      >
+        <StatusIcon :status="s.status" class="icon" />
+        <span class="name">{{ s.name || s.project }}</span>
       </div>
-      <template v-for="[proj, rows] in section.projs" :key="section.key + '|' + proj">
-        <div class="proj-head">{{ projShort(proj) }}</div>
-        <div
-          v-for="s in rows"
-          :key="s.id"
-          class="row"
-          :class="{
-            perm: s.status === 'needsPermission' && !s.snoozed,
-            reply: s.status === 'waitingForReply' && !s.snoozed,
-            dim: s.snoozed || isStaleInput(s, now),
-          }"
-          role="button"
-          tabindex="0"
-          :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
-          data-tauri-drag-region="false"
-          @click="focusSession(s.id)"
-          @keydown.enter.prevent="focusSession(s.id)"
-        >
-          <StatusIcon :status="s.status" class="icon" />
-          <span class="name">{{ s.name || s.project }}</span>
-          <span class="st" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
-        </div>
-      </template>
+      <div v-if="!flatRows.length" class="empty">暂无会话</div>
     </template>
-    <div v-if="!groups.length" class="empty">暂无会话</div>
+    <!-- B 精简：分组 + 项目标题 + 图标+名称+状态 -->
+    <template v-else>
+      <template v-for="(section, si) in groups" :key="section.key">
+        <div v-if="si > 0" class="group-sep" />
+        <div class="group-head">
+          {{ section.label }} <span class="cnt">{{ section.total }}</span>
+        </div>
+        <template v-for="[proj, rows] in section.projs" :key="section.key + '|' + proj">
+          <div class="proj-head">{{ projShort(proj) }}</div>
+          <div
+            v-for="s in rows"
+            :key="s.id"
+            class="row"
+            :class="{
+              perm: s.status === 'needsPermission' && !s.snoozed,
+              reply: s.status === 'waitingForReply' && !s.snoozed,
+              dim: s.snoozed || isStaleInput(s, now),
+            }"
+            role="button"
+            tabindex="0"
+            :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
+            data-tauri-drag-region="false"
+            @click="focusSession(s.id)"
+            @keydown.enter.prevent="focusSession(s.id)"
+          >
+            <StatusIcon :status="s.status" class="icon" />
+            <span class="name">{{ s.name || s.project }}</span>
+            <span class="st" :class="{ perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
+          </div>
+        </template>
+      </template>
+      <div v-if="!groups.length" class="empty">暂无会话</div>
+    </template>
   </div>
 </template>
 
