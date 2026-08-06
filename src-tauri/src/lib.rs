@@ -127,9 +127,12 @@ fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64)
         let yes = objc2::runtime::Bool::YES;
         let _: () = msg_send![obj, setFrame: rect, display: yes, animate: yes];
     }
-    std::thread::spawn(|| {
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(320));
         ANIMATING.store(false, std::sync::atomic::Ordering::Relaxed);
+        // 通知前端动画结束：精确退出过渡态（比前端兜底 setTimeout 准）。
+        let _ = app_handle.emit("animate_done", ());
     });
 }
 
