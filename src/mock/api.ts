@@ -78,7 +78,7 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
     case 'list_archived':
     case 'list_hidden': return [] as unknown as T;
     case 'get_overlay_pinned': return false as unknown as T;
-    case 'get_prefs': return { notify: true, shortcut: 'alt+space', poll_interval: 3 } as unknown as T;
+    case 'get_prefs': return { notify: true, shortcut: 'alt+space', poll_interval: 3, show_archived: false } as unknown as T;
     case 'get_autostart': return false as unknown as T;
     default: return undefined as unknown as T; // 写操作 noop
   }

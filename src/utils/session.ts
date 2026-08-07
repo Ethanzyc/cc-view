@@ -70,3 +70,9 @@ export function hlParts(text: string, k: string): HlSeg[] {
     { text: text.slice(i + k.length), hl: false },
   ].filter(seg => seg.text.length > 0);
 }
+
+// token 量格式化：<1000 原数，≥1000 一位小数 + k（1000→1k，12345→12.3k）。
+export function fmtTok(n: number): string {
+  if (n < 1000) return String(n);
+  return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+}

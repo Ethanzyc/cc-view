@@ -18,6 +18,8 @@ const rootEl = ref<HTMLElement>();
 const layout = ref<ResidentLayout>('b');
 const showSnoozed = ref(true);
 const showIdle = ref(true);
+const showArchived = ref(false);
+const archived = ref<Set<string>>(new Set());
 const opacity = ref(55);
 const theme = ref<'light' | 'dark'>('light');
 let unlistenSessions: (() => void) | undefined;
@@ -85,6 +87,7 @@ type Section = { key: string; label: string; total: number; projs: [string, Sess
 const groups = computed<Section[]>(() => {
   const list = all.value
     .filter(s => s.alive)
+    .filter(s => showArchived.value || !archived.value.has(s.id))
     .filter(s => showSnoozed.value || !s.snoozed)
     .filter(s => showIdle.value || !isStaleInput(s, now.value));
   const active = list.filter(s => !s.snoozed);
@@ -165,12 +168,14 @@ onMounted(async () => {
       resident_show_idle: boolean;
       resident_opacity: number;
       theme: 'light' | 'dark';
+      show_archived: boolean;
     }>('get_prefs');
     layout.value = p.resident_layout;
     showSnoozed.value = p.resident_show_snoozed;
     showIdle.value = p.resident_show_idle;
     opacity.value = p.resident_opacity;
     theme.value = p.theme;
+    showArchived.value = p.show_archived;
     applyOpacity();
   } catch (e) {
     console.error('get_prefs resident config failed', e);
@@ -181,6 +186,12 @@ onMounted(async () => {
     for (const s of all.value) prevStatus.set(s.id, s.status);
   } catch (e) {
     console.error('get_sessions on mount failed', e);
+  }
+  // 归档 id 集：常驻活着时同窗口无法归档，onMounted 读一次即可（切 mode 会 remount 重读）。
+  try {
+    archived.value = new Set(await invoke<string[]>('list_archived'));
+  } catch (e) {
+    console.error('list_archived on mount failed', e);
   }
   try {
     unlistenSessions = await listen<Session[]>('sessions', e => {
@@ -199,12 +210,14 @@ onMounted(async () => {
           resident_show_idle: boolean;
           resident_opacity: number;
           theme: 'light' | 'dark';
+          show_archived: boolean;
         }>('get_prefs');
         layout.value = p.resident_layout;
         showSnoozed.value = p.resident_show_snoozed;
         showIdle.value = p.resident_show_idle;
         opacity.value = p.resident_opacity;
         theme.value = p.theme;
+        showArchived.value = p.show_archived;
         applyOpacity();
       } catch (e) {
         console.error('prefs_changed reload failed', e);

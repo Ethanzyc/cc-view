@@ -1,5 +1,6 @@
 // 用户偏好：notify（通知开关）/ shortcut（全局快捷键预设）/ poll_interval（轮询间隔秒）
 // + 常驻模式：mode（面板/常驻）/ resident_layout（A/B）/ resident_show_snoozed / resident_show_idle / resident_opacity。
+// + 归档：show_archived（面板 toggle 控制，面板+常驻共享读；默认 false=隐藏归档）。
 // 读写 ~/.claude/cc-view/prefs.json。自启动不进此文件（tauri-plugin-autostart 自管）。
 // load 失败（无 home / 无文件 / 解析失败）→ 默认值，不崩溃。
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ fn default_layout() -> ResidentLayout { ResidentLayout::B }
 fn default_show() -> bool { true }
 fn default_opacity() -> u8 { 55 }
 fn default_theme() -> Theme { Theme::Light }
+fn default_false() -> bool { false }
 
 /// 允许的快捷键预设（"off" = 禁用）。
 pub const ALLOWED_SHORTCUTS: &[&str] = &["alt+space", "cmd+alt+space", "ctrl+space", "off"];
@@ -60,6 +62,9 @@ pub struct Prefs {
     pub resident_opacity: u8,
     #[serde(default = "default_theme")]
     pub theme: Theme,
+    /// 是否显示已归档会话（面板 toggle 写；面板+常驻共享读；默认 false=隐藏归档）。
+    #[serde(default = "default_false")]
+    pub show_archived: bool,
 }
 
 impl Default for Prefs {
@@ -74,6 +79,7 @@ impl Default for Prefs {
             resident_show_idle: default_show(),
             resident_opacity: default_opacity(),
             theme: default_theme(),
+            show_archived: false,
         }
     }
 }
@@ -120,6 +126,7 @@ mod tests {
         assert!(p.resident_show_idle);
         assert_eq!(p.resident_opacity, 55);
         assert_eq!(p.theme, Theme::Light);
+        assert!(!p.show_archived);
     }
 
     #[test]
@@ -153,6 +160,7 @@ mod tests {
             resident_show_idle: false,
             resident_opacity: 80,
             theme: Theme::Dark,
+            show_archived: true,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();

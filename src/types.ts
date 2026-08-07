@@ -13,6 +13,9 @@ export interface Session {
   focusHint: { host: string };
   // derived：后端 poll_loop 基于 SnoozeMap 算，随 sessions emit 一起下发（Task 1/2）
   snoozed: boolean;
+  // 累计 token（后端 scan JSONL 填充；纯 shell 会话为 0）
+  tokensIn: number;
+  tokensOut: number;
 }
 
 // overlay 窗口模式（与后端 prefs::OverlayMode serde lowercase 对齐）
@@ -33,4 +36,5 @@ export interface Prefs {
   resident_show_idle: boolean;
   resident_opacity: number;
   theme: Theme;
+  show_archived: boolean;
 }

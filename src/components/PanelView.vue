@@ -11,13 +11,23 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { Session } from '../types';
 import StatusIcon from './StatusIcon.vue';
-import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts } from '../utils/session';
+import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
 
 const all = ref<Session[]>([]);
 const q = ref('');
-// 归档列表 + 显示已归档 toggle（从 App.vue HUD 分支迁入）。visible 按 toggle 过滤。
+// 归档列表 + 显示已归档 toggle（持久化 prefs.show_archived，面板 toggle 写、面板+常驻共享读）。
 const archived = ref<Set<string>>(new Set());
 const showArchived = ref(false);
+// toggle 写 prefs + emit prefs_changed（常驻据此重读）；onMounted 先填初值再开启回写。
+async function toggleShowArchived(e: Event) {
+  const checked = (e.target as HTMLInputElement).checked;
+  showArchived.value = checked;
+  try {
+    await invoke('set_show_archived', { show: checked });
+  } catch (err) {
+    console.error('set_show_archived failed', err);
+  }
+}
 // 图钉（pin = 失焦不收起）：后端 command + overlay_position.json 驱动。
 const pinned = ref(false);
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
@@ -232,6 +242,12 @@ onMounted(async () => {
     console.error('get_overlay_pinned on mount failed', e);
   }
   try {
+    const p = await invoke<{ show_archived: boolean }>('get_prefs');
+    showArchived.value = p.show_archived;
+  } catch (e) {
+    console.error('get_prefs(show_archived) on mount failed', e);
+  }
+  try {
     unlistenSessions = await listen<Session[]>('sessions', e => { all.value = e.payload; });
   } catch (e) {
     console.error('overlay listen sessions failed', e);
@@ -274,7 +290,7 @@ onBeforeUnmount(() => {
       <!-- 计数：搜索态→结果数；非搜索态→待介入数 -->
       <span class="overlay-count">{{ overlayCount }}</span>
       <label class="toggle" data-tauri-drag-region="false">
-        <input type="checkbox" v-model="showArchived" />
+        <input type="checkbox" :checked="showArchived" @change="toggleShowArchived" />
         <span>显示已归档</span>
       </label>
       <button
@@ -350,6 +366,9 @@ onBeforeUnmount(() => {
               >{{ seg.text }}</span>
             </div>
           </div>
+          <span v-if="s.tokensIn || s.tokensOut" class="tok">
+            {{ fmtTok(s.tokensIn) }}<span class="arr">↑</span>{{ fmtTok(s.tokensOut) }}<span class="arr">↓</span>
+          </span>
           <span class="ago" :class="{ fresh: isFresh(s) }">
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
@@ -420,6 +439,9 @@ onBeforeUnmount(() => {
                   <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
                 </div>
               </div>
+              <span v-if="s.tokensIn || s.tokensOut" class="tok">
+                {{ fmtTok(s.tokensIn) }}<span class="arr">↑</span>{{ fmtTok(s.tokensOut) }}<span class="arr">↓</span>
+              </span>
               <span class="ago" :class="{ fresh: isFresh(s) }">
                 <span v-if="isFresh(s)" class="fresh-dot" />
                 {{ agoF(s.statusUpdatedAt) }}
@@ -737,6 +759,20 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 2px;
+}
+
+/* token 列：ago 左边，等宽数据列，箭头淡一点 */
+.tok {
+  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility);
+  color: var(--color-tertiary);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.tok .arr {
+  opacity: 0.6;
+  margin: 0 1px;
 }
 
 /* ago 时间：等宽数据列 */
