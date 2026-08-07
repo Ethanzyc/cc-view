@@ -114,7 +114,7 @@ static LAST_MODE_CHANGE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::At
 /// 估计时长后清除，期间 set_resident_height 跳过；清除后 ResizeObserver 重触发校正高度。
 #[cfg(target_os = "macos")]
 fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64) {
-    use objc2::{msg_send, runtime::AnyObject};
+    use objc2::{class, msg_send, runtime::AnyObject};
     let Some(w) = app.get_webview_window("overlay") else { return };
     // Cocoa 坐标原点在屏幕左下：NS y = 屏幕高度(logical) - Tauri y - 窗口高。
     let screen_h = w.current_monitor().ok().flatten()
@@ -129,6 +129,12 @@ fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64)
 
     ANIMATING.store(true, std::sync::atomic::Ordering::Relaxed);
     unsafe {
+        // 切换前 activate app + makeKey：常驻→放大时若 app 不 active（点过别的应用），
+        // 动画后窗口会 resign key 触发失焦 hide。主动激活避免。
+        let ns_app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        let _: () = msg_send![ns_app, activateIgnoringOtherApps: objc2::runtime::Bool::YES];
+        let nil: *mut AnyObject = std::ptr::null_mut();
+        let _: () = msg_send![obj, makeKeyAndOrderFront: nil];
         let yes = objc2::runtime::Bool::YES;
         let _: () = msg_send![obj, setFrame: rect, display: yes, animate: yes];
     }

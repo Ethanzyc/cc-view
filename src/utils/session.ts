@@ -71,8 +71,9 @@ export function hlParts(text: string, k: string): HlSeg[] {
   ].filter(seg => seg.text.length > 0);
 }
 
-// token 量格式化：<1000 原数，≥1000 一位小数 + k（1000→1k，12345→12.3k）。
+// token 量格式化（中文单位）：<1万 原数，<1亿 X.X万，否则 X.X亿。
 export function fmtTok(n: number): string {
-  if (n < 1000) return String(n);
-  return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  if (n < 10000) return String(n);
+  if (n < 100000000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+  return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
 }

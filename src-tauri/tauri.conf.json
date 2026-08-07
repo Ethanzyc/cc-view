@@ -32,8 +32,8 @@
         "visible": false,
         "decorations": true,
         "resizable": true,
-        "width": 480,
-        "height": 460,
+        "width": 880,
+        "height": 800,
         "center": true,
         "skipTaskbar": false,
         "title": "cc-view 偏好设置"

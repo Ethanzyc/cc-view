@@ -33,11 +33,10 @@ const q = ref('');
 const archived = ref<Set<string>>(new Set());
 const showArchived = ref(false);
 // toggle 写 prefs + emit prefs_changed（常驻据此重读）；onMounted 先填初值再开启回写。
-async function toggleShowArchived(e: Event) {
-  const checked = (e.target as HTMLInputElement).checked;
-  showArchived.value = checked;
+async function toggleShowArchived(show: boolean) {
+  showArchived.value = show;
   try {
-    await invoke('set_show_archived', { show: checked });
+    await invoke('set_show_archived', { show });
   } catch (err) {
     console.error('set_show_archived failed', err);
   }
@@ -314,10 +313,17 @@ onBeforeUnmount(() => {
       />
       <!-- 计数：搜索态→结果数；非搜索态→待介入数 -->
       <span class="overlay-count">{{ overlayCount }}</span>
-      <label class="toggle" data-tauri-drag-region="false">
-        <input type="checkbox" :checked="showArchived" @change="toggleShowArchived" />
-        <span>显示已归档</span>
-      </label>
+      <button
+        class="toggle"
+        :class="{ on: showArchived }"
+        :title="showArchived ? '隐藏已归档' : '显示已归档'"
+        :aria-pressed="showArchived"
+        data-tauri-drag-region="false"
+        @click="toggleShowArchived(!showArchived)"
+      >
+        <span class="switch-knob"></span>
+        <span class="toggle-label">归档</span>
+      </button>
       <button
         class="pin-btn"
         :class="{ pinned }"
@@ -584,26 +590,47 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-/* 显示已归档 toggle（从 App.vue HUD 迁入） */
+/* 显示已归档 toggle：macOS 风格 switch（替代原生 checkbox） */
 .toggle {
   display: inline-flex;
   align-items: center;
-  gap: var(--gap-xs);
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   color: var(--color-muted);
-  cursor: pointer;
   flex-shrink: 0;
 }
-.toggle input {
-  margin: 0;
-  width: 12px;
-  height: 12px;
-  accent-color: var(--color-primary);
-  cursor: pointer;
+.toggle-label { color: var(--color-muted); }
+.switch-knob {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  background: var(--color-border);
+  border-radius: 8px;
+  transition: background var(--motion-duration) var(--motion-easing);
 }
-.toggle input:focus-visible {
+.switch-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform var(--motion-duration) var(--motion-easing);
+}
+.toggle.on { color: var(--color-fg); }
+.toggle.on .switch-knob { background: var(--color-primary); }
+.toggle.on .switch-knob::after { transform: translateX(11px); }
+.toggle:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* 图钉：未钉 tertiary，定住 primary 高亮，hover fg + hover bg（同 App.vue HUD） */
