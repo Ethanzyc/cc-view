@@ -1,6 +1,39 @@
 use crate::models::Host;
 use std::process::Command;
 
+#[cfg(target_os = "macos")]
+mod ax {
+    use core_foundation::base::{CFTypeRef, TCFType};
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::CFDictionary;
+    use core_foundation::string::CFString;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        // 返回 macOS Boolean（unsigned char），用 u8 接再转 bool
+        fn AXIsProcessTrustedWithOptions(options: CFTypeRef) -> u8;
+    }
+
+    /// 辅助功能权限。prompt=true 触发系统授权弹窗（"cc-view 想要控制此电脑"，
+    /// 主流 app 同款）。首次调用把 app 加入系统设置列表，重复调用安全。
+    pub fn trusted(prompt: bool) -> bool {
+        let key = CFString::new("AXTrustedCheckOptionPrompt");
+        let val = CFBoolean::from(prompt);
+        let opts = CFDictionary::from_CFType_pairs(&[(key, val)]);
+        unsafe { AXIsProcessTrustedWithOptions(opts.as_CFTypeRef()) != 0 }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod ax {
+    pub fn trusted(_prompt: bool) -> bool { true }
+}
+
+/// 辅助功能权限查询。focus 切全屏 Space（点 Dock）需要；未授权时调 prompt=true 弹系统窗。
+pub fn ax_trusted(prompt: bool) -> bool {
+    ax::trusted(prompt)
+}
+
 /// MVP focus：activate 终端 **app**（不精确到 window/tab/pane）。
 ///
 /// 已知限制：同一 app 多窗口（如 Otty 的 B1 全屏终端 / B2 / 桌面窗口）时，activate 整个

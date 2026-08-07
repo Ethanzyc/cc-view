@@ -450,6 +450,7 @@ dependencies = [
 name = "cc-view"
 version = "0.2.0"
 dependencies = [
+ "core-foundation",
  "dirs 5.0.1",
  "libc",
  "objc2",

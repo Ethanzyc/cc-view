@@ -35,6 +35,8 @@ dirs = "5"
 # objc2 已被 tauri 间接依赖（v0.6.4），此处显式声明仅复用同一版本，不触发重复编译。
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
+# 辅助功能权限检查（AXIsProcessTrustedWithOptions 触发系统授权弹窗）
+core-foundation = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

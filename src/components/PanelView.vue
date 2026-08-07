@@ -165,7 +165,11 @@ async function focusSession(id: string) {
     await invoke('focus_session', { id });
     await getCurrentWebviewWindow().hide();
   } catch (e) {
-    console.error('focus_session failed', e);
+    if (e === 'accessibility') {
+      alert('需要辅助功能权限才能切换到终端窗口（尤其全屏空间）。\n请到 系统设置 → 隐私与安全性 → 辅助功能 授权 cc-view，然后重新点击。');
+    } else {
+      console.error('focus_session failed', e);
+    }
   }
 }
 

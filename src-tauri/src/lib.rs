@@ -430,19 +430,30 @@ fn get_session_detail(
     collector::scan_session_detail(&id, &cwd)
 }
 
-/// 按 session id 激活对应终端 app（MVP：只 activate，不精确定位 tab/pane）。
-/// 从最近 emit 的 sessions 缓存中查 host；找不到 id 时 eprintln 提示。
+/// 按 session id 激活对应终端。未授辅助功能权限时弹系统授权窗 + 返回 Err("accessibility")
+/// 让前端提示。仍尝试 activate（open -a 对非全屏终端生效）；click Dock 切全屏 Space 需要权限。
 #[tauri::command]
-fn focus_session(id: String, cache: tauri::State<'_, Mutex<Vec<models::Session>>>) {
-    match cache.lock() {
-        Ok(sessions) => {
-            if let Some(s) = sessions.iter().find(|s| s.id == id) {
-                focus::activate_host(&s.focus_hint.host);
-            } else {
-                eprintln!("focus_session: session {} not in cache", id);
-            }
-        }
-        Err(_) => eprintln!("focus_session: sessions cache lock poisoned"),
+fn focus_session(
+    id: String,
+    cache: tauri::State<'_, Mutex<Vec<models::Session>>>,
+) -> Result<(), String> {
+    let need_perm = !focus::ax_trusted(false);
+    if need_perm {
+        focus::ax_trusted(true); // 弹系统授权窗（首次进列表，重复调用安全）
+    }
+    let host = match cache.lock() {
+        Ok(sessions) => sessions
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.focus_hint.host.clone())
+            .ok_or_else(|| format!("focus_session: session {} not in cache", id)),
+        Err(_) => Err("focus_session: sessions cache lock poisoned".to_string()),
+    }?;
+    focus::activate_host(&host);
+    if need_perm {
+        Err("accessibility".into())
+    } else {
+        Ok(())
     }
 }
 
@@ -1085,7 +1096,12 @@ pub fn run() {
                             .lock()
                             .map(|g| *g)
                             .unwrap_or(false);
-                        if mode != prefs::OverlayMode::Resident && !pinned {
+                        let will_hide = mode != prefs::OverlayMode::Resident && !pinned;
+                        eprintln!(
+                            "overlay Focused(false): will_hide={} mode={:?} pinned={}",
+                            will_hide, mode, pinned
+                        );
+                        if will_hide {
                             let _ = w.hide();
                         }
                     }
