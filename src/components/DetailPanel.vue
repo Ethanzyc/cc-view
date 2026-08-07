@@ -2,7 +2,7 @@
 // 会话 token 详情：上下文 hero + sparkline + 消耗 + 按回合。
 // PanelView 内部子状态切入，不动全局 mode/窗口。
 import { computed } from 'vue';
-import type { SessionDetail } from '../types';
+import type { SessionDetail, TurnStat } from '../types';
 import { fmtTok, agoF } from '../utils/session';
 
 const props = defineProps<{ detail: SessionDetail; name: string }>();
@@ -27,6 +27,14 @@ const spark = computed(() => {
   const fill = `${line} ${lx.toFixed(1)},56 0,56`;
   return { line, fill, cx: +lx.toFixed(1), cy: +ly.toFixed(1) };
 });
+
+// 回合进度条：该回合 in+out 占所有回合最大值的比例（背景浅色条，直观对比回合大小）
+const maxTurnTok = computed(() =>
+  Math.max(1, ...props.detail.turns.map(t => t.tokensIn + t.tokensOut)),
+);
+function barPercent(t: TurnStat): number {
+  return Math.round(((t.tokensIn + t.tokensOut) / maxTurnTok.value) * 100);
+}
 </script>
 
 <template>
@@ -75,7 +83,7 @@ const spark = computed(() => {
       <span v-if="detail.webSearches || detail.webFetches"> · {{ detail.webSearches }} 搜 / {{ detail.webFetches }} 抓</span>
     </div>
     <div class="turns">
-      <div v-for="t in detail.turns" :key="t.idx" class="turn">
+      <div v-for="t in detail.turns" :key="t.idx" class="turn" :style="{ '--bar': barPercent(t) + '%' }">
         <span class="t-idx">#{{ t.idx }}</span>
         <span class="t-prompt">{{ t.prompt || '—' }}</span>
         <span class="t-tok">{{ fmtTok(t.tokensIn) }}<span class="arr">↑</span>{{ fmtTok(t.tokensOut) }}<span class="arr">↓</span></span>
@@ -208,6 +216,7 @@ const spark = computed(() => {
 /* 回合列表 */
 .turns { padding-bottom: var(--pad-y); }
 .turn {
+  position: relative;
   display: grid;
   grid-template-columns: 28px 1fr auto auto auto;
   align-items: center;
@@ -215,6 +224,16 @@ const spark = computed(() => {
   padding: 5px var(--pad-x);
   font: var(--fw-utility) var(--fs-caption)/var(--lh-caption) var(--font-body);
 }
+/* 进度条背景：宽度 = 该回合 in+out 占峰值比例，浅 primary 填充（深浅背景自适应） */
+.turn::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--bar, 0%);
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  z-index: 0;
+}
+.turn > * { position: relative; z-index: 1; }
 .turn:hover { background: var(--color-hover); }
 .t-idx {
   color: var(--color-tertiary);

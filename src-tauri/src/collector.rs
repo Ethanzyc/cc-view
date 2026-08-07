@@ -668,6 +668,7 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
     let mut web_fetches = 0u64;
     let mut context_peak = 0u64;
     let mut last_ctx = 0u64;
+    let mut prev_valid_ctx = 0u64;
     let mut compact_count = 0u32;
     let mut turns: Vec<TurnStat> = Vec::new();
     let mut cur: Option<TurnStat> = None;
@@ -714,12 +715,22 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                     let ctx = u.input_tokens
                         + u.cache_read_input_tokens
                         + u.cache_creation_input_tokens;
-                    if ctx > context_peak {
-                        context_peak = ctx;
-                    }
-                    last_ctx = ctx;
-                    if let Some(t) = cur.as_mut() {
-                        t.ctx = ctx;
+                    // usage 全 0 的异常 assistant（如 stop_sequence 提前终止）不计入 ctx，
+                    // 否则 sparkline 掉底、compact 误判。
+                    if ctx > 0 {
+                        // compact 启发式：相邻有效 ctx 大幅下降（降 30%+）视为一次压缩。
+                        // cc 新版 compact 不写 compact_boundary 标记，只能从 ctx 跳降推断。
+                        if prev_valid_ctx > 0 && ctx * 10 < prev_valid_ctx * 7 {
+                            compact_count += 1;
+                        }
+                        if ctx > context_peak {
+                            context_peak = ctx;
+                        }
+                        last_ctx = ctx;
+                        prev_valid_ctx = ctx;
+                        if let Some(t) = cur.as_mut() {
+                            t.ctx = ctx;
+                        }
                     }
                 }
                 if let Some(m) = msg.model.as_ref().filter(|m| !m.is_empty()) {
@@ -1027,5 +1038,34 @@ mod tests {
         assert_eq!(d.turn_count, 0);
         assert_eq!(d.tokens_in, 0);
         assert!(d.turns.is_empty());
+    }
+
+    #[test]
+    fn scan_detail_detects_compact_by_ctx_dip() {
+        // cc 新版 compact 不写 compact_boundary，靠相邻有效 ctx 大幅下降（降 30%+）推断
+        let text = "\
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"问\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}],\"usage\":{\"input_tokens\":100000,\"output_tokens\":10}}}
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:01:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"再问\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"b\"}],\"usage\":{\"input_tokens\":40000,\"output_tokens\":10}}}";
+        let d = super::scan_detail_from_text(text);
+        assert_eq!(d.compact_count, 1); // 100k→40k 降 60%
+        assert_eq!(d.context_peak, 100000);
+        assert_eq!(d.context_current, 40000);
+    }
+
+    #[test]
+    fn scan_detail_skips_zero_ctx_anomaly() {
+        // usage 全 0 的异常 assistant（stop_sequence）不计入 ctx
+        let text = "\
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"问\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}],\"usage\":{\"input_tokens\":50000,\"output_tokens\":10}}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:06.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[],\"usage\":{\"input_tokens\":0,\"output_tokens\":0},\"stop_reason\":\"stop_sequence\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:07.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"c\"}],\"usage\":{\"input_tokens\":55000,\"output_tokens\":10}}}";
+        let d = super::scan_detail_from_text(text);
+        assert_eq!(d.context_current, 55000); // 最后有效值，非 0
+        assert_eq!(d.context_peak, 55000);
+        assert_eq!(d.compact_count, 0); // 0 被跳过，不算跳降
+        assert_eq!(d.turns[0].ctx, 55000); // 回合 ctx = 最后有效值
     }
 }
