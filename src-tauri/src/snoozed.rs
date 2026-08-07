@@ -1,6 +1,6 @@
 // 会话搁置表：{ session_id: snoozed_at_ms }。持久化到 ~/.claude/cc-view/snoozed.json。
 // 与 hidden.rs 同构，但存时间戳（自动失效需要）。
-use crate::models::{Session, Status};
+use crate::models::Session;
 use std::collections::HashMap;
 
 pub struct SnoozeMap {
@@ -48,23 +48,20 @@ impl SnoozeMap {
         self.map.clone()
     }
 
-    /// 有效搁置：有 snoozedAt，且未触发自动失效。
-    /// 失效 = 搁置后状态又更新(statusUpdatedAt > snoozedAt) 且停在需要介入的状态
-    ///        (WaitingForInput | WaitingForReply | NeedsPermission) → 自动冒泡回待介入。
-    /// 含 WaitingForReply：Claude 新提问是"新动作"，搁置中的提问也该冒泡提醒。
+    /// 有效搁置：有 snoozedAt，且搁置后状态未再更新。
+    /// 失效 = statusUpdatedAt > snoozedAt：搁置后又重新输入/触发新动作（无论新状态是
+    ///        working 还是等输入）即视为重新关注 → 自动取消搁置、冒泡回待介入。
     /// 边界：statusUpdatedAt == snoozedAt 不算更新（同刻搁置不立即失效）。
     pub fn is_effectively_snoozed(&self, s: &Session) -> bool {
         let Some(at) = self.map.get(&s.id).copied() else { return false; };
-        let stale = s.status_updated_at > at
-            && matches!(s.status, Status::WaitingForInput | Status::WaitingForReply | Status::NeedsPermission);
-        !stale
+        s.status_updated_at <= at
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{FocusHint, Source};
+    use crate::models::{FocusHint, Source, Status};
 
     fn sess(id: &str, st: Status, updated_at: i64) -> Session {
         Session {
@@ -123,11 +120,11 @@ mod tests {
     }
 
     #[test]
-    fn stays_snoozed_when_new_status_is_working() {
-        // 搁置后更新但停在 Working（非介入态）→ 仍搁置
+    fn auto_unsnooze_when_new_working() {
+        // 搁置后又输入/动作（statusUpdatedAt 更新）→ 即使停在 Working 也取消搁置（重新关注）
         let mut m = SnoozeMap::empty();
         m.add("a", 1000);
-        assert!(m.is_effectively_snoozed(&sess("a", Status::Working, 2000)));
+        assert!(!m.is_effectively_snoozed(&sess("a", Status::Working, 2000)));
     }
 
     #[test]
