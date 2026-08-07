@@ -1,6 +1,5 @@
 // 解析 ~/.claude/sessions/<pid>.json，将原始 JSON 转换为 Session 模型。
 // 依赖 models + statemachine::decide 决定最终 Status。
-use crate::liveness::is_claude_alive;
 use crate::models::{FocusHint, Session, Source, Status};
 use crate::statemachine::{decide, DecideInput};
 use std::path::Path;
@@ -86,7 +85,7 @@ pub fn collect_sessions() -> Vec<Session> {
         let Ok(json) = std::fs::read_to_string(&path) else { continue }; // fail fast: 跳过坏文件
         match parse_session_file(pid, &json) {
             Ok(mut s) => {
-                s.alive = is_claude_alive(pid);
+                s.alive = crate::liveness::is_claude_alive_sys(&sys, pid);
                 if s.alive {
                     // /status Session name 逻辑（参考 claude-hud transcript.ts）：JSONL
                     // custom-title（/rename 用户改名）优先，否则 ai-title（Claude 生成）。
@@ -128,7 +127,7 @@ pub fn collect_sessions() -> Vec<Session> {
     }
     // 合并后台 fleet agent（roster.json），pid 存活校验
     for mut w in read_roster() {
-        w.alive = is_claude_alive(w.pid);
+        w.alive = crate::liveness::is_claude_alive_sys(&sys, w.pid);
         if w.alive {
             fill_tokens(&mut w);
             w.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, w.pid);
