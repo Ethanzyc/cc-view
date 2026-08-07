@@ -18,6 +18,10 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ![命令面板](doc/screenshots/overlay.png)
 
+**常驻模式（贴桌面 · 待介入闪动提醒）**
+
+![常驻](doc/screenshots/resident.png)
+
 **等权限突出（橙边提醒）**
 
 ![等权限](doc/screenshots/overlay-permission.png)
@@ -26,11 +30,9 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ![闲置](doc/screenshots/overlay-idle.png)
 
-**偏好设置**
+**偏好设置（外观开关 · 按钮组）**
 
 ![偏好设置](doc/screenshots/preferences.png)
-
-> 截图为 v0.2.0 前版本；新版偏好设置已改为按钮组 + 外观开关（见下），截图待更新。
 
 ## 功能
 
