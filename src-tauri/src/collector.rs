@@ -588,6 +588,8 @@ fn fill_tokens(s: &mut Session) {
 struct DetailRow {
     #[serde(rename = "type")]
     row_type: Option<String>,
+    #[serde(default)]
+    subtype: Option<String>,
     message: Option<DetailMessage>,
     timestamp: Option<String>,
 }
@@ -664,6 +666,9 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
     let mut tool_calls = 0u32;
     let mut web_searches = 0u64;
     let mut web_fetches = 0u64;
+    let mut context_peak = 0u64;
+    let mut last_ctx = 0u64;
+    let mut compact_count = 0u32;
     let mut turns: Vec<TurnStat> = Vec::new();
     let mut cur: Option<TurnStat> = None;
     let mut turn_idx = 0u32;
@@ -688,6 +693,7 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                         tokens_in: 0,
                         tokens_out: 0,
                         tool_calls: 0,
+                        ctx: 0,
                         ts: row.timestamp.clone().unwrap_or_default(),
                     });
                 }
@@ -704,6 +710,17 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                         web_searches += stu.web_search_requests;
                         web_fetches += stu.web_fetch_requests;
                     }
+                    // 上下文占用 = 该请求送入模型的总 token（input + 缓存读 + 缓存写）
+                    let ctx = u.input_tokens
+                        + u.cache_read_input_tokens
+                        + u.cache_creation_input_tokens;
+                    if ctx > context_peak {
+                        context_peak = ctx;
+                    }
+                    last_ctx = ctx;
+                    if let Some(t) = cur.as_mut() {
+                        t.ctx = ctx;
+                    }
                 }
                 if let Some(m) = msg.model.as_ref().filter(|m| !m.is_empty()) {
                     model = m.clone();
@@ -716,6 +733,11 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                         t.tokens_out += u.output_tokens;
                     }
                     t.tool_calls += tc;
+                }
+            }
+            Some("system") => {
+                if row.subtype.as_deref() == Some("compact_boundary") {
+                    compact_count += 1;
                 }
             }
             _ => {}
@@ -736,6 +758,9 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
         tool_calls,
         web_searches: web_searches as u32,
         web_fetches: web_fetches as u32,
+        context_current: last_ctx,
+        context_peak,
+        compact_count,
         turns,
     }
 }
@@ -966,26 +991,34 @@ mod tests {
     fn scan_detail_groups_turns_and_accumulates() {
         let text = "\
 {\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"第一问\"}}
-{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"tool_use\",\"name\":\"Read\"}],\"usage\":{\"input_tokens\":100,\"output_tokens\":40}}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"tool_use\",\"name\":\"Read\"}],\"usage\":{\"input_tokens\":100,\"cache_read_input_tokens\":500,\"output_tokens\":40}}}
 {\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:06.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"x\",\"content\":\"ok\"}]}}
-{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:10.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"答1\"}],\"usage\":{\"input_tokens\":50,\"output_tokens\":20}}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:10.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"答1\"}],\"usage\":{\"input_tokens\":50,\"cache_read_input_tokens\":800,\"output_tokens\":20}}}
+{\"type\":\"system\",\"timestamp\":\"2026-08-07T01:00:30.000Z\",\"subtype\":\"compact_boundary\"}
 {\"type\":\"user\",\"timestamp\":\"2026-08-07T01:01:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"第二问\"}}
-{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"答2\"}],\"usage\":{\"input_tokens\":30,\"output_tokens\":10}}}";
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"答2\"}],\"usage\":{\"input_tokens\":30,\"cache_read_input_tokens\":1200,\"output_tokens\":10}}}";
         let d = super::scan_detail_from_text(text);
         assert_eq!(d.turn_count, 2); // tool_result 不开回合
         assert_eq!(d.tokens_in, 180); // 100+50+30
         assert_eq!(d.tokens_out, 70); // 40+20+10
+        assert_eq!(d.cache_read, 2500); // 500+800+1200
         assert_eq!(d.tool_calls, 1);
         assert_eq!(d.model, "glm-5.2");
+        // 上下文：ctx = input + cache_read + cache_creation（cc=0）
+        assert_eq!(d.context_current, 1230); // 最后一条 A3: 30+1200
+        assert_eq!(d.context_peak, 1230); // A3 最大
+        assert_eq!(d.compact_count, 1); // compact_boundary 行
         // 回合1：含 tool_use assistant + text assistant，tool_result 归入回合1
         assert_eq!(d.turns[0].idx, 1);
         assert_eq!(d.turns[0].prompt, "第一问");
         assert_eq!(d.turns[0].tokens_in, 150); // 100+50
         assert_eq!(d.turns[0].tokens_out, 60); // 40+20
         assert_eq!(d.turns[0].tool_calls, 1);
+        assert_eq!(d.turns[0].ctx, 850); // 回合1 最后一条 A2: 50+800
         assert_eq!(d.turns[0].ts, "2026-08-07T01:00:00.000Z");
         assert_eq!(d.turns[1].idx, 2);
         assert_eq!(d.turns[1].prompt, "第二问");
+        assert_eq!(d.turns[1].ctx, 1230); // A3: 30+1200
     }
 
     #[test]

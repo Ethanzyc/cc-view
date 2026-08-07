@@ -46,6 +46,7 @@ export interface TurnStat {
   tokensIn: number;
   tokensOut: number;
   toolCalls: number;
+  ctx: number; // 该回合最后一条 assistant 的上下文占用（sparkline 用）
   ts: string; // ISO 8601 原始字符串，前端 Date.parse
 }
 
@@ -61,5 +62,9 @@ export interface SessionDetail {
   toolCalls: number;
   webSearches: number;
   webFetches: number;
+  // 上下文：当前 = 最后一条 assistant 的 input+cache；峰值 = 历史最高
+  contextCurrent: number;
+  contextPeak: number;
+  compactCount: number;
   turns: TurnStat[];
 }

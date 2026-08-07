@@ -87,6 +87,12 @@ pub struct SessionDetail {
     pub tool_calls: u32,
     pub web_searches: u32,
     pub web_fetches: u32,
+    /// 当前上下文占用（最后一条 assistant 的 input + 缓存读 + 缓存写）
+    pub context_current: u64,
+    /// 历史最高上下文占用
+    pub context_peak: u64,
+    /// compact_boundary 次数（上下文压缩过几次）
+    pub compact_count: u32,
     pub turns: Vec<TurnStat>,
 }
 
@@ -99,6 +105,8 @@ pub struct TurnStat {
     pub tokens_in: u64,
     pub tokens_out: u64,
     pub tool_calls: u32,
+    /// 该回合最后一条 assistant 的上下文占用（画 sparkline 用）
+    pub ctx: u64,
     pub ts: String,
 }
 
