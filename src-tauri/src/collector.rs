@@ -694,7 +694,7 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                         tokens_in: 0,
                         tokens_out: 0,
                         tool_calls: 0,
-                        ctx: 0,
+                        ctx: prev_valid_ctx,
                         ts: row.timestamp.clone().unwrap_or_default(),
                     });
                 }
@@ -1067,5 +1067,24 @@ mod tests {
         assert_eq!(d.context_peak, 55000);
         assert_eq!(d.compact_count, 0); // 0 被跳过，不算跳降
         assert_eq!(d.turns[0].ctx, 55000); // 回合 ctx = 最后有效值
+    }
+
+    #[test]
+    fn scan_detail_interrupted_turn_inherits_prev_ctx() {
+        // 中断回合（stop_sequence、usage 全 0 的 assistant 独占回合）继承前一回合 ctx，
+        // 不归零——上下文没变，只是该响应被中断（用户按 Esc 等）。
+        let text = "\
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"问1\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}],\"usage\":{\"input_tokens\":50000,\"output_tokens\":10}}}
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:01:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"继续\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"\"}],\"usage\":{\"input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0,\"output_tokens\":0},\"stop_reason\":\"stop_sequence\"}}
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"再继续\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:02:05.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"c\"}],\"usage\":{\"input_tokens\":60000,\"output_tokens\":10}}}";
+        let d = super::scan_detail_from_text(text);
+        assert_eq!(d.turn_count, 3);
+        assert_eq!(d.turns[0].ctx, 50000);
+        assert_eq!(d.turns[1].ctx, 50000); // 中断回合继承回合1 ctx，非 0
+        assert_eq!(d.turns[2].ctx, 60000);
+        assert_eq!(d.compact_count, 0); // 继承不算 compact 跳降
     }
 }

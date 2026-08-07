@@ -82,6 +82,13 @@ function barPercent(t: TurnStat): number {
       按回合 · {{ detail.toolCalls }} 工具
       <span v-if="detail.webSearches || detail.webFetches"> · {{ detail.webSearches }} 搜 / {{ detail.webFetches }} 抓</span>
     </div>
+    <div class="turn-head">
+      <span class="t-idx">#</span>
+      <span class="t-prompt">提问</span>
+      <span class="t-tok">token</span>
+      <span class="t-ctx">上下文</span>
+      <span class="t-ago">时间</span>
+    </div>
     <div class="turns">
       <div v-for="t in detail.turns" :key="t.idx" class="turn" :style="{ '--bar': barPercent(t) + '%' }">
         <span class="t-idx">#{{ t.idx }}</span>
@@ -215,6 +222,17 @@ function barPercent(t: TurnStat): number {
 
 /* 回合列表 */
 .turns { padding-bottom: var(--pad-y); }
+.turn-head {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto auto;
+  align-items: center;
+  gap: var(--gap);
+  padding: 3px var(--pad-x);
+  font: 600 var(--fs-utility)/var(--lh-utility) var(--font-utility);
+  color: var(--color-tertiary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .turn {
   position: relative;
   display: grid;

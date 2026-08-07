@@ -104,6 +104,9 @@ unsafe impl objc2::encode::Encode for CGRect {
 
 /// 模式切换动画进行中标志：set_resident_height 期间跳过，避免与动画 set_size 冲突。
 static ANIMATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// mode 切换时间戳（ms）：Focused(false) 在切换后短时间内忽略，避免动画期间
+/// 窗口 resign key 抖动触发 hide（「常驻→放大闪消失」根因）。
+static LAST_MODE_CHANGE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// 用 macOS 原生 setFrame:display:animate: 做窗口缩放/移动动画（Core Animation，渲染层平滑）。
 /// 手动逐帧 set_size + set_position 每帧两次 NSWindow setFrame + webview reflow，顿挫明显；
@@ -689,6 +692,11 @@ fn set_mode(
         p.mode = mode;
         p.save();
     }
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    LAST_MODE_CHANGE_MS.store(now_ms, std::sync::atomic::Ordering::Relaxed);
     let _ = app.emit("mode_changed", mode);
     let _ = app.emit("prefs_changed", ());
     Ok(())
@@ -1096,10 +1104,17 @@ pub fn run() {
                             .lock()
                             .map(|g| *g)
                             .unwrap_or(false);
-                        let will_hide = mode != prefs::OverlayMode::Resident && !pinned;
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis() as u64)
+                            .unwrap_or(0);
+                        let last_mode = LAST_MODE_CHANGE_MS.load(std::sync::atomic::Ordering::Relaxed);
+                        // mode 切换后 1.5s 内不 hide：动画期间窗口可能瞬间 resign key
+                        let in_grace = now_ms.saturating_sub(last_mode) < 1500;
+                        let will_hide = mode != prefs::OverlayMode::Resident && !pinned && !in_grace;
                         eprintln!(
-                            "overlay Focused(false): will_hide={} mode={:?} pinned={}",
-                            will_hide, mode, pinned
+                            "overlay Focused(false): will_hide={} mode={:?} pinned={} in_grace={}",
+                            will_hide, mode, pinned, in_grace
                         );
                         if will_hide {
                             let _ = w.hide();
