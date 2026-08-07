@@ -411,25 +411,29 @@ onBeforeUnmount(() => {
               v-if="s.alive && s.snoozed"
               class="act-btn snooze"
               title="恢复（取消搁置）"
+              aria-label="恢复（取消搁置）"
               @click.stop="unsnooze(s.id)"
-            >恢复</button>
+            ><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg></button>
             <button
               v-else-if="s.alive && (s.status === 'waitingForInput' || s.status === 'waitingForReply')"
               class="act-btn snooze"
               title="搁置（暂时不管）"
+              aria-label="搁置（暂时不管）"
               @click.stop="snooze(s.id)"
-            >搁置</button>
+            ><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></button>
             <button
               class="act-btn archive"
               :title="archived.has(s.id) ? '取消归档' : '归档'"
+              :aria-label="archived.has(s.id) ? '取消归档' : '归档'"
               @click.stop="archived.has(s.id) ? unarchive(s.id) : archive(s.id)"
-            >{{ archived.has(s.id) ? '取消归档' : '归档' }}</button>
+            ><svg v-if="archived.has(s.id)" class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M12 18v-6" /><path d="M9 15l3-3 3 3" /></svg><svg v-else class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
             <button
               class="act-btn copy"
               :class="{ done: copiedId === s.id }"
               :title="copiedId === s.id ? '已复制' : '复制'"
+              :aria-label="copiedId === s.id ? '已复制' : '复制'"
               @click.stop="copyId(s.id)"
-            >{{ copiedId === s.id ? '已复制' : '复制' }}</button>
+            ><svg v-if="copiedId === s.id" class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg><svg v-else class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
           </div>
         </li>
         <li v-if="!flatResults.length" class="empty">无匹配 "{{ q.trim() }}"</li>
@@ -494,25 +498,29 @@ onBeforeUnmount(() => {
                   v-if="s.alive && s.snoozed"
                   class="act-btn snooze"
                   title="恢复（取消搁置）"
+                  aria-label="恢复（取消搁置）"
                   @click.stop="unsnooze(s.id)"
-                >恢复</button>
+                ><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg></button>
                 <button
                   v-else-if="s.alive && (s.status === 'waitingForInput' || s.status === 'waitingForReply')"
                   class="act-btn snooze"
                   title="搁置（暂时不管）"
+                  aria-label="搁置（暂时不管）"
                   @click.stop="snooze(s.id)"
-                >搁置</button>
+                ><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></button>
                 <button
                   class="act-btn archive"
                   :title="archived.has(s.id) ? '取消归档' : '归档'"
+                  :aria-label="archived.has(s.id) ? '取消归档' : '归档'"
                   @click.stop="archived.has(s.id) ? unarchive(s.id) : archive(s.id)"
-                >{{ archived.has(s.id) ? '取消归档' : '归档' }}</button>
+                ><svg v-if="archived.has(s.id)" class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M12 18v-6" /><path d="M9 15l3-3 3 3" /></svg><svg v-else class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
                 <button
                   class="act-btn copy"
                   :class="{ done: copiedId === s.id }"
                   :title="copiedId === s.id ? '已复制' : '复制'"
+                  :aria-label="copiedId === s.id ? '已复制' : '复制'"
                   @click.stop="copyId(s.id)"
-                >{{ copiedId === s.id ? '已复制' : '复制' }}</button>
+                ><svg v-if="copiedId === s.id" class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg><svg v-else class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
               </div>
             </li>
           </template>
