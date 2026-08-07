@@ -30,3 +30,7 @@ src-tauri/target/
 docs/
 src-tauri/icons/android/
 src-tauri/icons/ios/
+
+# release 本地产物（已上传 GitHub release，不入库）
+/*.dmg
+/latest.json
