@@ -14,6 +14,7 @@ import TransitionOverlay from './components/TransitionOverlay.vue';
 import Preferences from './components/Preferences.vue';
 import type { OverlayMode, Theme } from './types';
 import { applyTheme } from './utils/theme';
+import { tokenUnit } from './utils/session';
 
 const isPrefs = computed(() => getCurrentWebviewWindow().label === 'prefs');
 const mode = ref<OverlayMode>('resident');
@@ -23,8 +24,9 @@ const transitioning = ref(false);
 onMounted(async () => {
   // theme 两窗口都要应用（prefs 窗口也渲染偏好 UI），先于 isPrefs 分支。
   try {
-    const p = await invoke<{ mode: OverlayMode; theme: Theme }>('get_prefs');
+    const p = await invoke<{ mode: OverlayMode; theme: Theme; token_unit: 'km' | 'wan' }>('get_prefs');
     applyTheme(p.theme);
+    tokenUnit.value = p.token_unit;
     if (isPrefs.value) {
       // prefs 窗口非透明（无 vibrancy），html/body 默认 transparent 会露 webview 白底；
       // 加 .prefs-win 让背景用实色（跟 theme），深色下不至浅字白底。
@@ -40,8 +42,9 @@ onMounted(async () => {
     // prefs 变更（如 set_theme）→ 重读 theme 应用（overlay 跟随 prefs 窗口的切换）。
     await listen<{ theme?: Theme }>('prefs_changed', async () => {
       try {
-        const p = await invoke<{ theme: Theme }>('get_prefs');
+        const p = await invoke<{ theme: Theme; token_unit: 'km' | 'wan' }>('get_prefs');
         applyTheme(p.theme);
+        tokenUnit.value = p.token_unit;
       } catch (e) {
         console.error('prefs_changed theme reload failed', e);
       }

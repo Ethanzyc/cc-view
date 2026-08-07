@@ -1,4 +1,5 @@
 // Overlay 会话展示工具（排序/分组/状态文案等，从原两组件去重合并而来）。
+import { ref } from 'vue';
 import type { Session, Status } from '../types';
 
 // 状态中文名：保留 cc 真实状态（不因 snoozed 改成"已搁置"——分组标题已表达）
@@ -71,9 +72,18 @@ export function hlParts(text: string, k: string): HlSeg[] {
   ].filter(seg => seg.text.length > 0);
 }
 
-// token 量格式化（中文单位）：<1万 原数，<1亿 X.X万，否则 X.X亿。
+// token 量单位（全局响应式；App.vue 从 prefs 同步，fmtTok 自动响应）。默认 km。
+export const tokenUnit = ref<'km' | 'wan'>('km');
+
+// token 量格式化：km → k/M/B，wan → 万/亿。读 tokenUnit 自动响应切换。
 export function fmtTok(n: number): string {
-  if (n < 10000) return String(n);
-  if (n < 100000000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
-  return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+  if (tokenUnit.value === 'wan') {
+    if (n < 10000) return String(n);
+    if (n < 100000000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+    return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+  }
+  if (n < 1000) return String(n);
+  if (n < 1000000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  if (n < 1000000000) return (n / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+  return (n / 1000000000).toFixed(2).replace(/\.?0+$/, '') + 'B';
 }

@@ -683,6 +683,20 @@ fn set_theme(
     Ok(())
 }
 
+/// 设置 token 量单位（km/wan）：存 prefs + emit prefs_changed（前端 tokenUnit 响应）。
+#[tauri::command]
+fn set_token_unit(
+    unit: prefs::TokenUnit,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.token_unit = unit;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
 /// 切换 overlay 模式（panel / resident）：存 prefs + resize 窗口 + 重新定位 + emit mode_changed
 /// 让前端（overlay 窗口）切换视图；同时 emit prefs_changed 让 ResidentView 重读配置。
 /// prefs 窗口的 set_mode 调用同样 emit，overlay 会响应。
@@ -1027,6 +1041,7 @@ pub fn run() {
             set_show_archived,
             set_resident_opacity,
             set_theme,
+            set_token_unit,
             set_mode,
             do_animate,
             set_resident_height

@@ -20,6 +20,8 @@ export interface Session {
 
 // overlay 窗口模式（与后端 prefs::OverlayMode serde lowercase 对齐）
 export type OverlayMode = 'resident' | 'panel';
+// token 量单位（与后端 prefs::TokenUnit serde lowercase 对齐）
+export type TokenUnit = 'km' | 'wan';
 // 常驻布局（与后端 prefs::ResidentLayout serde lowercase 对齐）
 export type ResidentLayout = 'b' | 'a';
 // 外观主题（与后端 prefs::Theme serde lowercase 对齐）
@@ -37,6 +39,7 @@ export interface Prefs {
   resident_opacity: number;
   theme: Theme;
   show_archived: boolean;
+  token_unit: TokenUnit;
 }
 
 // 按回合的消耗明细（与后端 TurnStat camelCase 对齐）

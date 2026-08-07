@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import type { Prefs, ResidentLayout, Theme } from '../types';
+import type { Prefs, ResidentLayout, Theme, TokenUnit } from '../types';
 import { applyTheme } from '../utils/theme';
 
 const notify = ref(true);
@@ -19,6 +19,7 @@ const residentLayout = ref<ResidentLayout>('b');
 const showSnoozed = ref(true);
 const showIdle = ref(true);
 const opacity = ref(55);
+const tokenUnitPref = ref<TokenUnit>('km');
 const saving = ref<string | null>(null);
 const error = ref<string | null>(null);
 const appVersion = ref('');
@@ -46,6 +47,7 @@ onMounted(async () => {
     showSnoozed.value = p.resident_show_snoozed;
     showIdle.value = p.resident_show_idle;
     opacity.value = p.resident_opacity;
+    tokenUnitPref.value = p.token_unit;
   } catch (e) {
     console.error('get_prefs failed', e);
   }
@@ -85,6 +87,7 @@ const onTheme = (v: Theme) => wrap('theme', async () => {
 const onLayout = (v: ResidentLayout) => wrap('layout', async () => { await invoke('set_resident_layout', { layout: v }); residentLayout.value = v; });
 const onShowSnoozed = (v: boolean) => wrap('showSnoozed', async () => { await invoke('set_resident_show_snoozed', { show: v }); showSnoozed.value = v; });
 const onShowIdle = (v: boolean) => wrap('showIdle', async () => { await invoke('set_resident_show_idle', { show: v }); showIdle.value = v; });
+const onTokenUnit = (v: TokenUnit) => wrap('tokenUnit', async () => { await invoke('set_token_unit', { unit: v }); tokenUnitPref.value = v; });
 
 let opacityTimer: number | undefined;
 const onOpacity = (v: number) => {
@@ -204,6 +207,21 @@ async function downloadAndInstall() {
                 :disabled="saving === 'theme'" @click="onTheme('dark')">
           <span class="opt-title">深色</span>
         </button>
+      </div>
+
+      <div class="field">
+        <span class="field-label">token 单位</span>
+        <div class="opt-group">
+          <button type="button" class="opt-btn" :class="{ active: tokenUnitPref === 'km' }"
+                  :disabled="saving === 'tokenUnit'" @click="onTokenUnit('km')">
+            <span class="opt-title">k / M</span>
+            <span class="opt-desc">默认</span>
+          </button>
+          <button type="button" class="opt-btn" :class="{ active: tokenUnitPref === 'wan' }"
+                  :disabled="saving === 'tokenUnit'" @click="onTokenUnit('wan')">
+            <span class="opt-title">万 / 亿</span>
+          </button>
+        </div>
       </div>
     </section>
 

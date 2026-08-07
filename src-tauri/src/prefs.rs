@@ -14,6 +14,7 @@ fn default_show() -> bool { true }
 fn default_opacity() -> u8 { 55 }
 fn default_theme() -> Theme { Theme::Light }
 fn default_false() -> bool { false }
+fn default_token_unit() -> TokenUnit { TokenUnit::Km }
 
 /// 允许的快捷键预设（"off" = 禁用）。
 pub const ALLOWED_SHORTCUTS: &[&str] = &["alt+space", "cmd+alt+space", "ctrl+space", "off"];
@@ -42,6 +43,14 @@ pub enum Theme {
     Dark,
 }
 
+/// token 量单位：Km（k/M/B 国际）/ Wan（万/亿 中文）。默认 Km。
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum TokenUnit {
+    Km,
+    Wan,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Prefs {
     #[serde(default = "default_true")]
@@ -65,6 +74,9 @@ pub struct Prefs {
     /// 是否显示已归档会话（面板 toggle 写；面板+常驻共享读；默认 false=隐藏归档）。
     #[serde(default = "default_false")]
     pub show_archived: bool,
+    /// token 量单位（km 或 wan）。默认 km。
+    #[serde(default = "default_token_unit")]
+    pub token_unit: TokenUnit,
 }
 
 impl Default for Prefs {
@@ -80,6 +92,7 @@ impl Default for Prefs {
             resident_opacity: default_opacity(),
             theme: default_theme(),
             show_archived: false,
+            token_unit: default_token_unit(),
         }
     }
 }
@@ -127,6 +140,7 @@ mod tests {
         assert_eq!(p.resident_opacity, 55);
         assert_eq!(p.theme, Theme::Light);
         assert!(!p.show_archived);
+        assert_eq!(p.token_unit, TokenUnit::Km);
     }
 
     #[test]
@@ -161,6 +175,7 @@ mod tests {
             resident_opacity: 80,
             theme: Theme::Dark,
             show_archived: true,
+            token_unit: TokenUnit::Wan,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();
