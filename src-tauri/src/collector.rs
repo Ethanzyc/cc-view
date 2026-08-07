@@ -583,6 +583,177 @@ fn fill_tokens(s: &mut Session) {
     }
 }
 
+// ---- 详情扫描：回合分组 + 汇总（on-demand，无缓存）----
+#[derive(serde::Deserialize)]
+struct DetailRow {
+    #[serde(rename = "type")]
+    row_type: Option<String>,
+    message: Option<DetailMessage>,
+    timestamp: Option<String>,
+}
+#[derive(serde::Deserialize)]
+struct DetailMessage {
+    #[serde(default)]
+    model: Option<String>,
+    // content 可能是 string 或 array，用 Value 统一处理
+    #[serde(default)]
+    content: Option<serde_json::Value>,
+    #[serde(default)]
+    usage: Option<DetailUsage>,
+}
+#[derive(serde::Deserialize)]
+struct DetailUsage {
+    #[serde(default)]
+    input_tokens: u64,
+    #[serde(default)]
+    output_tokens: u64,
+    #[serde(default)]
+    cache_read_input_tokens: u64,
+    #[serde(default)]
+    cache_creation_input_tokens: u64,
+    #[serde(default)]
+    server_tool_use: Option<DetailServerToolUse>,
+}
+#[derive(serde::Deserialize)]
+struct DetailServerToolUse {
+    #[serde(default)]
+    web_search_requests: u64,
+    #[serde(default)]
+    web_fetch_requests: u64,
+}
+
+/// 从 user message content 提取真实用户输入文本。
+/// string → 整段；array → 取首个 type=="text" 的 text；纯 tool_result → None（不开回合）。
+fn extract_user_text(content: &serde_json::Value) -> Option<String> {
+    if let Some(s) = content.as_str() {
+        return Some(s.to_string());
+    }
+    if let Some(arr) = content.as_array() {
+        for item in arr {
+            if item.get("type").and_then(|v| v.as_str()) == Some("text") {
+                if let Some(t) = item.get("text").and_then(|v| v.as_str()) {
+                    return Some(t.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 统计 assistant content 中 tool_use block 数。
+fn count_tool_use(content: &serde_json::Value) -> u32 {
+    content
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter(|item| item.get("type").and_then(|v| v.as_str()) == Some("tool_use"))
+                .count() as u32
+        })
+        .unwrap_or(0)
+}
+
+/// 纯函数：一遍遍历 JSONL 文本，按回合分组 + 累计汇总。session_id 留空，由调用方填。
+/// 回合定义：真实用户输入（string 或含 text block）开新回合；tool_result 不开回合。
+pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
+    use crate::models::{SessionDetail, TurnStat};
+    let mut tokens_in = 0u64;
+    let mut tokens_out = 0u64;
+    let mut cache_read = 0u64;
+    let mut cache_creation = 0u64;
+    let mut model = String::new();
+    let mut tool_calls = 0u32;
+    let mut web_searches = 0u64;
+    let mut web_fetches = 0u64;
+    let mut turns: Vec<TurnStat> = Vec::new();
+    let mut cur: Option<TurnStat> = None;
+    let mut turn_idx = 0u32;
+
+    for line in text.lines() {
+        let Ok(row) = serde_json::from_str::<DetailRow>(line) else {
+            continue;
+        };
+        match row.row_type.as_deref() {
+            Some("user") => {
+                let Some(msg) = row.message.as_ref() else { continue };
+                let Some(content) = msg.content.as_ref() else { continue };
+                if let Some(prompt) = extract_user_text(content) {
+                    // 真实输入 → 结束当前回合、开新回合
+                    if let Some(t) = cur.take() {
+                        turns.push(t);
+                    }
+                    turn_idx += 1;
+                    cur = Some(TurnStat {
+                        idx: turn_idx,
+                        prompt: prompt.chars().take(40).collect(),
+                        tokens_in: 0,
+                        tokens_out: 0,
+                        tool_calls: 0,
+                        ts: row.timestamp.clone().unwrap_or_default(),
+                    });
+                }
+                // tool_result：不开回合，忽略
+            }
+            Some("assistant") => {
+                let Some(msg) = row.message.as_ref() else { continue };
+                if let Some(u) = msg.usage.as_ref() {
+                    tokens_in += u.input_tokens;
+                    tokens_out += u.output_tokens;
+                    cache_read += u.cache_read_input_tokens;
+                    cache_creation += u.cache_creation_input_tokens;
+                    if let Some(stu) = u.server_tool_use.as_ref() {
+                        web_searches += stu.web_search_requests;
+                        web_fetches += stu.web_fetch_requests;
+                    }
+                }
+                if let Some(m) = msg.model.as_ref().filter(|m| !m.is_empty()) {
+                    model = m.clone();
+                }
+                let tc = msg.content.as_ref().map(count_tool_use).unwrap_or(0);
+                tool_calls += tc;
+                if let Some(t) = cur.as_mut() {
+                    if let Some(u) = msg.usage.as_ref() {
+                        t.tokens_in += u.input_tokens;
+                        t.tokens_out += u.output_tokens;
+                    }
+                    t.tool_calls += tc;
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(t) = cur.take() {
+        turns.push(t);
+    }
+    let turn_count = turns.len() as u32;
+    SessionDetail {
+        session_id: String::new(),
+        tokens_in,
+        tokens_out,
+        cache_read,
+        cache_creation,
+        model,
+        turn_count,
+        tool_calls,
+        web_searches: web_searches as u32,
+        web_fetches: web_fetches as u32,
+        turns,
+    }
+}
+
+/// 读 JSONL 全文做详情扫描。
+pub fn scan_session_detail(session_id: &str, cwd: &str) -> Option<crate::models::SessionDetail> {
+    let home = dirs::home_dir()?;
+    let encoded = cwd.replace('/', "-");
+    let path = home
+        .join(".claude/projects")
+        .join(&encoded)
+        .join(format!("{}.jsonl", session_id));
+    let text = std::fs::read_to_string(&path).ok()?;
+    let mut d = scan_detail_from_text(&text);
+    d.session_id = session_id.to_string();
+    Some(d)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -789,5 +960,39 @@ mod tests {
         assert_eq!(scan.title.as_deref(), Some("用户改名"));
         assert_eq!(scan.tokens_in, 10);
         assert_eq!(scan.tokens_out, 5);
+    }
+
+    #[test]
+    fn scan_detail_groups_turns_and_accumulates() {
+        let text = "\
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"第一问\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"tool_use\",\"name\":\"Read\"}],\"usage\":{\"input_tokens\":100,\"output_tokens\":40}}}
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:00:06.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"x\",\"content\":\"ok\"}]}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:00:10.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"答1\"}],\"usage\":{\"input_tokens\":50,\"output_tokens\":20}}}
+{\"type\":\"user\",\"timestamp\":\"2026-08-07T01:01:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"第二问\"}}
+{\"type\":\"assistant\",\"timestamp\":\"2026-08-07T01:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"model\":\"glm-5.2\",\"content\":[{\"type\":\"text\",\"text\":\"答2\"}],\"usage\":{\"input_tokens\":30,\"output_tokens\":10}}}";
+        let d = super::scan_detail_from_text(text);
+        assert_eq!(d.turn_count, 2); // tool_result 不开回合
+        assert_eq!(d.tokens_in, 180); // 100+50+30
+        assert_eq!(d.tokens_out, 70); // 40+20+10
+        assert_eq!(d.tool_calls, 1);
+        assert_eq!(d.model, "glm-5.2");
+        // 回合1：含 tool_use assistant + text assistant，tool_result 归入回合1
+        assert_eq!(d.turns[0].idx, 1);
+        assert_eq!(d.turns[0].prompt, "第一问");
+        assert_eq!(d.turns[0].tokens_in, 150); // 100+50
+        assert_eq!(d.turns[0].tokens_out, 60); // 40+20
+        assert_eq!(d.turns[0].tool_calls, 1);
+        assert_eq!(d.turns[0].ts, "2026-08-07T01:00:00.000Z");
+        assert_eq!(d.turns[1].idx, 2);
+        assert_eq!(d.turns[1].prompt, "第二问");
+    }
+
+    #[test]
+    fn scan_detail_empty_text_returns_zero() {
+        let d = super::scan_detail_from_text("");
+        assert_eq!(d.turn_count, 0);
+        assert_eq!(d.tokens_in, 0);
+        assert!(d.turns.is_empty());
     }
 }

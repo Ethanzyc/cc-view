@@ -73,6 +73,35 @@ pub struct Session {
     pub tokens_out: u64,
 }
 
+/// 单个会话的 token 消耗详情（on-demand：点详情才扫描）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDetail {
+    pub session_id: String,
+    pub tokens_in: u64,
+    pub tokens_out: u64,
+    pub cache_read: u64,
+    pub cache_creation: u64,
+    pub model: String, // 最近一条 assistant 的 model
+    pub turn_count: u32,
+    pub tool_calls: u32,
+    pub web_searches: u32,
+    pub web_fetches: u32,
+    pub turns: Vec<TurnStat>,
+}
+
+/// 按回合的消耗明细。ts 为原始 ISO 8601 字符串，前端 Date.parse 转 ms（省后端解析）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnStat {
+    pub idx: u32,
+    pub prompt: String, // 用户输入前 40 字
+    pub tokens_in: u64,
+    pub tokens_out: u64,
+    pub tool_calls: u32,
+    pub ts: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

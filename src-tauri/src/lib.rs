@@ -416,6 +416,20 @@ fn get_sessions(
     derived
 }
 
+/// 返回某会话的 token 消耗详情（汇总 + 按回合）。on-demand：点详情才扫描。
+/// 从 sessions cache 按 id 查 cwd 定位 JSONL；找不到 id 或文件缺失返回 None。
+#[tauri::command]
+fn get_session_detail(
+    id: String,
+    cache: tauri::State<'_, Mutex<Vec<models::Session>>>,
+) -> Option<models::SessionDetail> {
+    let cwd = cache
+        .lock()
+        .ok()
+        .and_then(|s| s.iter().find(|s| s.id == id).map(|s| s.cwd.clone()))?;
+    collector::scan_session_detail(&id, &cwd)
+}
+
 /// 按 session id 激活对应终端 app（MVP：只 activate，不精确定位 tab/pane）。
 /// 从最近 emit 的 sessions 缓存中查 host；找不到 id 时 eprintln 提示。
 #[tauri::command]
@@ -970,6 +984,7 @@ pub fn run() {
             list_archived,
             focus_session,
             get_sessions,
+            get_session_detail,
             get_overlay_pinned,
             set_overlay_pinned,
             snooze_session,
