@@ -1,7 +1,18 @@
 use crate::models::Host;
 use std::process::Command;
 
-/// MVP focus：osascript activate 终端 app（不精确到 tab/pane）。
+/// MVP focus：activate 终端 **app**（不精确到 window/tab/pane）。
+///
+/// 已知限制：同一 app 多窗口（如 Otty 的 B1 全屏终端 / B2 / 桌面窗口）时，activate 整个
+/// app 后 macOS 带前哪个窗口不确定 → 可能跳到非终端所在窗口。日志已验证 open -a + click
+/// Dock 都 exit=0、found=true（命令全成功），问题在 app 级 activate 的窗口不精确。
+/// cc-view 是文件系统发现 session、无终端窗口句柄，macOS AX 也不暴露 shell pid→终端
+/// window/tab 映射，故通用层面难精确。
+///
+/// TODO(终端集成)：各终端 app 的 AppleScript/CLI 支持 tab/window 级控制，cc-view 记住
+/// session→tab 后可精确切。用户 2026-08-07 定：常见终端 app 都要支持。详见 memory
+/// [[focus-terminal-window-integration]]。
+///
 /// Unknown host 直接返回不动作；spawn 失败忽略（fire-and-forget）。
 pub fn activate_host(host: &Host) {
     // host → macOS 应用名映射；tmux 兜底激活 Terminal。
@@ -24,17 +35,8 @@ pub fn activate_host(host: &Host) {
     // 需辅助功能权限（系统设置 → 隐私与安全 → 辅助功能 → cc-view）。
     // System Events 的 whose 查询对 Dock 无效，用循环遍历找图标。
     // Dock 显示名需与 app 一致（Otty/iTerm2/Ghostty/Visual Studio Code/...）。
-    // 诊断（全屏 Space 跳转不对称：A→B 通、B→A 不通）——open -a 不切全屏 Space、click Dock 才切。
-    // 打两步各自的 exit/stderr 定位哪步失败；定位后降为 trace 或移除。
-    let open_out = Command::new("/usr/bin/open").args(["-a", app]).output();
-    match &open_out {
-        Ok(o) => eprintln!(
-            "[activate_host] open -a {app} exit={} stderr={}",
-            o.status,
-            String::from_utf8_lossy(&o.stderr).trim()
-        ),
-        Err(e) => eprintln!("[activate_host] open -a {app} spawn 失败: {e}"),
-    }
+    // 注：仍是 app 级 activate——同 app 多窗口不精确（见函数 doc 注释）。
+    let _ = Command::new("/usr/bin/open").args(["-a", app]).spawn();
     let script = format!(
         r#"tell application "System Events"
     tell process "Dock"
@@ -50,14 +52,5 @@ pub fn activate_host(host: &Host) {
 end tell"#,
         app
     );
-    let osa_out = Command::new("/usr/bin/osascript").arg("-e").arg(script).output();
-    match &osa_out {
-        Ok(o) => eprintln!(
-            "[activate_host] osascript click {app} exit={} stdout={} stderr={}",
-            o.status,
-            String::from_utf8_lossy(&o.stdout).trim(),
-            String::from_utf8_lossy(&o.stderr).trim()
-        ),
-        Err(e) => eprintln!("[activate_host] osascript spawn 失败: {e}"),
-    }
+    let _ = Command::new("/usr/bin/osascript").arg("-e").arg(script).spawn();
 }
