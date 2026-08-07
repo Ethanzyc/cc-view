@@ -80,6 +80,11 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 2. 打开 dmg，拖 cc-view 到 **Applications**。
 3. 启动 cc-view——menubar 出现图标（平时无 dock 图标），`⌥Space` 呼出命令面板。
 
+> **首次打开提示「已损坏」？** cc-view 未做 Apple 公证（个人开源项目，无开发者证书），macOS Gatekeeper 会拦。终端跑一下即可放开：
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/cc-view.app
+> ```
+
 **要求**：macOS 13+，Apple Silicon（aarch64）。首次运行在系统设置里授权：
 - **通知**：系统通知
 - **辅助功能**：focus 跳全屏 app（点 Dock 切全屏 Space 需要）
