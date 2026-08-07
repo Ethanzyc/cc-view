@@ -72,6 +72,8 @@ mod tests {
             cwd: "/c".into(), name: id.into(), status: st, started_at: 0,
             status_updated_at: updated_at, alive: true, focus_hint: FocusHint::default(),
             snoozed: false,
+            tokens_in: 0,
+            tokens_out: 0,
         }
     }
 

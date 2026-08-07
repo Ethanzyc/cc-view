@@ -66,6 +66,11 @@ pub struct Session {
     /// serde default 兼容旧缓存/前端旧版。
     #[serde(default)]
     pub snoozed: bool,
+    /// 累计 token（collect 时 scan JSONL 填充，roster/agents 无 JSONL 时为 0）。
+    #[serde(default)]
+    pub tokens_in: u64,
+    #[serde(default)]
+    pub tokens_out: u64,
 }
 
 #[cfg(test)]
@@ -79,6 +84,8 @@ mod tests {
             status: Status::Working, started_at: 0, status_updated_at: 0,
             alive: true, focus_hint: FocusHint::default(),
             snoozed: false,
+            tokens_in: 0,
+            tokens_out: 0,
         };
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("\"statusUpdatedAt\""));

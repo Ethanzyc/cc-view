@@ -55,6 +55,8 @@ fn hash_sessions(s: &[models::Session]) -> u64 {
         format!("{:?}", x.status).hash(&mut h);
         x.alive.hash(&mut h);
         x.snoozed.hash(&mut h);
+        x.tokens_in.hash(&mut h);
+        x.tokens_out.hash(&mut h);
     }
     h.finish()
 }
@@ -590,6 +592,20 @@ fn set_resident_show_idle(
     let _ = app.emit("prefs_changed", ());
 }
 
+/// 切换是否显示已归档会话（全局：面板 toggle 写，面板+常驻共享读）：存 prefs + emit prefs_changed。
+#[tauri::command]
+fn set_show_archived(
+    show: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.show_archived = show;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
 /// 设置常驻背景透明度（0–100）：校验失败返回 Err（fail fast），合法则存 prefs + emit。
 #[tauri::command]
 fn set_resident_opacity(
@@ -968,6 +984,7 @@ pub fn run() {
             set_resident_layout,
             set_resident_show_snoozed,
             set_resident_show_idle,
+            set_show_archived,
             set_resident_opacity,
             set_theme,
             set_mode,

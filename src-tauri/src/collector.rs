@@ -56,6 +56,8 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
         alive: true,
         focus_hint: FocusHint::default(),
         snoozed: false,
+        tokens_in: 0,
+        tokens_out: 0,
     })
 }
 
@@ -90,8 +92,12 @@ pub fn collect_sessions() -> Vec<Session> {
                     // custom-title（/rename 用户改名）优先，否则 ai-title（Claude 生成）。
                     // 无两者则保留 sessions.json 的 name（derived/sessionId 短码）。
                     // 实测：cc-view-45(无custom,ai=了解...)→了解...；述职(custom=述职)→述职。
-                    if let Some(title) = read_session_title(&s.id, &s.cwd) {
-                        s.name = title;
+                    if let Some(scan) = scan_session_jsonl(&s.id, &s.cwd) {
+                        if let Some(t) = scan.title {
+                            s.name = t;
+                        }
+                        s.tokens_in = scan.tokens_in;
+                        s.tokens_out = scan.tokens_out;
                     }
                     // 末尾文本一次读出，供 pending tool_use + compact 检测共用（避免两次 seek）
                     // 真实权限判定：读 JSONL 末尾 pending tool_use + PermissionChecker 预测。
@@ -124,6 +130,7 @@ pub fn collect_sessions() -> Vec<Session> {
     for mut w in read_roster() {
         w.alive = is_claude_alive(w.pid);
         if w.alive {
+            fill_tokens(&mut w);
             w.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, w.pid);
         }
         out.push(w);
@@ -132,11 +139,14 @@ pub fn collect_sessions() -> Vec<Session> {
     // 只合并 Source::Fleet（background）条目——它们覆盖/补充 roster 默认 Working。
     // interactive 条目不合并：它们的 busy/idle 会覆盖 JSONL 精确状态
     // （NeedsPermission / Compacting），造成静默降级为 Working。
-    out.extend(
-        read_agents()
-            .into_iter()
-            .filter(|s| s.source == crate::models::Source::Fleet),
-    );
+    let mut agents: Vec<Session> = read_agents()
+        .into_iter()
+        .filter(|s| s.source == crate::models::Source::Fleet)
+        .collect();
+    for s in agents.iter_mut().filter(|s| s.alive) {
+        fill_tokens(s);
+    }
+    out.extend(agents);
     out
 }
 
@@ -243,6 +253,7 @@ pub fn read_jsonl_tail_text(session_id: &str, cwd: &str) -> Option<String> {
 /// 解析 JSONL 文本，取会话标题：最后一条 `custom-title`（/rename 用户改名）优先，
 /// 否则最后一条 `ai-title`（Claude 生成）。与 Claude Code /status 同源
 /// （参考 claude-hud transcript.ts: customTitle ?? aiTitle）。无则 None。
+#[cfg(test)]
 pub fn parse_session_title(text: &str) -> Option<String> {
     let mut custom: Option<String> = None;
     let mut ai: Option<String> = None;
@@ -265,18 +276,6 @@ pub fn parse_session_title(text: &str) -> Option<String> {
         }
     }
     custom.or(ai)
-}
-
-/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 全文，取会话标题（custom ?? ai）。
-pub fn read_session_title(session_id: &str, cwd: &str) -> Option<String> {
-    let home = dirs::home_dir()?;
-    let encoded = cwd.replace('/', "-");
-    let path = home
-        .join(".claude/projects")
-        .join(&encoded)
-        .join(format!("{}.jsonl", session_id));
-    let text = std::fs::read_to_string(&path).ok()?;
-    parse_session_title(&text)
 }
 
 /// 扫 JSONL 末尾文本：若任行含 compact_boundary 标志 → true。
@@ -354,6 +353,8 @@ pub fn parse_roster(json: &str) -> Vec<Session> {
             alive: true, // collect_sessions 会用 pid 校验覆盖
             focus_hint: FocusHint::default(),
             snoozed: false,
+            tokens_in: 0,
+            tokens_out: 0,
         }
     }).collect()
 }
@@ -449,6 +450,8 @@ pub fn parse_agents(json: &str) -> Vec<Session> {
             alive: true, // agents --json 只列活进程
             focus_hint: FocusHint::default(),
             snoozed: false,
+            tokens_in: 0,
+            tokens_out: 0,
         }
     }).collect()
 }
@@ -501,6 +504,83 @@ pub fn read_agents() -> Vec<Session> {
         return vec![];
     }
     parse_agents(&stdout)
+}
+
+// ---- 全文 scan：标题 + 累计 token 一遍遍历（替代 read_session_title 单一职责）----
+// 零额外 IO：取标题本来就要读全文，顺带累加 assistant usage。
+#[derive(serde::Deserialize)]
+struct ScanRow {
+    #[serde(rename = "type")]
+    row_type: Option<String>,
+    message: Option<ScanMessage>,
+    #[serde(rename = "customTitle")]
+    custom_title: Option<String>,
+    #[serde(rename = "aiTitle")]
+    ai_title: Option<String>,
+}
+#[derive(serde::Deserialize)]
+struct ScanMessage {
+    #[serde(default)]
+    usage: Option<ScanUsage>,
+}
+#[derive(serde::Deserialize)]
+struct ScanUsage {
+    #[serde(default)]
+    input_tokens: u64,
+    #[serde(default)]
+    output_tokens: u64,
+}
+
+/// 一遍遍历的产出：标题（custom ?? ai）+ 累计 input/output token。
+pub struct SessionScan {
+    pub title: Option<String>,
+    pub tokens_in: u64,
+    pub tokens_out: u64,
+}
+
+/// 纯函数：从 JSONL 全文文本一遍遍历，取标题 + 累计 token。便于单测。
+pub fn scan_session_jsonl_from_text(text: &str) -> SessionScan {
+    let mut custom: Option<String> = None;
+    let mut ai: Option<String> = None;
+    let mut tokens_in: u64 = 0;
+    let mut tokens_out: u64 = 0;
+    for line in text.lines() {
+        let Ok(row) = serde_json::from_str::<ScanRow>(line) else {
+            continue;
+        };
+        match row.row_type.as_deref() {
+            Some("custom-title") => custom = row.custom_title,
+            Some("ai-title") => ai = row.ai_title,
+            Some("assistant") => {
+                if let Some(u) = row.message.as_ref().and_then(|m| m.usage.as_ref()) {
+                    tokens_in += u.input_tokens;
+                    tokens_out += u.output_tokens;
+                }
+            }
+            _ => {}
+        }
+    }
+    SessionScan { title: custom.or(ai), tokens_in, tokens_out }
+}
+
+/// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 全文，一遍出标题 + token。
+pub fn scan_session_jsonl(session_id: &str, cwd: &str) -> Option<SessionScan> {
+    let home = dirs::home_dir()?;
+    let encoded = cwd.replace('/', "-");
+    let path = home
+        .join(".claude/projects")
+        .join(&encoded)
+        .join(format!("{}.jsonl", session_id));
+    let text = std::fs::read_to_string(&path).ok()?;
+    Some(scan_session_jsonl_from_text(&text))
+}
+
+/// 对单个活会话填充累计 token（不碰 name）。roster/agents 共用。
+fn fill_tokens(s: &mut Session) {
+    if let Some(scan) = scan_session_jsonl(&s.id, &s.cwd) {
+        s.tokens_in = scan.tokens_in;
+        s.tokens_out = scan.tokens_out;
+    }
 }
 
 #[cfg(test)]
@@ -669,6 +749,8 @@ mod tests {
             status: Status::Working, started_at: 0, status_updated_at: 0,
             alive: true, focus_hint: FocusHint::default(),
             snoozed: false,
+            tokens_in: 0,
+            tokens_out: 0,
         };
         let agents_json = r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","state":"blocked"}]"#;
         let agents_sessions: Vec<Session> = super::parse_agents(agents_json)
@@ -683,5 +765,29 @@ mod tests {
         });
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].status, Status::NeedsPermission); // Fleet agents 覆盖了 roster 的 Working
+    }
+
+    #[test]
+    fn scan_totals_accumulate_assistant_usage() {
+        let text = "\
+{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}
+{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50}}}
+{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"usage\":{\"input_tokens\":200,\"output_tokens\":80}}}";
+        let scan = super::scan_session_jsonl_from_text(text);
+        assert_eq!(scan.tokens_in, 300);
+        assert_eq!(scan.tokens_out, 130);
+        assert_eq!(scan.title, None);
+    }
+
+    #[test]
+    fn scan_picks_custom_title_over_ai_with_tokens() {
+        let text = "\
+{\"type\":\"ai-title\",\"aiTitle\":\"AI标题\"}
+{\"type\":\"custom-title\",\"customTitle\":\"用户改名\"}
+{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}}";
+        let scan = super::scan_session_jsonl_from_text(text);
+        assert_eq!(scan.title.as_deref(), Some("用户改名"));
+        assert_eq!(scan.tokens_in, 10);
+        assert_eq!(scan.tokens_out, 5);
     }
 }

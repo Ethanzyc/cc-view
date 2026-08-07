@@ -42,6 +42,8 @@ mod tests {
             alive,
             focus_hint: FocusHint::default(),
             snoozed: false,
+            tokens_in: 0,
+            tokens_out: 0,
         }
     }
 
