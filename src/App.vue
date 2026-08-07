@@ -25,7 +25,12 @@ onMounted(async () => {
   try {
     const p = await invoke<{ mode: OverlayMode; theme: Theme }>('get_prefs');
     applyTheme(p.theme);
-    if (isPrefs.value) return;
+    if (isPrefs.value) {
+      // prefs 窗口非透明（无 vibrancy），html/body 默认 transparent 会露 webview 白底；
+      // 加 .prefs-win 让背景用实色（跟 theme），深色下不至浅字白底。
+      document.documentElement.classList.add('prefs-win');
+      return;
+    }
     mode.value = p.mode;
   } catch (e) {
     console.error('get_prefs failed', e);
@@ -109,6 +114,7 @@ onMounted(async () => {
   --space-empty: 40px;
   --motion-duration: 160ms;
   --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --prefs-bg: #f5f5f7; /* prefs 窗口（非透明、无 vibrancy）实色背景：浅色 */
 }
 /* 深色覆盖：applyTheme 给 <html> 加 .dark 时生效（不再跟随系统）。 */
 html.dark {
@@ -121,6 +127,7 @@ html.dark {
   --color-hover: rgba(255, 255, 255, 0.08);
   --status-working-ink: #3FB950;
   --status-reply-ink: #FFD60A;
+  --prefs-bg: #1c1c1e; /* prefs 窗口实色背景：深色 */
 }
 @media (prefers-reduced-motion: reduce) {
   .status-icon--spinning { animation: none !important; }
@@ -136,4 +143,7 @@ html, body {
   user-select: none;
   -webkit-user-select: none;
 }
+/* prefs 窗口（非透明、无 vibrancy）：实色背景跟 theme，避免深色下 webview 白底。 */
+html.prefs-win,
+html.prefs-win body { background: var(--prefs-bg); }
 </style>

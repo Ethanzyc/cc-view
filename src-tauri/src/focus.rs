@@ -24,7 +24,17 @@ pub fn activate_host(host: &Host) {
     // 需辅助功能权限（系统设置 → 隐私与安全 → 辅助功能 → cc-view）。
     // System Events 的 whose 查询对 Dock 无效，用循环遍历找图标。
     // Dock 显示名需与 app 一致（Otty/iTerm2/Ghostty/Visual Studio Code/...）。
-    let _ = Command::new("/usr/bin/open").args(["-a", app]).spawn();
+    // 诊断（全屏 Space 跳转不对称：A→B 通、B→A 不通）——open -a 不切全屏 Space、click Dock 才切。
+    // 打两步各自的 exit/stderr 定位哪步失败；定位后降为 trace 或移除。
+    let open_out = Command::new("/usr/bin/open").args(["-a", app]).output();
+    match &open_out {
+        Ok(o) => eprintln!(
+            "[activate_host] open -a {app} exit={} stderr={}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!("[activate_host] open -a {app} spawn 失败: {e}"),
+    }
     let script = format!(
         r#"tell application "System Events"
     tell process "Dock"
@@ -40,5 +50,14 @@ pub fn activate_host(host: &Host) {
 end tell"#,
         app
     );
-    let _ = Command::new("/usr/bin/osascript").arg("-e").arg(script).spawn();
+    let osa_out = Command::new("/usr/bin/osascript").arg("-e").arg(script).output();
+    match &osa_out {
+        Ok(o) => eprintln!(
+            "[activate_host] osascript click {app} exit={} stdout={} stderr={}",
+            o.status,
+            String::from_utf8_lossy(&o.stdout).trim(),
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!("[activate_host] osascript spawn 失败: {e}"),
+    }
 }

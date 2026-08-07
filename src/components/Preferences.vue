@@ -127,11 +127,6 @@ function onSliderDown(e: PointerEvent) {
   el.addEventListener('pointerup', onUp);
 }
 
-const previewBg = computed(() => {
-  const rgb = theme.value === 'light' ? '255, 255, 255' : '28, 28, 30';
-  return `rgba(${rgb}, ${(opacity.value / 100).toFixed(3)})`;
-});
-
 async function checkForUpdates() {
   error.value = null;
   installError.value = null;
@@ -253,11 +248,6 @@ async function downloadAndInstall() {
             <div class="slider-knob" :style="{ left: sliderPct + '%' }"></div>
           </div>
         </div>
-        <div class="opacity-preview">
-          <div class="preview-desktop">
-            <div class="preview-window" :style="{ background: previewBg }">cc-view</div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -349,15 +339,6 @@ section { margin-top: 20px; }
   transition: transform var(--motion-duration) var(--motion-easing);
 }
 .slider:active .slider-knob { transform: translate(-50%, -50%) scale(1.12); }
-
-/* 透明度预览 */
-.opacity-preview { margin-top: 10px; }
-.preview-desktop { height: 52px; border-radius: 6px; overflow: hidden;
-  background: radial-gradient(120% 90% at 15% 10%, #5b3fa8 0%, transparent 55%),
-              radial-gradient(120% 90% at 90% 20%, #c2445e 0%, transparent 50%),
-              linear-gradient(135deg, #1b1b2e, #14213d);
-  display: flex; align-items: center; justify-content: center; }
-.preview-window { padding: 4px 12px; border-radius: 4px; color: #fff; font-size: 11px; border: 1px solid rgba(255,255,255,0.15); }
 
 .error { color: var(--status-permission); margin-top: 16px; }
 .update-section { margin-top: 24px; }
