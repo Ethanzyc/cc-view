@@ -38,3 +38,28 @@ export interface Prefs {
   theme: Theme;
   show_archived: boolean;
 }
+
+// 按回合的消耗明细（与后端 TurnStat camelCase 对齐）
+export interface TurnStat {
+  idx: number;
+  prompt: string;
+  tokensIn: number;
+  tokensOut: number;
+  toolCalls: number;
+  ts: string; // ISO 8601 原始字符串，前端 Date.parse
+}
+
+// get_session_detail 返回的完整详情
+export interface SessionDetail {
+  sessionId: string;
+  tokensIn: number;
+  tokensOut: number;
+  cacheRead: number;
+  cacheCreation: number;
+  model: string;
+  turnCount: number;
+  toolCalls: number;
+  webSearches: number;
+  webFetches: number;
+  turns: TurnStat[];
+}

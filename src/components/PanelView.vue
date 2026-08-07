@@ -9,11 +9,25 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { Session } from '../types';
+import type { Session, SessionDetail } from '../types';
 import StatusIcon from './StatusIcon.vue';
+import DetailPanel from './DetailPanel.vue';
 import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
 
 const all = ref<Session[]>([]);
+// 详情子状态：selectedDetail 非空时切到 DetailPanel（不动全局 mode/窗口）。
+const selectedDetail = ref<SessionDetail | null>(null);
+const detailName = ref('');
+
+async function openDetail(s: Session) {
+  detailName.value = s.name || s.project;
+  try {
+    selectedDetail.value = await invoke<SessionDetail>('get_session_detail', { id: s.id });
+  } catch (e) {
+    console.error('get_session_detail failed', e);
+  }
+}
+
 const q = ref('');
 // 归档列表 + 显示已归档 toggle（持久化 prefs.show_archived，面板 toggle 写、面板+常驻共享读）。
 const archived = ref<Set<string>>(new Set());
@@ -273,6 +287,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="overlay">
+    <DetailPanel
+      v-if="selectedDetail"
+      :detail="selectedDetail"
+      :name="detailName"
+      @back="selectedDetail = null"
+    />
+    <template v-else>
     <div class="search-bar" data-tauri-drag-region="deep">
       <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="7" cy="7" r="4.5" />
@@ -377,6 +398,16 @@ onBeforeUnmount(() => {
           </span>
           <div class="actions">
             <button
+              class="act-btn detail"
+              title="详情"
+              aria-label="详情"
+              @click.stop="openDetail(s)"
+            >
+              <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" />
+              </svg>
+            </button>
+            <button
               v-if="s.alive && s.snoozed"
               class="act-btn snooze"
               title="恢复（取消搁置）"
@@ -450,6 +481,16 @@ onBeforeUnmount(() => {
               </span>
               <div class="actions">
                 <button
+                  class="act-btn detail"
+                  title="详情"
+                  aria-label="详情"
+                  @click.stop="openDetail(s)"
+                >
+                  <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" />
+                  </svg>
+                </button>
+                <button
                   v-if="s.alive && s.snoozed"
                   class="act-btn snooze"
                   title="恢复（取消搁置）"
@@ -482,6 +523,7 @@ onBeforeUnmount(() => {
       </ul>
       <div v-else class="empty">暂无会话</div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -816,10 +858,14 @@ onBeforeUnmount(() => {
   padding: var(--gap-xs) var(--gap);
   border-radius: 4px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background var(--motion-duration) var(--motion-easing),
               color var(--motion-duration) var(--motion-easing);
   -webkit-font-smoothing: antialiased;
 }
+.act-btn .ico { display: block; }
 .act-btn:hover {
   background: color-mix(in srgb, var(--color-primary) 22%, var(--color-hover));
   color: var(--color-fg);
