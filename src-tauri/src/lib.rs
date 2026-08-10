@@ -956,27 +956,33 @@ fn show_overlay(app: &tauri::AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(300));
             let stable_front = frontmost_bundle_id();
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(200));
+                // 间隔按 mode：panel 200ms 抓快速切走；resident 2s（只检测窗口关 / mode 切回 panel）。
+                // resident 不查 frontmost（省 objc 链调用），panel 才查——省 ~90% 轮询开销。
+                let mode = app_handle
+                    .state::<Mutex<prefs::Prefs>>()
+                    .lock()
+                    .map(|p| p.mode)
+                    .unwrap_or(prefs::OverlayMode::Resident);
+                let gap = if mode == prefs::OverlayMode::Resident { 2000 } else { 200 };
+                std::thread::sleep(std::time::Duration::from_millis(gap));
                 let Some(win) = app_handle.get_webview_window("overlay") else { break };
                 if !win.is_visible().unwrap_or(false) { break; }
+                // resident：always-pinned，不查 frontmost 不 hide，下一轮再判 mode。
+                if mode == prefs::OverlayMode::Resident {
+                    continue;
+                }
+                // panel：查 frontmost，切走了且未 pin 则 hide。
                 let current_front = frontmost_bundle_id();
                 if current_front != stable_front {
-                    // 常驻模式不收起；面板模式按 pin 决定。
-                    let mode = app_handle
-                        .state::<Mutex<prefs::Prefs>>()
-                        .lock()
-                        .map(|p| p.mode)
-                        .unwrap_or(prefs::OverlayMode::Resident);
                     let pinned = app_handle
                         .state::<Mutex<bool>>()
                         .lock()
                         .map(|g| *g)
                         .unwrap_or(false);
-                    if mode != prefs::OverlayMode::Resident && !pinned {
+                    if !pinned {
                         let _ = win.hide();
                         break;
                     }
-                    // resident 或 pinned：静默 continue（不收起）
                 }
             }
         });
