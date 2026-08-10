@@ -76,6 +76,12 @@ fn resident_layout_width(layout: prefs::ResidentLayout) -> f64 {
     }
 }
 
+/// 右边锚定几何：宽度从 old_w 变 new_w 时的新 x（保证 old_x + old_w == new_x + new_w，
+/// 即窗口右边缘不动）。set_resident_width 与启动恢复共用。
+fn anchored_x(old_x: f64, old_w: f64, new_w: f64) -> f64 {
+    old_x + old_w - new_w
+}
+
 /// 面板模式窗口尺寸（logical px，与 tauri.conf.json overlay width/height 一致）。
 const PANEL_W: f64 = 560.0;
 const PANEL_H: f64 = 420.0;
@@ -1267,4 +1273,17 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anchored_x_keeps_right_edge() {
+        // 右边 = old_x + old_w；宽度变后右边不变（50+250=300, 150+150=300, 0+300=300）
+        assert_eq!(anchored_x(100.0, 200.0, 250.0), 50.0);
+        assert_eq!(anchored_x(100.0, 200.0, 150.0), 150.0);
+        assert_eq!(anchored_x(100.0, 200.0, 300.0), 0.0);
+    }
 }
