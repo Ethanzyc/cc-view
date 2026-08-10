@@ -19,6 +19,11 @@ const residentLayout = ref<ResidentLayout>('b');
 const showSnoozed = ref(true);
 const showIdle = ref(true);
 const opacity = ref(55);
+const residentWidth = ref<number>(285);
+
+function defaultWidthForLayout(layout: ResidentLayout): number {
+  return layout === 'a' ? 180 : 285;
+}
 const tokenUnitPref = ref<TokenUnit>('km');
 const saving = ref<string | null>(null);
 const error = ref<string | null>(null);
@@ -47,6 +52,7 @@ onMounted(async () => {
     showSnoozed.value = p.resident_show_snoozed;
     showIdle.value = p.resident_show_idle;
     opacity.value = p.resident_opacity;
+    residentWidth.value = p.resident_width ?? defaultWidthForLayout(p.resident_layout);
     tokenUnitPref.value = p.token_unit;
   } catch (e) {
     console.error('get_prefs failed', e);
@@ -105,8 +111,25 @@ const onOpacity = (v: number) => {
   }, 150);
 };
 
+let widthTimer: number | undefined;
+const onWidth = (v: number) => {
+  residentWidth.value = v;
+  clearTimeout(widthTimer);
+  widthTimer = window.setTimeout(async () => {
+    saving.value = 'width';
+    try {
+      await invoke('set_resident_width', { width: v });
+    } catch (e: unknown) {
+      error.value = typeof e === 'string' ? e : (e as Error)?.message ?? '保存失败';
+    } finally {
+      saving.value = null;
+    }
+  }, 150);
+};
+
 // 自定义 slider（div + pointer），范围 0–100。
 const sliderTrack = ref<HTMLElement>();
+const sliderTrackWidth = ref<HTMLElement>();
 const sliderPct = computed(() => opacity.value);
 function setFromClientX(clientX: number) {
   const el = sliderTrack.value;
@@ -121,6 +144,28 @@ function onSliderDown(e: PointerEvent) {
   el.setPointerCapture(e.pointerId);
   setFromClientX(e.clientX);
   const onMove = (ev: PointerEvent) => setFromClientX(ev.clientX);
+  const onUp = (ev: PointerEvent) => {
+    el.releasePointerCapture(ev.pointerId);
+    el.removeEventListener('pointermove', onMove);
+    el.removeEventListener('pointerup', onUp);
+  };
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+}
+
+function setWidthFromClientX(clientX: number) {
+  const el = sliderTrackWidth.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  onWidth(Math.round(140 + ratio * (480 - 140)));
+}
+function onSliderDownWidth(e: PointerEvent) {
+  e.preventDefault();
+  const el = e.currentTarget as HTMLElement;
+  el.setPointerCapture(e.pointerId);
+  setWidthFromClientX(e.clientX);
+  const onMove = (ev: PointerEvent) => setWidthFromClientX(ev.clientX);
   const onUp = (ev: PointerEvent) => {
     el.releasePointerCapture(ev.pointerId);
     el.removeEventListener('pointermove', onMove);
@@ -264,6 +309,15 @@ async function downloadAndInstall() {
           <div class="slider-track" ref="sliderTrack">
             <div class="slider-fill" :style="{ width: sliderPct + '%' }"></div>
             <div class="slider-knob" :style="{ left: sliderPct + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">面板宽度 <span class="value">{{ residentWidth }}px</span></span>
+        <div class="slider" @pointerdown="onSliderDownWidth">
+          <div class="slider-track" ref="sliderTrackWidth">
+            <div class="slider-fill" :style="{ width: ((residentWidth - 140) / 340 * 100) + '%' }"></div>
+            <div class="slider-knob" :style="{ left: ((residentWidth - 140) / 340 * 100) + '%' }"></div>
           </div>
         </div>
       </div>
