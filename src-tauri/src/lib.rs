@@ -82,6 +82,12 @@ fn anchored_x(old_x: f64, old_w: f64, new_w: f64) -> f64 {
     old_x + old_w - new_w
 }
 
+/// 纯函数：physical 坐标 (px,py) 是否在 rect (x0,y0,w,h) 内。
+/// 供窗口位置恢复校验——防坏坐标（如宽度 bug 残留的屏外坐标）恢复到屏外看不见。
+fn pos_in_rect(px: i32, py: i32, x0: i32, y0: i32, w: i32, h: i32) -> bool {
+    px >= x0 && px < x0 + w && py >= y0 && py < y0 + h
+}
+
 /// 面板模式窗口尺寸（logical px，与 tauri.conf.json overlay width/height 一致）。
 const PANEL_W: f64 = 560.0;
 const PANEL_H: f64 = 420.0;
@@ -1048,7 +1054,22 @@ fn show_overlay(app: &tauri::AppHandle) {
     #[cfg(target_os = "macos")]
     join_all_spaces(&w);
     if let Some(pos) = overlay_position::OverlayPosition::load() {
-        let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+        // 校验坐标在屏幕内——防坏坐标恢复到屏外（与 setup 一致）。
+        let in_bounds = w
+            .current_monitor()
+            .ok()
+            .flatten()
+            .map(|m| {
+                let s = m.size();
+                let p = m.position();
+                pos_in_rect(pos.x, pos.y, p.x, p.y, s.width as i32, s.height as i32)
+            })
+            .unwrap_or(true);
+        if in_bounds {
+            let _ = w.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+        } else {
+            let _ = w.center(); // 坏坐标 → center 兜底
+        }
     } else {
         let _ = w.center();
     }
@@ -1247,7 +1268,21 @@ pub fn run() {
                 // 恢复上次保存的 overlay 位置（vibrancy / swizzle 之后）。
                 // 无记录时跳过——由呼出时的 center() 兜底。
                 if let Some(pos) = overlay_position::OverlayPosition::load() {
-                    let _ = overlay.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                    // 校验坐标在屏幕内——防坏坐标（如宽度 bug 残留）恢复到屏外。
+                    let in_bounds = overlay
+                        .current_monitor()
+                        .ok()
+                        .flatten()
+                        .map(|m| {
+                            let s = m.size();
+                            let p = m.position();
+                            pos_in_rect(pos.x, pos.y, p.x, p.y, s.width as i32, s.height as i32)
+                        })
+                        .unwrap_or(true);
+                    if in_bounds {
+                        let _ = overlay.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                    }
+                    // 坏坐标：skip → 窗口保持 tauri.conf center 初始
                 }
 
                 // mode=resident 时按持久化宽度初始化窗口尺寸（panel 保持 560×420 初始）。
@@ -1451,5 +1486,15 @@ mod tests {
         assert_eq!(anchored_x(100.0, 200.0, 250.0), 50.0);
         assert_eq!(anchored_x(100.0, 200.0, 150.0), 150.0);
         assert_eq!(anchored_x(100.0, 200.0, 300.0), 0.0);
+    }
+
+    #[test]
+    fn pos_in_rect_bounds() {
+        assert!(pos_in_rect(100, 100, 0, 0, 1920, 1080));
+        assert!(!pos_in_rect(2000, 100, 0, 0, 1920, 1080)); // x 超出
+        assert!(!pos_in_rect(100, 2000, 0, 0, 1920, 1080)); // y 超出
+        assert!(!pos_in_rect(-1, 100, 0, 0, 1920, 1080)); // x 负
+                                                          // 坏坐标 186470（宽度 bug 残留）远超屏 3456 → false
+        assert!(!pos_in_rect(186470, 21456, 0, 0, 3456, 2234));
     }
 }
