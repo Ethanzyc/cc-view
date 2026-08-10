@@ -5,17 +5,39 @@
 // load 失败（无 home / 无文件 / 解析失败）→ 默认值，不崩溃。
 use serde::{Deserialize, Serialize};
 
-fn default_true() -> bool { true }
-fn default_shortcut() -> String { "alt+space".into() }
-fn default_interval() -> u64 { 3 }
-fn default_mode() -> OverlayMode { OverlayMode::Panel }
-fn default_layout() -> ResidentLayout { ResidentLayout::B }
-fn default_show() -> bool { true }
-fn default_opacity() -> u8 { 55 }
-fn default_theme() -> Theme { Theme::Light }
-fn default_false() -> bool { false }
-fn default_token_unit() -> TokenUnit { TokenUnit::Km }
-fn default_resident_width() -> Option<f64> { None }
+fn default_true() -> bool {
+    true
+}
+fn default_shortcut() -> String {
+    "alt+space".into()
+}
+fn default_interval() -> u64 {
+    3
+}
+fn default_mode() -> OverlayMode {
+    OverlayMode::Panel
+}
+fn default_layout() -> ResidentLayout {
+    ResidentLayout::B
+}
+fn default_show() -> bool {
+    true
+}
+fn default_opacity() -> u8 {
+    55
+}
+fn default_theme() -> Theme {
+    Theme::Light
+}
+fn default_false() -> bool {
+    false
+}
+fn default_token_unit() -> TokenUnit {
+    TokenUnit::Km
+}
+fn default_resident_width() -> Option<f64> {
+    None
+}
 
 /// 允许的快捷键预设（"off" = 禁用）。
 pub const ALLOWED_SHORTCUTS: &[&str] = &["alt+space", "cmd+alt+space", "ctrl+space", "off"];
@@ -104,7 +126,9 @@ impl Default for Prefs {
 
 impl Prefs {
     pub fn load() -> Self {
-        let Some(home) = dirs::home_dir() else { return Self::default() };
+        let Some(home) = dirs::home_dir() else {
+            return Self::default();
+        };
         let path = home.join(".claude/cc-view/prefs.json");
         let Ok(txt) = std::fs::read_to_string(&path) else {
             log::warn!("prefs load: failed to read ~/.claude/cc-view/prefs.json");
@@ -123,9 +147,13 @@ impl Prefs {
             let _ = std::fs::write(dir.join("prefs.json"), json);
         }
     }
-    pub fn is_valid_shortcut(s: &str) -> bool { ALLOWED_SHORTCUTS.contains(&s) }
+    pub fn is_valid_shortcut(s: &str) -> bool {
+        ALLOWED_SHORTCUTS.contains(&s)
+    }
     /// 常驻背景透明度合法范围 0–100（百分比；0=完全透明，vibrancy 仍托底窗口可见）。
-    pub fn is_valid_opacity(n: u8) -> bool { (0..=100).contains(&n) }
+    pub fn is_valid_opacity(n: u8) -> bool {
+        (0..=100).contains(&n)
+    }
 }
 
 #[cfg(test)]
@@ -160,8 +188,7 @@ mod tests {
     #[test]
     fn partial_json_keeps_new_defaults_for_missing() {
         // 现有字段设了非默认值，新字段缺失 → 新字段填默认
-        let p: Prefs =
-            serde_json::from_str(r#"{"notify":false,"shortcut":"ctrl+space"}"#).unwrap();
+        let p: Prefs = serde_json::from_str(r#"{"notify":false,"shortcut":"ctrl+space"}"#).unwrap();
         assert!(!p.notify);
         assert_eq!(p.mode, OverlayMode::Panel);
         assert_eq!(p.resident_layout, ResidentLayout::B);
@@ -207,7 +234,10 @@ mod tests {
     fn mode_and_layout_serde_lowercase() {
         let m: OverlayMode = serde_json::from_str("\"resident\"").unwrap();
         assert_eq!(m, OverlayMode::Resident);
-        assert_eq!(serde_json::to_string(&OverlayMode::Panel).unwrap(), "\"panel\"");
+        assert_eq!(
+            serde_json::to_string(&OverlayMode::Panel).unwrap(),
+            "\"panel\""
+        );
         let l: ResidentLayout = serde_json::from_str("\"a\"").unwrap();
         assert_eq!(l, ResidentLayout::A);
         assert_eq!(serde_json::to_string(&ResidentLayout::B).unwrap(), "\"b\"");

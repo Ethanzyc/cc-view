@@ -78,23 +78,38 @@ mod tests {
 
     #[test]
     fn match_iterm() {
-        assert_eq!(match_host("iTerm2", "/Applications/iTerm.app/Contents/MacOS/iTerm2"), Some(Host::ITerm2));
+        assert_eq!(
+            match_host("iTerm2", "/Applications/iTerm.app/Contents/MacOS/iTerm2"),
+            Some(Host::ITerm2)
+        );
     }
 
     #[test]
     fn match_ghostty_over_otty() {
         // "ghostty" 包含 "otty"——顺序敏感：ghostty 分支必须在 otty 前
-        assert_eq!(match_host("ghostty", "/Applications/Ghostty.app"), Some(Host::Ghostty));
+        assert_eq!(
+            match_host("ghostty", "/Applications/Ghostty.app"),
+            Some(Host::Ghostty)
+        );
     }
 
     #[test]
     fn match_vscode() {
-        assert_eq!(match_host("Code", "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"), Some(Host::Vscode));
+        assert_eq!(
+            match_host(
+                "Code",
+                "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"
+            ),
+            Some(Host::Vscode)
+        );
     }
 
     #[test]
     fn match_terminal() {
-        assert_eq!(match_host("Terminal", "/System/Applications/Utilities/Terminal.app"), Some(Host::Terminal));
+        assert_eq!(
+            match_host("Terminal", "/System/Applications/Utilities/Terminal.app"),
+            Some(Host::Terminal)
+        );
     }
 
     #[test]

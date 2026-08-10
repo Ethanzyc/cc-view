@@ -67,10 +67,14 @@ pub fn parse_session_file(pid: u32, json: &str) -> Result<Session, ParseError> {
 /// 单文件解析失败隔离（skip），不拖垮整体。
 /// 每 3s 调用一次：权限配置按 session cwd 在循环内读三层 settings（user+project+local）。
 pub fn collect_sessions() -> Vec<Session> {
-    let Some(home) = dirs::home_dir() else { return vec![] };
+    let Some(home) = dirs::home_dir() else {
+        return vec![];
+    };
     let dir = home.join(".claude/sessions");
     let mut out = Vec::new();
-    let Ok(entries) = std::fs::read_dir(&dir) else { return vec![] };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return vec![];
+    };
     // 循环外刷新一次 System：避免每个活 session 各触发一次全量 refresh（N=5 时 8-17% CPU 纯冗余）
     // with_exe(Always) 确保父进程链爬到的 p.exe() 可用
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
@@ -82,10 +86,18 @@ pub fn collect_sessions() -> Vec<Session> {
     );
     for entry in entries.flatten() {
         let path = entry.path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
-        let Some(pid_str) = name.strip_suffix(".json") else { continue };
-        let Ok(pid) = pid_str.parse::<u32>() else { continue };
-        let Ok(json) = std::fs::read_to_string(&path) else { continue }; // fail fast: 跳过坏文件
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some(pid_str) = name.strip_suffix(".json") else {
+            continue;
+        };
+        let Ok(pid) = pid_str.parse::<u32>() else {
+            continue;
+        };
+        let Ok(json) = std::fs::read_to_string(&path) else {
+            continue;
+        }; // fail fast: 跳过坏文件
         match parse_session_file(pid, &json) {
             Ok(mut s) => {
                 s.alive = crate::liveness::is_claude_alive_sys(&sys, pid);
@@ -108,10 +120,13 @@ pub fn collect_sessions() -> Vec<Session> {
                     // 不应判定为 pending permission——仅活进程做此检查。
                     let tail_text = read_jsonl_tail_text(&s.id, &s.cwd);
                     let pending = tail_text.as_deref().and_then(parse_pending_from_str);
-                    let is_compacting = tail_text.as_deref().map(detect_compacting).unwrap_or(false);
+                    let is_compacting =
+                        tail_text.as_deref().map(detect_compacting).unwrap_or(false);
                     // 权限配置按 session cwd 读三层（user + project + local）：
                     // 不同项目 local allow 不同（如 Skill(gstack) 仅 life-planner 有）
-                    let pc = crate::permission::PermissionChecker::from_settings_for_cwd(Some(Path::new(&s.cwd)));
+                    let pc = crate::permission::PermissionChecker::from_settings_for_cwd(Some(
+                        Path::new(&s.cwd),
+                    ));
                     let needs_perm = matches!(&pc, Some(pc) if matches!(&pending, Some(p) if pc.needs_permission(&p.name, p.bash_command.as_deref())));
                     // 优先级：permission > compact > 原 status（parse_session_file 已得的 Working/Shell/Waiting）
                     // 注：compact 与 permission 实际互斥（compact 是阻塞操作），此处冗余 guard 保 safety net
@@ -183,7 +198,9 @@ pub fn parse_pending_from_str(text: &str) -> Option<PendingToolUse> {
     let mut tool_uses: Vec<(String, String, Option<String>)> = Vec::new(); // (id, name, bash_cmd)
     let mut completed: std::collections::HashSet<String> = std::collections::HashSet::new();
     for line in text.lines() {
-        let Ok(row) = serde_json::from_str::<JsonlRow>(line) else { continue };
+        let Ok(row) = serde_json::from_str::<JsonlRow>(line) else {
+            continue;
+        };
         let Some(msg) = row.message else { continue };
         let Some(items) = msg.content else { continue };
         for it in items {
@@ -324,48 +341,55 @@ struct RosterSeed {
 pub fn parse_roster(json: &str) -> Vec<Session> {
     let Ok(f) = serde_json::from_str::<RosterFile>(json) else {
         log::warn!("parse_roster: invalid roster json, skipping");
-        return vec![]
+        return vec![];
     };
-    f.workers.into_values().map(|w| {
-        let source = match w.dispatch.as_ref().and_then(|d| d.source.as_deref()) {
-            Some("slash") => Source::Slash,
-            _ => Source::Fleet,
-        };
-        let name = w
-            .dispatch
-            .as_ref()
-            .map(|d| d.seed.intent.clone())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| w.session_id.chars().take(8).collect());
-        let project = std::path::Path::new(&w.cwd)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-        Session {
-            id: w.session_id,
-            source,
-            pid: w.pid,
-            project,
-            cwd: w.cwd,
-            name,
-            status: Status::Working,
-            started_at: w.started_at.unwrap_or(0),
-            status_updated_at: w.started_at.unwrap_or(0),
-            alive: true, // collect_sessions 会用 pid 校验覆盖
-            focus_hint: FocusHint::default(),
-            snoozed: false,
-            tokens_in: 0,
-            tokens_out: 0,
-        }
-    }).collect()
+    f.workers
+        .into_values()
+        .map(|w| {
+            let source = match w.dispatch.as_ref().and_then(|d| d.source.as_deref()) {
+                Some("slash") => Source::Slash,
+                _ => Source::Fleet,
+            };
+            let name = w
+                .dispatch
+                .as_ref()
+                .map(|d| d.seed.intent.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| w.session_id.chars().take(8).collect());
+            let project = std::path::Path::new(&w.cwd)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+            Session {
+                id: w.session_id,
+                source,
+                pid: w.pid,
+                project,
+                cwd: w.cwd,
+                name,
+                status: Status::Working,
+                started_at: w.started_at.unwrap_or(0),
+                status_updated_at: w.started_at.unwrap_or(0),
+                alive: true, // collect_sessions 会用 pid 校验覆盖
+                focus_hint: FocusHint::default(),
+                snoozed: false,
+                tokens_in: 0,
+                tokens_out: 0,
+            }
+        })
+        .collect()
 }
 
 /// 读 ~/.claude/daemon/roster.json。
 pub fn read_roster() -> Vec<Session> {
-    let Some(home) = dirs::home_dir() else { return vec![] };
+    let Some(home) = dirs::home_dir() else {
+        return vec![];
+    };
     let path = home.join(".claude/daemon/roster.json");
-    let Ok(json) = std::fs::read_to_string(&path) else { return vec![] };
+    let Ok(json) = std::fs::read_to_string(&path) else {
+        return vec![];
+    };
     parse_roster(&json)
 }
 
@@ -412,50 +436,55 @@ pub fn parse_agents(json: &str) -> Vec<Session> {
         log::warn!("parse_agents: invalid agents json, skipping");
         return vec![];
     };
-    entries.into_iter().map(|a| {
-        // interactive: status busy|idle；background: state blocked
-        let status = if let Some(st) = a.status.as_deref() {
-            match st {
-                "busy" => Status::Working,
-                "idle" => Status::WaitingForInput,
-                "waiting" => Status::WaitingForReply,
-                _ => Status::Working,
+    entries
+        .into_iter()
+        .map(|a| {
+            // interactive: status busy|idle；background: state blocked
+            let status = if let Some(st) = a.status.as_deref() {
+                match st {
+                    "busy" => Status::Working,
+                    "idle" => Status::WaitingForInput,
+                    "waiting" => Status::WaitingForReply,
+                    _ => Status::Working,
+                }
+            } else if let Some(state) = a.state.as_deref() {
+                match state {
+                    "blocked" => Status::NeedsPermission,
+                    _ => Status::Working,
+                }
+            } else {
+                Status::Working
+            };
+            let source = match a.kind.as_deref() {
+                Some("background") => Source::Fleet,
+                _ => Source::Interactive,
+            };
+            let project = Path::new(&a.cwd)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+            let name = a
+                .name
+                .unwrap_or_else(|| a.session_id.chars().take(8).collect());
+            Session {
+                id: a.session_id,
+                source,
+                pid: a.pid.unwrap_or(0),
+                project,
+                cwd: a.cwd,
+                name,
+                status,
+                started_at: a.started_at.unwrap_or(0),
+                status_updated_at: a.started_at.unwrap_or(0),
+                alive: true, // agents --json 只列活进程
+                focus_hint: FocusHint::default(),
+                snoozed: false,
+                tokens_in: 0,
+                tokens_out: 0,
             }
-        } else if let Some(state) = a.state.as_deref() {
-            match state {
-                "blocked" => Status::NeedsPermission,
-                _ => Status::Working,
-            }
-        } else {
-            Status::Working
-        };
-        let source = match a.kind.as_deref() {
-            Some("background") => Source::Fleet,
-            _ => Source::Interactive,
-        };
-        let project = Path::new(&a.cwd)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-        let name = a.name.unwrap_or_else(|| a.session_id.chars().take(8).collect());
-        Session {
-            id: a.session_id,
-            source,
-            pid: a.pid.unwrap_or(0),
-            project,
-            cwd: a.cwd,
-            name,
-            status,
-            started_at: a.started_at.unwrap_or(0),
-            status_updated_at: a.started_at.unwrap_or(0),
-            alive: true, // agents --json 只列活进程
-            focus_hint: FocusHint::default(),
-            snoozed: false,
-            tokens_in: 0,
-            tokens_out: 0,
-        }
-    }).collect()
+        })
+        .collect()
 }
 
 /// 跑 `claude agents --json`，10s 超时兜底。
@@ -562,7 +591,11 @@ pub fn scan_session_jsonl_from_text(text: &str) -> SessionScan {
             _ => {}
         }
     }
-    SessionScan { title: custom.or(ai), tokens_in, tokens_out }
+    SessionScan {
+        title: custom.or(ai),
+        tokens_in,
+        tokens_out,
+    }
 }
 
 /// 读 ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl 全文，一遍出标题 + token。
@@ -612,7 +645,13 @@ pub fn scan_session_jsonl_cached(session_id: &str, cwd: &str) -> Option<SessionS
     if let Ok(mut cache) = JSONL_CACHE.lock() {
         cache.insert(
             session_id.to_string(),
-            (mtime, size, scan.tokens_in, scan.tokens_out, scan.title.clone()),
+            (
+                mtime,
+                size,
+                scan.tokens_in,
+                scan.tokens_out,
+                scan.title.clone(),
+            ),
         );
     }
     Some(scan)
@@ -723,8 +762,12 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
         };
         match row.row_type.as_deref() {
             Some("user") => {
-                let Some(msg) = row.message.as_ref() else { continue };
-                let Some(content) = msg.content.as_ref() else { continue };
+                let Some(msg) = row.message.as_ref() else {
+                    continue;
+                };
+                let Some(content) = msg.content.as_ref() else {
+                    continue;
+                };
                 if let Some(prompt) = extract_user_text(content) {
                     // 真实输入 → 结束当前回合、开新回合
                     if let Some(t) = cur.take() {
@@ -744,7 +787,9 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                 // tool_result：不开回合，忽略
             }
             Some("assistant") => {
-                let Some(msg) = row.message.as_ref() else { continue };
+                let Some(msg) = row.message.as_ref() else {
+                    continue;
+                };
                 if let Some(u) = msg.usage.as_ref() {
                     tokens_in += u.input_tokens;
                     tokens_out += u.output_tokens;
@@ -755,9 +800,8 @@ pub fn scan_detail_from_text(text: &str) -> crate::models::SessionDetail {
                         web_fetches += stu.web_fetch_requests;
                     }
                     // 上下文占用 = 该请求送入模型的总 token（input + 缓存读 + 缓存写）
-                    let ctx = u.input_tokens
-                        + u.cache_read_input_tokens
-                        + u.cache_creation_input_tokens;
+                    let ctx =
+                        u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens;
                     // usage 全 0 的异常 assistant（如 stop_sequence 提前终止）不计入 ctx，
                     // 否则 sparkline 掉底、compact 误判。
                     if ctx > 0 {
@@ -865,7 +909,10 @@ mod tests {
 
     #[test]
     fn parse_session_title_none_when_absent() {
-        assert_eq!(parse_session_title("{\"type\":\"user\",\"message\":\"hi\"}"), None);
+        assert_eq!(
+            parse_session_title("{\"type\":\"user\",\"message\":\"hi\"}"),
+            None
+        );
     }
 
     #[test]
@@ -931,10 +978,16 @@ mod tests {
     #[test]
     fn detect_compacting_boundary_inline() {
         // 真实 JSONL 行结构 → 命中
-        assert!(super::detect_compacting(r#"{"type":"system","subtype":"compact_boundary"}"#));
+        assert!(super::detect_compacting(
+            r#"{"type":"system","subtype":"compact_boundary"}"#
+        ));
         // 裸字符串 "compact_boundary"（对话中提到此词）不命中——收紧避免误报
-        assert!(!super::detect_compacting(r#"{"type":"user","message":"compact_boundary is a marker"}"#));
-        assert!(!super::detect_compacting(r#"{"type":"user","message":"hello"}"#));
+        assert!(!super::detect_compacting(
+            r#"{"type":"user","message":"compact_boundary is a marker"}"#
+        ));
+        assert!(!super::detect_compacting(
+            r#"{"type":"user","message":"hello"}"#
+        ));
     }
 
     // ---- parse_agents 测试（基于实测 claude agents --json schema） ----
@@ -946,7 +999,10 @@ mod tests {
         assert_eq!(v.len(), 3);
 
         // interactive busy → Working
-        let busy = v.iter().find(|s| s.id == "04bb90a4-c80d-47ef-98ea-c040df5da3d7").unwrap();
+        let busy = v
+            .iter()
+            .find(|s| s.id == "04bb90a4-c80d-47ef-98ea-c040df5da3d7")
+            .unwrap();
         assert_eq!(busy.status, Status::Working);
         assert_eq!(busy.source, crate::models::Source::Interactive);
         assert_eq!(busy.pid, 63586);
@@ -955,12 +1011,18 @@ mod tests {
         assert!(busy.alive);
 
         // interactive idle → WaitingForInput
-        let idle = v.iter().find(|s| s.id == "21eb6f0e-8687-479e-9e04-6599d98bce43").unwrap();
+        let idle = v
+            .iter()
+            .find(|s| s.id == "21eb6f0e-8687-479e-9e04-6599d98bce43")
+            .unwrap();
         assert_eq!(idle.status, Status::WaitingForInput);
         assert_eq!(idle.project, "cc-job");
 
         // background blocked → NeedsPermission，pid 缺省为 0
-        let blocked = v.iter().find(|s| s.id == "13ce4523-bd41-49b7-8b90-8f8d739d62b6").unwrap();
+        let blocked = v
+            .iter()
+            .find(|s| s.id == "13ce4523-bd41-49b7-8b90-8f8d739d62b6")
+            .unwrap();
         assert_eq!(blocked.status, Status::NeedsPermission);
         assert_eq!(blocked.source, crate::models::Source::Fleet);
         assert_eq!(blocked.pid, 0); // background blocked agent 无 pid
@@ -994,15 +1056,23 @@ mod tests {
         // 避免覆盖 JSONL 精确状态）。background 真实 schema 用 state 而非 status。
         use crate::models::{FocusHint, Source};
         let roster_session = Session {
-            id: "abc123".into(), source: Source::Fleet, pid: 100,
-            project: "p".into(), cwd: "/c".into(), name: "test".into(),
-            status: Status::Working, started_at: 0, status_updated_at: 0,
-            alive: true, focus_hint: FocusHint::default(),
+            id: "abc123".into(),
+            source: Source::Fleet,
+            pid: 100,
+            project: "p".into(),
+            cwd: "/c".into(),
+            name: "test".into(),
+            status: Status::Working,
+            started_at: 0,
+            status_updated_at: 0,
+            alive: true,
+            focus_hint: FocusHint::default(),
             snoozed: false,
             tokens_in: 0,
             tokens_out: 0,
         };
-        let agents_json = r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","state":"blocked"}]"#;
+        let agents_json =
+            r#"[{"sessionId":"abc123","cwd":"/c","kind":"background","state":"blocked"}]"#;
         let agents_sessions: Vec<Session> = super::parse_agents(agents_json)
             .into_iter()
             .filter(|s| s.source == Source::Fleet)
@@ -1062,7 +1132,7 @@ mod tests {
         assert_eq!(d.context_current, 1230); // 最后一条 A3: 30+1200
         assert_eq!(d.context_peak, 1230); // A3 最大
         assert_eq!(d.compact_count, 1); // compact_boundary 行
-        // 回合1：含 tool_use assistant + text assistant，tool_result 归入回合1
+                                        // 回合1：含 tool_use assistant + text assistant，tool_result 归入回合1
         assert_eq!(d.turns[0].idx, 1);
         assert_eq!(d.turns[0].prompt, "第一问");
         assert_eq!(d.turns[0].tokens_in, 150); // 100+50

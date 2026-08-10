@@ -1,15 +1,15 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod archived;
 mod badge;
 mod collector;
 mod discovery;
 mod focus;
-mod archived;
-mod overlay_position;
-mod prefs;
 mod liveness;
 mod models;
 mod notify;
+mod overlay_position;
 mod permission;
+mod prefs;
 mod reducer;
 mod snoozed;
 mod statemachine;
@@ -90,22 +90,34 @@ const PANEL_H: f64 = 420.0;
 /// 64 位 NSRect = CGRect（同布局），@encode 名用 CGRect（与系统一致）。
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct CGPoint { x: f64, y: f64 }
+struct CGPoint {
+    x: f64,
+    y: f64,
+}
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct CGSize { width: f64, height: f64 }
+struct CGSize {
+    width: f64,
+    height: f64,
+}
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct CGRect { origin: CGPoint, size: CGSize }
+struct CGRect {
+    origin: CGPoint,
+    size: CGSize,
+}
 // SAFETY: repr(C)，encoding 与系统 CGRect 一致（见 objc2 encode_core_graphics 示例）。
 unsafe impl objc2::encode::Encode for CGPoint {
-    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGPoint", &[f64::ENCODING, f64::ENCODING]);
+    const ENCODING: objc2::encode::Encoding =
+        objc2::encode::Encoding::Struct("CGPoint", &[f64::ENCODING, f64::ENCODING]);
 }
 unsafe impl objc2::encode::Encode for CGSize {
-    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]);
+    const ENCODING: objc2::encode::Encoding =
+        objc2::encode::Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]);
 }
 unsafe impl objc2::encode::Encode for CGRect {
-    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGRect", &[CGPoint::ENCODING, CGSize::ENCODING]);
+    const ENCODING: objc2::encode::Encoding =
+        objc2::encode::Encoding::Struct("CGRect", &[CGPoint::ENCODING, CGSize::ENCODING]);
 }
 
 /// 模式切换动画进行中标志：set_resident_height 期间跳过，避免与动画 set_size 冲突。
@@ -127,14 +139,25 @@ static DEBOUNCE_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 #[cfg(target_os = "macos")]
 fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64) {
     use objc2::{class, msg_send, runtime::AnyObject};
-    let Some(w) = app.get_webview_window("overlay") else { return };
+    let Some(w) = app.get_webview_window("overlay") else {
+        return;
+    };
     // Cocoa 坐标原点在屏幕左下：NS y = 屏幕高度(logical) - Tauri y - 窗口高。
-    let screen_h = w.current_monitor().ok().flatten()
+    let screen_h = w
+        .current_monitor()
+        .ok()
+        .flatten()
         .map(|m| m.size().height as f64 / m.scale_factor())
         .unwrap_or(800.0);
     let rect = CGRect {
-        origin: CGPoint { x: tx, y: screen_h - ty - th },
-        size: CGSize { width: tw, height: th },
+        origin: CGPoint {
+            x: tx,
+            y: screen_h - ty - th,
+        },
+        size: CGSize {
+            width: tw,
+            height: th,
+        },
     };
     let Ok(ptr) = w.ns_window() else { return };
     let obj = ptr as *mut AnyObject;
@@ -163,13 +186,19 @@ fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64)
 /// 把 overlay 窗口尺寸 + 位置（动画）切到目标模式。
 /// - panel：560×420，居中。
 /// - resident：宽度按 layout，高度沿用当前（动画结束后前端 set_resident_height 校正到内容高度），右上角。
-fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: prefs::ResidentLayout) {
+fn apply_mode_window(
+    app: &tauri::AppHandle,
+    mode: prefs::OverlayMode,
+    layout: prefs::ResidentLayout,
+) {
     let resident_width = if let Some(state) = app.try_state::<Mutex<prefs::Prefs>>() {
         state.lock().ok().map(|p| p.resident_width).unwrap_or(None)
     } else {
         None
     };
-    let Some(w) = app.get_webview_window("overlay") else { return };
+    let Some(w) = app.get_webview_window("overlay") else {
+        return;
+    };
     let sf = w.scale_factor().ok().unwrap_or(1.0);
     let mon = w.current_monitor().ok().flatten();
 
@@ -188,7 +217,8 @@ fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: p
         }
         prefs::OverlayMode::Resident => {
             let width = resident_width.unwrap_or_else(|| resident_layout_width(layout));
-            let cur_h = w.outer_size()
+            let cur_h = w
+                .outer_size()
                 .and_then(|s| w.scale_factor().map(|sf2| s.to_logical::<f64>(sf2).height))
                 .unwrap_or(PANEL_H);
             let (rx, ry) = mon
@@ -210,12 +240,16 @@ fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: p
 #[cfg(target_os = "macos")]
 fn set_resident_window_width(app: &tauri::AppHandle, new_width: f64) {
     use objc2::{msg_send, runtime::AnyObject};
-    let Some(w) = app.get_webview_window("overlay") else { return };
+    let Some(w) = app.get_webview_window("overlay") else {
+        return;
+    };
     let Ok(ptr) = w.ns_window() else { return };
     let sf = w.scale_factor().ok().unwrap_or(1.0);
     let pos = w.outer_position().ok();
     let size = w.outer_size().ok();
-    let (Some(pos), Some(size)) = (pos, size) else { return };
+    let (Some(pos), Some(size)) = (pos, size) else {
+        return;
+    };
     // outer_position/size 返回 physical；setFrame 要 logical（point）——统一转 logical。
     // 旧版 old_x=pos.x（physical）与 old_w（logical）单位混用，retina 下 new_x 偏大 → 窗口移出屏。
     let pos_l = pos.to_logical::<f64>(sf);
@@ -224,12 +258,21 @@ fn set_resident_window_width(app: &tauri::AppHandle, new_width: f64) {
     let old_h = size.to_logical::<f64>(sf).height;
     let new_x = anchored_x(old_x, old_w, new_width);
     // NS 坐标原点左下：y = screen_h - top_y - height
-    let screen_h = w.current_monitor().ok().flatten()
+    let screen_h = w
+        .current_monitor()
+        .ok()
+        .flatten()
         .map(|m| m.size().height as f64 / m.scale_factor())
         .unwrap_or(800.0);
     let rect = CGRect {
-        origin: CGPoint { x: new_x, y: screen_h - pos_l.y - old_h },
-        size: CGSize { width: new_width, height: old_h },
+        origin: CGPoint {
+            x: new_x,
+            y: screen_h - pos_l.y - old_h,
+        },
+        size: CGSize {
+            width: new_width,
+            height: old_h,
+        },
     };
     let obj = ptr as *mut AnyObject;
     unsafe {
@@ -277,7 +320,11 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                         models::Status::WaitingForInput => "等待输入",
                         _ => "需要关注",
                     };
-                    notify::send_notification(&handle, "cc-view", &format!("{}：{}", name, status_zh));
+                    notify::send_notification(
+                        &handle,
+                        "cc-view",
+                        &format!("{}：{}", name, status_zh),
+                    );
                 }
             }
 
@@ -338,7 +385,10 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                     last_urgent_count = urgent;
                     let (icon, as_template) = if urgent > 0 {
                         // badge 合成：基于单色剪影底图画红圆数字，template=false 才能显出红色。
-                        (tray_icon.as_ref().map(|img| badge::draw_badge(img, urgent)), false)
+                        (
+                            tray_icon.as_ref().map(|img| badge::draw_badge(img, urgent)),
+                            false,
+                        )
                     } else {
                         (tray_icon.clone(), true)
                     };
@@ -404,13 +454,10 @@ fn unarchive_session(state: tauri::State<'_, Mutex<archived::ArchivedList>>, id:
 /// 返回当前隐藏会话 id 列表（前端据此 filter）。
 #[tauri::command]
 fn list_archived(state: tauri::State<'_, Mutex<archived::ArchivedList>>) -> Vec<String> {
-    state
-        .lock()
-        .map(|h| h.to_vec())
-        .unwrap_or_else(|_| {
-            log::warn!("list_archived: archived state lock poisoned");
-            vec![]
-        })
+    state.lock().map(|h| h.to_vec()).unwrap_or_else(|_| {
+        log::warn!("list_archived: archived state lock poisoned");
+        vec![]
+    })
 }
 
 // --- Tauri commands：搁置/取消搁置/查询搁置表 ---
@@ -449,13 +496,10 @@ fn unsnooze_session(state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>, id: Stri
 fn list_snoozed(
     state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>,
 ) -> std::collections::HashMap<String, i64> {
-    state
-        .lock()
-        .map(|m| m.to_map())
-        .unwrap_or_else(|_| {
-            log::warn!("list_snoozed: snoozed state lock poisoned");
-            std::collections::HashMap::new()
-        })
+    state.lock().map(|m| m.to_map()).unwrap_or_else(|_| {
+        log::warn!("list_snoozed: snoozed state lock poisoned");
+        std::collections::HashMap::new()
+    })
 }
 
 /// 立即采集并返回当前所有会话（供前端打开时拉初始数据 / 手动刷新）。
@@ -533,11 +577,7 @@ fn get_overlay_pinned(state: tauri::State<'_, Mutex<bool>>) -> bool {
 ///   2) 窗口不可见/拿不到 → 回退磁盘记录（仅替换 pinned，保留 x,y）
 ///   3) 无窗口 + 无文件 → 不写（等 Moved 事件或下次 show 自然落盘）
 #[tauri::command]
-fn set_overlay_pinned(
-    pinned: bool,
-    state: tauri::State<'_, Mutex<bool>>,
-    app: tauri::AppHandle,
-) {
+fn set_overlay_pinned(pinned: bool, state: tauri::State<'_, Mutex<bool>>, app: tauri::AppHandle) {
     *state.lock().unwrap() = pinned;
     // 1) 优先读窗口当前位置（pin 通常在呼出可见时操作）。
     if let Some(w) = app.get_webview_window("overlay") {
@@ -805,10 +845,7 @@ fn set_mode(
 
 /// 前端 spinner 就位后调（mode_changed 后 100ms）：按当前 mode 启动窗口缩放动画。
 #[tauri::command]
-fn do_animate(
-    state: tauri::State<'_, Mutex<prefs::Prefs>>,
-    app: tauri::AppHandle,
-) {
+fn do_animate(state: tauri::State<'_, Mutex<prefs::Prefs>>, app: tauri::AppHandle) {
     let (mode, layout) = state
         .lock()
         .map(|p| (p.mode, p.resident_layout))
@@ -837,7 +874,9 @@ fn set_resident_height(
         return;
     }
     let width = resident_width.unwrap_or_else(|| resident_layout_width(layout));
-    let Some(w) = app.get_webview_window("overlay") else { return };
+    let Some(w) = app.get_webview_window("overlay") else {
+        return;
+    };
     let _ = w.set_size(tauri::LogicalSize::new(width, height));
 }
 
@@ -867,7 +906,10 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
         let _: () = msg_send![obj, setLevel: level];
         // 读回确认（诊断用）。
         let val: objc2::ffi::NSUInteger = msg_send![obj, collectionBehavior];
-        log::debug!("overlay collectionBehavior = {} (expect 257), level = 101", val);
+        log::debug!(
+            "overlay collectionBehavior = {} (expect 257), level = 101",
+            val
+        );
     }
 }
 
@@ -899,8 +941,7 @@ fn apply_theme_to_window(w: &tauri::WebviewWindow, theme: prefs::Theme) {
     unsafe {
         let nsstr: *mut AnyObject =
             msg_send![class!(NSString), stringWithUTF8String: cstr.as_ptr()];
-        let appearance: *mut AnyObject =
-            msg_send![class!(NSAppearance), appearanceNamed: nsstr];
+        let appearance: *mut AnyObject = msg_send![class!(NSAppearance), appearanceNamed: nsstr];
         let _: () = msg_send![ns_window, setAppearance: appearance];
     }
 }
@@ -944,8 +985,7 @@ fn make_panel(w: &tauri::WebviewWindow) {
         let _: () = msg_send![obj, setStyleMask: mask | (1 << 7)];
         // 强制替换 NSPanel 的 canBecomeKeyWindow 返回 true：borderless（Tauri 无标题栏）默认 false
         // → makeKey 不成 key → 搜索框无法 input。titled styleMask 与 swizzle 冲突 panic，故走 method swizzle。
-        let ns_panel: *mut objc2::runtime::AnyClass =
-            objc2::class!(NSPanel) as *const _ as *mut _;
+        let ns_panel: *mut objc2::runtime::AnyClass = objc2::class!(NSPanel) as *const _ as *mut _;
         let fn_ptr: unsafe extern "C-unwind" fn(
             *mut objc2::runtime::AnyObject,
             objc2::runtime::Sel,
@@ -970,9 +1010,9 @@ fn make_panel(w: &tauri::WebviewWindow) {
 /// （LSUIElement）从不是 frontmost，所以基准值是用户呼出时所在的 app。
 #[cfg(target_os = "macos")]
 fn frontmost_bundle_id() -> Option<String> {
-    use objc2::{class, msg_send};
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
     use std::ffi::CStr;
 
     unsafe {
@@ -996,7 +1036,9 @@ fn frontmost_bundle_id() -> Option<String> {
 /// 呼出 overlay：恢复/居中位置 → show → makeKey → 启动失焦轮询。
 /// 快捷键 ⌥Space 与 tray 菜单「显示面板」共用。
 fn show_overlay(app: &tauri::AppHandle) {
-    let Some(w) = app.get_webview_window("overlay") else { return };
+    let Some(w) = app.get_webview_window("overlay") else {
+        return;
+    };
     // 已可见直接 return：避免 tray 菜单「显示面板」重复点击 spawn 第二个 frontmost 轮询线程。
     // （⌥Space handler 已有自己的 is_visible 守卫，此处不影响它。）
     if w.is_visible().unwrap_or(false) {
@@ -1044,10 +1086,18 @@ fn show_overlay(app: &tauri::AppHandle) {
                     .lock()
                     .map(|p| p.mode)
                     .unwrap_or(prefs::OverlayMode::Resident);
-                let gap = if mode == prefs::OverlayMode::Resident { 2000 } else { 200 };
+                let gap = if mode == prefs::OverlayMode::Resident {
+                    2000
+                } else {
+                    200
+                };
                 std::thread::sleep(std::time::Duration::from_millis(gap));
-                let Some(win) = app_handle.get_webview_window("overlay") else { break };
-                if !win.is_visible().unwrap_or(false) { break; }
+                let Some(win) = app_handle.get_webview_window("overlay") else {
+                    break;
+                };
+                if !win.is_visible().unwrap_or(false) {
+                    break;
+                }
                 // resident：always-pinned，不查 frontmost 不 hide，下一轮再判 mode。
                 if mode == prefs::OverlayMode::Resident {
                     continue;
@@ -1085,10 +1135,8 @@ fn open_prefs(app: &tauri::AppHandle) {
 pub fn run() {
     // 日志：默认 warn（release 静默诊断），RUST_LOG=debug 开调试。
     // try_init 容忍 tauri 自身可能已初始化 logger，不 panic。
-    let _ = env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("warn"),
-    )
-    .try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .try_init();
     let loaded_prefs = prefs::Prefs::load();
     let poll_secs = loaded_prefs.poll_interval;
     tauri::Builder::default()
@@ -1143,7 +1191,9 @@ pub fn run() {
         .setup(|app| {
             // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
             // cc-view 平时 accessory（无 dock）——启动显式 set Accessory；打开偏好设置时切 Regular。
-            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
+            let _ = app
+                .handle()
+                .set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             // 启动按当前 theme 强制窗口 appearance（让 vibrancy 跟 theme 而非系统）。
             let startup_theme = app
@@ -1234,14 +1284,13 @@ pub fn run() {
                                     .map(|d| d.as_millis() as u64)
                                     .unwrap_or(0);
                                 if now.saturating_sub(last) >= 300 {
-                                    let pos = PENDING_MOVE_POS
-                                        .lock()
-                                        .ok()
-                                        .and_then(|mut g| g.take());
+                                    let pos =
+                                        PENDING_MOVE_POS.lock().ok().and_then(|mut g| g.take());
                                     if let Some((x, y)) = pos {
                                         overlay_position::OverlayPosition::save(x, y);
                                     }
-                                    DEBOUNCE_ACTIVE.store(false, std::sync::atomic::Ordering::Release);
+                                    DEBOUNCE_ACTIVE
+                                        .store(false, std::sync::atomic::Ordering::Release);
                                     return;
                                 }
                             });
@@ -1263,13 +1312,18 @@ pub fn run() {
                             .duration_since(std::time::UNIX_EPOCH)
                             .map(|d| d.as_millis() as u64)
                             .unwrap_or(0);
-                        let last_mode = LAST_MODE_CHANGE_MS.load(std::sync::atomic::Ordering::Relaxed);
+                        let last_mode =
+                            LAST_MODE_CHANGE_MS.load(std::sync::atomic::Ordering::Relaxed);
                         // mode 切换后 1.5s 内不 hide：动画期间窗口可能瞬间 resign key
                         let in_grace = now_ms.saturating_sub(last_mode) < 1500;
-                        let will_hide = mode != prefs::OverlayMode::Resident && !pinned && !in_grace;
+                        let will_hide =
+                            mode != prefs::OverlayMode::Resident && !pinned && !in_grace;
                         log::debug!(
                             "overlay Focused(false): will_hide={} mode={:?} pinned={} in_grace={}",
-                            will_hide, mode, pinned, in_grace
+                            will_hide,
+                            mode,
+                            pinned,
+                            in_grace
                         );
                         if will_hide {
                             let _ = w.hide();
@@ -1310,36 +1364,32 @@ pub fn run() {
             let show_item =
                 MenuItem::with_id(app.handle(), "show", "显示面板", true, None::<&str>)?;
             let sep2 = PredefinedMenuItem::separator(app.handle())?;
-            let prefs_item = MenuItem::with_id(
-                app.handle(),
-                "prefs",
-                "偏好设置…",
-                true,
-                None::<&str>,
-            )?;
-            let update_item = MenuItem::with_id(
-                app.handle(),
-                "update",
-                "检查更新…",
-                true,
-                None::<&str>,
-            )?;
+            let prefs_item =
+                MenuItem::with_id(app.handle(), "prefs", "偏好设置…", true, None::<&str>)?;
+            let update_item =
+                MenuItem::with_id(app.handle(), "update", "检查更新…", true, None::<&str>)?;
             let sep3 = PredefinedMenuItem::separator(app.handle())?;
             let quit_item =
                 MenuItem::with_id(app.handle(), "quit", "退出 cc-view", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app.handle(),
                 &[
-                    &version_item, &sep1, &show_item, &sep2, &prefs_item, &update_item, &sep3,
+                    &version_item,
+                    &sep1,
+                    &show_item,
+                    &sep2,
+                    &prefs_item,
+                    &update_item,
+                    &sep3,
                     &quit_item,
                 ],
             )?;
 
             // tray icon 已在 tauri.conf.json 声明（id="main"），取出附菜单。
             // 左键弹菜单（showMenuOnLeftClick: true）——不再 on_tray_icon_event toggle。
-            let tray = app.tray_by_id("main").ok_or_else(|| {
-                tauri::Error::AssetNotFound("tray icon 'main'".to_string())
-            })?;
+            let tray = app
+                .tray_by_id("main")
+                .ok_or_else(|| tauri::Error::AssetNotFound("tray icon 'main'".to_string()))?;
             tray.set_menu(Some(menu))?;
 
             // 菜单事件：show → 呼出 overlay；prefs → 打开偏好（转 regular）；quit → 退出。version 占位 no-op；update → 打开偏好。

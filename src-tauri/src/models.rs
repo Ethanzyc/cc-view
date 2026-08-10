@@ -116,10 +116,17 @@ mod tests {
     #[test]
     fn session_serializes_to_camel_case() {
         let s = Session {
-            id: "x".into(), source: Source::Interactive, pid: 1,
-            project: "p".into(), cwd: "/c".into(), name: "n".into(),
-            status: Status::Working, started_at: 0, status_updated_at: 0,
-            alive: true, focus_hint: FocusHint::default(),
+            id: "x".into(),
+            source: Source::Interactive,
+            pid: 1,
+            project: "p".into(),
+            cwd: "/c".into(),
+            name: "n".into(),
+            status: Status::Working,
+            started_at: 0,
+            status_updated_at: 0,
+            alive: true,
+            focus_hint: FocusHint::default(),
             snoozed: false,
             tokens_in: 0,
             tokens_out: 0,
