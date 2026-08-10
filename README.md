@@ -4,7 +4,7 @@
 
 [![release](https://img.shields.io/github/v/release/Ethanzyc/cc-view?color=blue)](https://github.com/Ethanzyc/cc-view/releases)
 [![platform](https://img.shields.io/badge/platform-macOS%2013%2B-black)](#安装)
-[![arch](https://img.shields.io/badge/arch-Apple%20Silicon-silver)](#安装)
+[![arch](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-silver)](#安装)
 [![built with Tauri](https://img.shields.io/badge/built%20with-Tauri-orange)](https://tauri.app)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -78,7 +78,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ## 安装
 
-1. 下载最新 [release dmg](https://github.com/Ethanzyc/cc-view/releases/latest)（`cc-view_<ver>_aarch64.dmg`）。
+1. 下载最新 [release dmg](https://github.com/Ethanzyc/cc-view/releases/latest)：按 CPU 架构选——Apple Silicon（M 系列）用 `cc-view_<ver>_aarch64.dmg`，Intel 用 `cc-view_<ver>_x86_64.dmg`。
 2. 打开 dmg，拖 cc-view 到 **Applications**。
 3. 启动 cc-view——menubar 出现图标（平时无 dock 图标），`⌥Space` 呼出命令面板。
 
@@ -87,7 +87,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 > xattr -dr com.apple.quarantine /Applications/cc-view.app
 > ```
 
-**要求**：macOS 13+，Apple Silicon（aarch64）。首次运行在系统设置里授权：
+**要求**：macOS 13+，Apple Silicon（aarch64，已验证）或 Intel（x86_64，**未经实机测试**，有问题[提 issue](https://github.com/Ethanzyc/cc-view/issues)）。首次运行在系统设置里授权：
 - **通知**：系统通知
 - **辅助功能**：focus 跳全屏 app（点 Dock 切全屏 Space 需要）；**首次 focus 会弹系统授权窗**引导
 
@@ -117,12 +117,11 @@ npm run tauri build   # 产出 .app / dmg / updater artifacts
 - **focus 为 app 级**：点会话行 activate 宿主终端 **app**（Terminal / iTerm / Ghostty / Otty …），不区分同 app 的多窗口 / tab / pane——同一终端 app 多窗口时跳到哪个不确定。精确切 tab / window 待后续终端 app 集成（见路线图）。
 - **Compacting 检测为 post-compact**：详情面板用上下文跳降启发式（不依赖 `compact_boundary`，适配新版 claude-code）；状态机的"压缩中"判定仍用 `compact_boundary`，compaction 进行中的 ~2min 内无法实时检测。
 - **updater 依赖网络**：检查更新走 `github.com`，不可达时报错（中文提示），需 GitHub 可达或代理。
-- **仅 Apple Silicon**：universal binary（Intel）待后续。
+- **Intel 版未经实机测试**：x86_64 包由 Apple Silicon 交叉编译产出（纯 Rust + 系统框架依赖，理论可用），未在真实 Intel Mac 上验证运行；遇到问题请[提 issue](https://github.com/Ethanzyc/cc-view/issues)。
 
 ## 路线图
 
 - [ ] **终端 app 精确切 tab / window**：iTerm2 / Otty / Ghostty / Warp / VSCode / IntelliJ / Terminal 各自的 AppleScript / CLI 集成（当前 app 级 activate，同 app 多窗口不精确）
-- [ ] Universal binary（Intel）支持
 - [ ] 更多终端 host 自动识别
 - [ ] 透明度 / 毛玻璃效果进一步可调
 
