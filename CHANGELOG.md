@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-10
+
+### Added
+- ⌘, 全局快捷键打开偏好设置（VSCode/macOS 习惯，独立于 ⌥Space overlay 快捷键）
+- 任务完成未读红点——会话切到待介入时行前红点提醒（未读消息式），focus 跳转或该会话恢复处理后自动消除；常驻 + 命令面板共用
+- 常驻面板宽度可调——拖右边缘 140–480px，右锚定不动，拖完持久化
+- 常驻面板拖拽防抖（move 事件 IO write debounce）
+
+### Changed
+- 偏好设置重做为 VSCode 风格——左侧分类导航（通用 / 外观 / 常驻面板 / 更新）+ 右侧设置项行
+- 开关统一 macOS toggle switch；搁置 / 闲置拆两行各自带说明；配置项字号缩小
+
+### Known Limitations
+- 常驻拖动需先点击——nonActivating panel 失焦后需先点一下回归焦点才能拖（输入可用性 becomesKeyOnlyIfNeeded 与拖动便利的折衷）
+
 ## [0.3.1] - 2026-08-10
 
 ### Added

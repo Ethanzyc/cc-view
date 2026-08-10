@@ -5,110 +5,144 @@
 <title>cc-view 偏好设置 demo</title>
 <link rel="stylesheet" href="_base.css">
 <style>
-  /* prefs 是实色窗口（非毛玻璃）：覆盖 _base .app 的半透明 + backdrop-filter */
-  .app { background: var(--prefs-bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .prefs { padding: 24px 28px; width: 560px; color: var(--color-fg); font-family: var(--font-body); }
-
-  h1 { font-size: 18px; font-weight: 700; margin: 0 0 20px; }
-  section { margin-top: 20px; }
-  .section-title { font-size: 13px; font-weight: 700; margin: 0 0 4px; color: var(--color-muted); letter-spacing: 0.03em; display: flex; align-items: center; gap: 8px; }
-  .tag { font-size: 10px; font-weight: 600; color: var(--color-primary); border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent); border-radius: 8px; padding: 1px 7px; letter-spacing: 0; }
-
-  .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--color-border); font-size: var(--fs-body); }
-  .row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-primary); }
-  .row input[type="number"] { font-size: 15px; padding: 4px 8px; background: #fff; color: var(--color-fg); border: 1px solid var(--color-border); border-radius: 6px; font-family: var(--font-utility); width: 72px; }
-
-  .opt-group { display: flex; flex-wrap: wrap; gap: 8px; }
-  .opt-btn { flex: 1 1 120px; min-width: 0; background: var(--color-hover); border: 1.5px solid var(--color-border); border-radius: 8px; padding: 10px 12px; text-align: left; font-family: inherit; color: var(--color-fg); cursor: pointer; }
-  .opt-btn.active { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 10%, var(--color-hover)); }
-  .opt-btn .opt-title { font-size: var(--fs-body); font-weight: 700; display: block; }
-  .opt-btn .opt-desc { font-size: var(--fs-caption); color: var(--color-muted); font-weight: 400; margin-top: 3px; display: block; }
-
-  .field { padding: 14px 0; border-bottom: 1px solid var(--color-border); }
-  .field:last-child { border-bottom: none; }
-  .field-label { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-body); margin-bottom: 10px; }
-  .field-label .value { font-size: var(--fs-caption); color: var(--color-tertiary); font-variant-numeric: tabular-nums; }
-  .check-line { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: var(--fs-body); }
-  .check-line input { width: 16px; height: 16px; accent-color: var(--color-primary); }
-
-  .resident-box { border: 1px solid var(--color-border); border-radius: 10px; padding: 4px 14px; margin-top: 24px; }
-  .resident-box .section-title { margin-top: 12px; }
-
-  .slider { padding: 10px 0; }
-  .slider-track { position: relative; height: 5px; background: var(--color-border); border-radius: 3px; }
-  .slider-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--color-primary); border-radius: 3px; }
-  .slider-knob { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1px solid var(--color-primary); transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
-
-  .update-section { margin-top: 24px; }
-  .update-section .row { border-bottom: none; }
-  .update-section button { font-size: 15px; padding: 5px 14px; background: var(--color-hover); color: var(--color-fg); border: 1px solid var(--color-border); border-radius: 6px; font-family: inherit; cursor: pointer; }
-  .muted { color: var(--color-muted); margin-top: 8px; font-size: var(--fs-body); }
-  .repo { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); text-align: center; }
-  .repo a { color: var(--color-primary); text-decoration: none; font: 400 var(--fs-caption)/var(--lh-caption) var(--font-body); }
+  /* prefs 实色窗口（非毛玻璃）：覆盖 _base .app 半透明 + backdrop-filter */
+  .app { background: var(--prefs-bg); backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 10px; }
+  /* VSCode 风格：顶栏 + 左 nav + 右 settings（880 宽，与 tauri.conf 一致） */
+  .prefs-win { width: 880px; display: flex; flex-direction: column; background: #fff; border-radius: 10px; overflow: hidden; }
+  .topbar { padding: 10px 16px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: 14px; background: var(--prefs-bg); }
+  .topbar h1 { font-size: 14px; font-weight: 700; white-space: nowrap; color: var(--color-fg); }
+  .body { display: flex; }
+  nav.cats { width: 196px; border-right: 1px solid var(--color-border); padding: 8px 0; background: var(--prefs-bg); flex-shrink: 0; }
+  .cat { padding: 8px 16px 8px 14px; color: var(--color-muted); font-size: 13px; border-left: 2px solid transparent; }
+  .cat.active { background: var(--color-hover); color: var(--color-fg); font-weight: 600; border-left-color: var(--color-primary); }
+  main.settings { flex: 1; padding: 4px 28px 28px; }
+  .group { font-size: 17px; font-weight: 700; margin: 24px 0 6px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border); letter-spacing: -0.01em; color: var(--color-fg); }
+  .group:first-child { margin-top: 12px; }
+  .group .tag { font-size: 11px; font-weight: 400; color: var(--color-primary); border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent); border-radius: 6px; padding: 1px 7px; margin-left: 6px; }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--color-border); gap: 24px; }
+  .row:last-child { border-bottom: none; }
+  .txt { flex: 1; min-width: 0; }
+  .txt .t { font-weight: 600; color: var(--color-fg); font-size: 12px; }
+  .txt .d { font-size: 11px; color: var(--color-muted); margin-top: 2px; }
+  .ctl { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+  /* macOS toggle switch */
+  .toggle { display: inline-flex; align-items: center; }
+  .switch-knob { position: relative; width: 28px; height: 16px; background: var(--color-border); border-radius: 8px; }
+  .switch-knob::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+  .toggle.on .switch-knob { background: var(--color-primary); }
+  .toggle.on .switch-knob::after { transform: translateX(12px); }
+  /* 按钮组 */
+  .opt-group { display: flex; gap: 6px; }
+  .opt-btn { padding: 5px 12px; border: 1.5px solid var(--color-border); border-radius: 6px; background: #fff; color: var(--color-muted); font-family: var(--font-body); font-size: 12px; }
+  .opt-btn.active { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 8%, transparent); color: var(--color-primary); }
+  .num { width: 56px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; text-align: center; font-size: 12px; background: #fff; color: var(--color-fg); }
+  .unit { font-size: 12px; color: var(--color-muted); }
+  /* 滑块 */
+  .slider-wrap { display: flex; align-items: center; gap: 10px; }
+  .slider { width: 140px; height: 4px; background: var(--color-border); border-radius: 2px; position: relative; }
+  .slider .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--color-primary); border-radius: 2px; }
+  .slider .knob { position: absolute; top: 50%; width: 14px; height: 14px; background: #fff; border: 1px solid var(--color-primary); border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .val { font-size: 12px; color: var(--color-muted); min-width: 44px; text-align: right; }
+  /* 更新 */
+  .update-box { margin-top: 16px; padding: 14px 16px; background: var(--prefs-bg); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+  .update-box .ver { font-size: 12px; color: var(--color-muted); }
+  .btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; background: #fff; color: var(--color-fg); font-size: 12px; }
 </style>
 </head>
 <body>
-  <div class="frame"><div class="app"><div class="prefs">
+  <div class="frame"><div class="app">
+    <div class="prefs-win">
 
-    <h1>cc-view 偏好设置</h1>
+      <div class="topbar"><h1>cc-view 偏好设置</h1></div>
 
-    <section>
-      <label class="row"><span>开机自启动</span><input type="checkbox" checked></label>
-      <label class="row"><span>通知</span><input type="checkbox" checked></label>
-      <div class="field">
-        <span class="field-label">全局快捷键</span>
-        <div class="opt-group">
-          <button class="opt-btn active"><span class="opt-title">⌥Space（默认）</span></button>
-          <button class="opt-btn"><span class="opt-title">⌘⌥Space</span></button>
-          <button class="opt-btn"><span class="opt-title">⌃Space</span></button>
-          <button class="opt-btn"><span class="opt-title">禁用</span></button>
-        </div>
+      <div class="body">
+        <nav class="cats">
+          <div class="cat active">通用</div>
+          <div class="cat">外观</div>
+          <div class="cat">常驻面板</div>
+          <div class="cat">更新</div>
+        </nav>
+
+        <main class="settings">
+          <div class="group">通用</div>
+          <div class="row">
+            <div class="txt"><div class="t">开机自启动</div><div class="d">登录 macOS 时自动启动 cc-view</div></div>
+            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">通知</div><div class="d">会话进入待介入时弹系统通知</div></div>
+            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">全局快捷键</div><div class="d">呼出 / 收起命令面板（⌘, 开偏好已独立注册）</div></div>
+            <div class="ctl"><div class="opt-group">
+              <button class="opt-btn active">⌥Space</button>
+              <button class="opt-btn">⌘⌥Space</button>
+              <button class="opt-btn">⌃Space</button>
+              <button class="opt-btn">禁用</button>
+            </div></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">轮询间隔</div><div class="d">采集会话状态的频率</div></div>
+            <div class="ctl"><input class="num" value="3"> <span class="unit">秒</span></div>
+          </div>
+
+          <div class="group">外观</div>
+          <div class="row">
+            <div class="txt"><div class="t">主题</div><div class="d">浅色 / 深色（不跟随系统）</div></div>
+            <div class="ctl"><div class="opt-group">
+              <button class="opt-btn active">浅色</button>
+              <button class="opt-btn">深色</button>
+            </div></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">token 单位</div><div class="d">列表 / 详情 token 显示单位</div></div>
+            <div class="ctl"><div class="opt-group">
+              <button class="opt-btn active">k / M</button>
+              <button class="opt-btn">万 / 亿</button>
+            </div></div>
+          </div>
+
+          <div class="group">常驻面板 <span class="tag">仅常驻</span></div>
+          <div class="row">
+            <div class="txt"><div class="t">常驻布局</div><div class="d">B 精简（带状态文字）/ A 极简（仅图标名称）</div></div>
+            <div class="ctl"><div class="opt-group">
+              <button class="opt-btn active">B 精简</button>
+              <button class="opt-btn">A 极简</button>
+            </div></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示搁置的会话</div><div class="d">搁置 = 你手动标记「暂时不管」的会话（不催促、不通知）</div></div>
+            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示闲置的会话</div><div class="d">闲置 = 等输入超过 30 分钟未给下一条指令，自动降级</div></div>
+            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">背景透明度</div><div class="d">常驻面板贴桌面的透明度</div></div>
+            <div class="ctl"><div class="slider-wrap">
+              <div class="slider"><div class="fill" style="width:55%"></div><div class="knob" style="left:55%"></div></div>
+              <span class="val">55%</span>
+            </div></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">面板宽度</div><div class="d">常驻面板宽度（右边锚定不动）</div></div>
+            <div class="ctl"><div class="slider-wrap">
+              <div class="slider"><div class="fill" style="width:42%"></div><div class="knob" style="left:42%"></div></div>
+              <span class="val">242px</span>
+            </div></div>
+          </div>
+
+          <div class="group">更新</div>
+          <div class="update-box">
+            <span class="ver">版本 cc-view 0.4.0</span>
+            <button class="btn">检查更新</button>
+          </div>
+        </main>
       </div>
-      <label class="row"><span>轮询间隔（秒，1–30）</span><input type="number" value="3" min="1" max="30"></label>
-    </section>
 
-    <section>
-      <h2 class="section-title">外观</h2>
-      <div class="opt-group">
-        <button class="opt-btn active"><span class="opt-title">浅色</span><span class="opt-desc">默认</span></button>
-        <button class="opt-btn"><span class="opt-title">深色</span></button>
-      </div>
-      <div class="field">
-        <span class="field-label">token 单位</span>
-        <div class="opt-group">
-          <button class="opt-btn active"><span class="opt-title">k / M</span><span class="opt-desc">默认</span></button>
-          <button class="opt-btn"><span class="opt-title">万 / 亿</span></button>
-        </div>
-      </div>
-    </section>
-
-    <section class="resident-box">
-      <h2 class="section-title">常驻面板 <span class="tag">仅常驻模式</span></h2>
-      <div class="field">
-        <span class="field-label">常驻布局</span>
-        <div class="opt-group">
-          <button class="opt-btn active"><span class="opt-title">B 精简</span><span class="opt-desc">每行带状态文字（等权限 / 等输入）</span></button>
-          <button class="opt-btn"><span class="opt-title">A 极简</span><span class="opt-desc">仅图标和名称，不含状态文字，更紧凑</span></button>
-        </div>
-      </div>
-      <div class="field">
-        <span class="field-label">显示哪些会话</span>
-        <label class="check-line"><input type="checkbox" checked><span>显示搁置的会话</span></label>
-        <label class="check-line"><input type="checkbox" checked><span>显示闲置的会话（等输入超时）</span></label>
-      </div>
-      <div class="field">
-        <span class="field-label">背景透明度 <span class="value">55%</span></span>
-        <div class="slider"><div class="slider-track"><div class="slider-fill" style="width:55%"></div><div class="slider-knob" style="left:55%"></div></div></div>
-      </div>
-    </section>
-
-    <section class="update-section">
-      <div class="row"><span>版本 cc-view 0.3.0</span><button>检查更新</button></div>
-      <p class="muted">已是最新版本</p>
-    </section>
-
-    <p class="repo"><a href="#">GitHub →</a></p>
-
-  </div></div></div>
+    </div>
+  </div></div>
 </body>
 </html>
