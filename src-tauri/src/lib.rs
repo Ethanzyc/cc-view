@@ -650,6 +650,10 @@ fn set_shortcut(
     app.global_shortcut()
         .unregister_all()
         .map_err(|e| e.to_string())?;
+    // cmd+comma 固定（开偏好）——unregister_all 会清掉，每次 re-register。
+    app.global_shortcut()
+        .register("cmd+comma")
+        .map_err(|e| e.to_string())?;
     if shortcut != "off" {
         // register 接受 TryInto<ShortcutWrapper>；&str 直接满足，内部 parse。
         app.global_shortcut()
@@ -1441,30 +1445,39 @@ pub fn run() {
             // 核对 v2.x：with_shortcuts 接受 [&str]，"cmd+alt+space"/"ctrl+space" 能解析。
             #[cfg(desktop)]
             {
-                use tauri_plugin_global_shortcut::{Builder, ShortcutState};
+                use tauri_plugin_global_shortcut::{Builder, Code, Modifiers, ShortcutState};
                 let shortcut_str = app
                     .state::<Mutex<prefs::Prefs>>()
                     .lock()
                     .map(|p| p.shortcut.clone())
                     .unwrap_or_else(|_| "alt+space".into());
+                // cmd+comma 固定注册（开偏好，VSCode/macOS 习惯）；overlay 快捷键按 prefs（可 off）。
+                let mut shortcuts: Vec<&str> = vec!["cmd+comma"];
                 if shortcut_str != "off" {
-                    app.handle().plugin(
-                        Builder::new()
-                            .with_shortcuts([shortcut_str.as_str()])?
-                            .with_handler(|app, _shortcut, event| {
-                                if event.state == ShortcutState::Pressed {
-                                    if let Some(w) = app.get_webview_window("overlay") {
-                                        if w.is_visible().unwrap_or(false) {
-                                            let _ = w.hide();
-                                        } else {
-                                            show_overlay(app);
-                                        }
-                                    }
-                                }
-                            })
-                            .build(),
-                    )?;
+                    shortcuts.push(shortcut_str.as_str());
                 }
+                app.handle().plugin(
+                    Builder::new()
+                        .with_shortcuts(shortcuts)?
+                        .with_handler(|app, shortcut, event| {
+                            if event.state != ShortcutState::Pressed {
+                                return;
+                            }
+                            if shortcut.matches(Modifiers::SUPER, Code::Comma) {
+                                open_prefs(app);
+                                return;
+                            }
+                            // overlay toggle
+                            if let Some(w) = app.get_webview_window("overlay") {
+                                if w.is_visible().unwrap_or(false) {
+                                    let _ = w.hide();
+                                } else {
+                                    show_overlay(app);
+                                }
+                            }
+                        })
+                        .build(),
+                )?;
             }
 
             // 启动后台轮询：每 3s 收集 sessions → reduce → hash 去重 → emit
