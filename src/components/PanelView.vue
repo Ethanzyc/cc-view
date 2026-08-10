@@ -13,6 +13,7 @@ import type { Session, SessionDetail } from '../types';
 import StatusIcon from './StatusIcon.vue';
 import DetailPanel from './DetailPanel.vue';
 import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
+import { processUnread, clearUnread, unread } from '../utils/unread';
 
 const all = ref<Session[]>([]);
 // 详情子状态：selectedDetail 非空时切到 DetailPanel（不动全局 mode/窗口）。
@@ -163,6 +164,7 @@ async function unsnooze(id: string) {
 async function focusSession(id: string) {
   try {
     await invoke('focus_session', { id });
+    clearUnread(id);
     await getCurrentWebviewWindow().hide();
   } catch (e) {
     if (e === 'accessibility') {
@@ -266,7 +268,7 @@ onMounted(async () => {
     console.error('get_prefs(show_archived) on mount failed', e);
   }
   try {
-    unlistenSessions = await listen<Session[]>('sessions', e => { all.value = e.payload; });
+    unlistenSessions = await listen<Session[]>('sessions', e => { processUnread(e.payload); all.value = e.payload; });
   } catch (e) {
     console.error('overlay listen sessions failed', e);
   }
@@ -379,6 +381,7 @@ onBeforeUnmount(() => {
           @keydown.enter.prevent="focusSession(s.id)"
           @keydown.space.prevent="focusSession(s.id)"
         >
+          <span v-if="unread.has(s.id)" class="unread-dot" />
           <StatusIcon :status="s.status" class="icon" />
           <div class="info">
             <div class="line1">
@@ -479,6 +482,7 @@ onBeforeUnmount(() => {
               @keydown.enter.prevent="focusSession(s.id)"
               @keydown.space.prevent="focusSession(s.id)"
             >
+              <span v-if="unread.has(s.id)" class="unread-dot" />
               <StatusIcon :status="s.status" class="icon" />
               <div class="info">
                 <div class="line1">
@@ -803,6 +807,15 @@ onBeforeUnmount(() => {
 }
 
 .icon { flex-shrink: 0; }
+/* 未读红点：行 StatusIcon 前红圆（待介入未查看提醒，未读消息式） */
+.unread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-permission);
+  flex-shrink: 0;
+  align-self: center;
+}
 
 .info {
   flex: 1;

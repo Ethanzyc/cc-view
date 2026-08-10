@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Session, Status, ResidentLayout } from '../types';
 import StatusIcon from './StatusIcon.vue';
 import { STATUS_ZH, projShort, isStaleInput } from '../utils/session';
+import { processUnread, clearUnread, unread } from '../utils/unread';
 
 const all = ref<Session[]>([]);
 // now tick：isStaleInput 依赖时间，需前端定期刷新（后端 emit 有 hash 去重不随时间触发）。
@@ -122,6 +123,7 @@ const groups = computed<Section[]>(() => {
 async function focusSession(id: string) {
   try {
     await invoke('focus_session', { id });
+    clearUnread(id);
   } catch (e) {
     if (e === 'accessibility') {
       alert('需要辅助功能权限才能切换到终端窗口（尤其全屏空间）。\n请到 系统设置 → 隐私与安全性 → 辅助功能 授权 cc-view，然后重新点击。');
@@ -200,6 +202,7 @@ onMounted(async () => {
   try {
     unlistenSessions = await listen<Session[]>('sessions', e => {
       detectAndFlash(e.payload);
+      processUnread(e.payload);
       all.value = e.payload;
     });
   } catch (e) {
@@ -294,6 +297,7 @@ onBeforeUnmount(() => {
           @click="focusSession(s.id)"
           @keydown.enter.prevent="focusSession(s.id)"
         >
+          <span v-if="unread.has(s.id)" class="unread-dot" />
           <StatusIcon :status="s.status" class="icon" />
           <span class="name">{{ s.name || s.project }}</span>
           <span v-if="layout === 'b'" class="st" :class="{
@@ -385,6 +389,15 @@ onBeforeUnmount(() => {
 }
 
 .icon { flex-shrink: 0; }
+/* 未读红点：行 StatusIcon 前红圆（待介入未查看提醒） */
+.unread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-permission);
+  flex-shrink: 0;
+  align-self: center;
+}
 .name {
   flex: 1; min-width: 0;
   font: 600 12px/1 var(--font-body);
