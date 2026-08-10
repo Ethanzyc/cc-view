@@ -15,6 +15,7 @@ fn default_opacity() -> u8 { 55 }
 fn default_theme() -> Theme { Theme::Light }
 fn default_false() -> bool { false }
 fn default_token_unit() -> TokenUnit { TokenUnit::Km }
+fn default_resident_width() -> Option<f64> { None }
 
 /// 允许的快捷键预设（"off" = 禁用）。
 pub const ALLOWED_SHORTCUTS: &[&str] = &["alt+space", "cmd+alt+space", "ctrl+space", "off"];
@@ -77,6 +78,9 @@ pub struct Prefs {
     /// token 量单位（km 或 wan）。默认 km。
     #[serde(default = "default_token_unit")]
     pub token_unit: TokenUnit,
+    /// 常驻面板宽度（logical px）。None = 用 resident_layout 默认（A=180/B=285）。
+    #[serde(default = "default_resident_width")]
+    pub resident_width: Option<f64>,
 }
 
 impl Default for Prefs {
@@ -93,6 +97,7 @@ impl Default for Prefs {
             theme: default_theme(),
             show_archived: false,
             token_unit: default_token_unit(),
+            resident_width: default_resident_width(),
         }
     }
 }
@@ -141,6 +146,7 @@ mod tests {
         assert_eq!(p.theme, Theme::Light);
         assert!(!p.show_archived);
         assert_eq!(p.token_unit, TokenUnit::Km);
+        assert_eq!(p.resident_width, None);
     }
 
     #[test]
@@ -176,9 +182,11 @@ mod tests {
             theme: Theme::Dark,
             show_archived: true,
             token_unit: TokenUnit::Wan,
+            resident_width: Some(300.0),
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.resident_width, Some(300.0));
         assert_eq!(p, back);
     }
 
