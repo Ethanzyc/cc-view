@@ -84,6 +84,8 @@ pub fn collect_sessions() -> Vec<Session> {
         true,
         ProcessRefreshKind::new().with_exe(UpdateKind::Always),
     );
+    // host 探测用 ps 全表（一次 ps -ax），避免每会话每层 spawn ps（review P1-1）。
+    let ps_table = crate::discovery::read_ps_table();
     for entry in entries.flatten() {
         let path = entry.path();
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -136,7 +138,7 @@ pub fn collect_sessions() -> Vec<Session> {
                         s.status = Status::Compacting;
                     }
                     // host 探测仅对活进程有意义（死进程的父进程链可能已失效）
-                    s.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, pid);
+                    s.focus_hint.host = crate::discovery::detect_host_via_table(pid, &ps_table);
                 }
                 out.push(s);
             }
@@ -148,7 +150,7 @@ pub fn collect_sessions() -> Vec<Session> {
         w.alive = crate::liveness::is_claude_alive_sys(&sys, w.pid);
         if w.alive {
             fill_tokens(&mut w);
-            w.focus_hint.host = crate::discovery::detect_host_with_sys(&sys, w.pid);
+            w.focus_hint.host = crate::discovery::detect_host_via_table(w.pid, &ps_table);
         }
         out.push(w);
     }
