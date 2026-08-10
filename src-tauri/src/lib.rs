@@ -216,7 +216,10 @@ fn set_resident_window_width(app: &tauri::AppHandle, new_width: f64) {
     let pos = w.outer_position().ok();
     let size = w.outer_size().ok();
     let (Some(pos), Some(size)) = (pos, size) else { return };
-    let old_x = pos.x as f64;
+    // outer_position/size 返回 physical；setFrame 要 logical（point）——统一转 logical。
+    // 旧版 old_x=pos.x（physical）与 old_w（logical）单位混用，retina 下 new_x 偏大 → 窗口移出屏。
+    let pos_l = pos.to_logical::<f64>(sf);
+    let old_x = pos_l.x;
     let old_w = size.to_logical::<f64>(sf).width;
     let old_h = size.to_logical::<f64>(sf).height;
     let new_x = anchored_x(old_x, old_w, new_width);
@@ -225,7 +228,7 @@ fn set_resident_window_width(app: &tauri::AppHandle, new_width: f64) {
         .map(|m| m.size().height as f64 / m.scale_factor())
         .unwrap_or(800.0);
     let rect = CGRect {
-        origin: CGPoint { x: new_x, y: screen_h - pos.y as f64 - old_h },
+        origin: CGPoint { x: new_x, y: screen_h - pos_l.y - old_h },
         size: CGSize { width: new_width, height: old_h },
     };
     let obj = ptr as *mut AnyObject;
