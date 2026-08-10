@@ -40,6 +40,8 @@ export interface Prefs {
   theme: Theme;
   show_archived: boolean;
   token_unit: TokenUnit;
+  // 常驻面板宽度（null = 用 layout 默认 A=180/B=285）。后端 Option<f64>。
+  resident_width: number | null;
 }
 
 // 按回合的消耗明细（与后端 TurnStat camelCase 对齐）
