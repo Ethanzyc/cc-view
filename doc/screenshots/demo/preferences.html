@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>cc-view 偏好设置 demo</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  /* prefs 是实色窗口（非毛玻璃）：覆盖 _base .app 的半透明 + backdrop-filter */
+  .app { background: var(--prefs-bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .prefs { padding: 24px 28px; width: 560px; color: var(--color-fg); font-family: var(--font-body); }
+
+  h1 { font-size: 18px; font-weight: 700; margin: 0 0 20px; }
+  section { margin-top: 20px; }
+  .section-title { font-size: 13px; font-weight: 700; margin: 0 0 4px; color: var(--color-muted); letter-spacing: 0.03em; display: flex; align-items: center; gap: 8px; }
+  .tag { font-size: 10px; font-weight: 600; color: var(--color-primary); border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent); border-radius: 8px; padding: 1px 7px; letter-spacing: 0; }
+
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--color-border); font-size: var(--fs-body); }
+  .row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-primary); }
+  .row input[type="number"] { font-size: 15px; padding: 4px 8px; background: #fff; color: var(--color-fg); border: 1px solid var(--color-border); border-radius: 6px; font-family: var(--font-utility); width: 72px; }
+
+  .opt-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt-btn { flex: 1 1 120px; min-width: 0; background: var(--color-hover); border: 1.5px solid var(--color-border); border-radius: 8px; padding: 10px 12px; text-align: left; font-family: inherit; color: var(--color-fg); cursor: pointer; }
+  .opt-btn.active { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 10%, var(--color-hover)); }
+  .opt-btn .opt-title { font-size: var(--fs-body); font-weight: 700; display: block; }
+  .opt-btn .opt-desc { font-size: var(--fs-caption); color: var(--color-muted); font-weight: 400; margin-top: 3px; display: block; }
+
+  .field { padding: 14px 0; border-bottom: 1px solid var(--color-border); }
+  .field:last-child { border-bottom: none; }
+  .field-label { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-body); margin-bottom: 10px; }
+  .field-label .value { font-size: var(--fs-caption); color: var(--color-tertiary); font-variant-numeric: tabular-nums; }
+  .check-line { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: var(--fs-body); }
+  .check-line input { width: 16px; height: 16px; accent-color: var(--color-primary); }
+
+  .resident-box { border: 1px solid var(--color-border); border-radius: 10px; padding: 4px 14px; margin-top: 24px; }
+  .resident-box .section-title { margin-top: 12px; }
+
+  .slider { padding: 10px 0; }
+  .slider-track { position: relative; height: 5px; background: var(--color-border); border-radius: 3px; }
+  .slider-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--color-primary); border-radius: 3px; }
+  .slider-knob { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1px solid var(--color-primary); transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
+
+  .update-section { margin-top: 24px; }
+  .update-section .row { border-bottom: none; }
+  .update-section button { font-size: 15px; padding: 5px 14px; background: var(--color-hover); color: var(--color-fg); border: 1px solid var(--color-border); border-radius: 6px; font-family: inherit; cursor: pointer; }
+  .muted { color: var(--color-muted); margin-top: 8px; font-size: var(--fs-body); }
+  .repo { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); text-align: center; }
+  .repo a { color: var(--color-primary); text-decoration: none; font: 400 var(--fs-caption)/var(--lh-caption) var(--font-body); }
+</style>
+</head>
+<body>
+  <div class="frame"><div class="app"><div class="prefs">
+
+    <h1>cc-view 偏好设置</h1>
+
+    <section>
+      <label class="row"><span>开机自启动</span><input type="checkbox" checked></label>
+      <label class="row"><span>通知</span><input type="checkbox" checked></label>
+      <div class="field">
+        <span class="field-label">全局快捷键</span>
+        <div class="opt-group">
+          <button class="opt-btn active"><span class="opt-title">⌥Space（默认）</span></button>
+          <button class="opt-btn"><span class="opt-title">⌘⌥Space</span></button>
+          <button class="opt-btn"><span class="opt-title">⌃Space</span></button>
+          <button class="opt-btn"><span class="opt-title">禁用</span></button>
+        </div>
+      </div>
+      <label class="row"><span>轮询间隔（秒，1–30）</span><input type="number" value="3" min="1" max="30"></label>
+    </section>
+
+    <section>
+      <h2 class="section-title">外观</h2>
+      <div class="opt-group">
+        <button class="opt-btn active"><span class="opt-title">浅色</span><span class="opt-desc">默认</span></button>
+        <button class="opt-btn"><span class="opt-title">深色</span></button>
+      </div>
+      <div class="field">
+        <span class="field-label">token 单位</span>
+        <div class="opt-group">
+          <button class="opt-btn active"><span class="opt-title">k / M</span><span class="opt-desc">默认</span></button>
+          <button class="opt-btn"><span class="opt-title">万 / 亿</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="resident-box">
+      <h2 class="section-title">常驻面板 <span class="tag">仅常驻模式</span></h2>
+      <div class="field">
+        <span class="field-label">常驻布局</span>
+        <div class="opt-group">
+          <button class="opt-btn active"><span class="opt-title">B 精简</span><span class="opt-desc">每行带状态文字（等权限 / 等输入）</span></button>
+          <button class="opt-btn"><span class="opt-title">A 极简</span><span class="opt-desc">仅图标和名称，不含状态文字，更紧凑</span></button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">显示哪些会话</span>
+        <label class="check-line"><input type="checkbox" checked><span>显示搁置的会话</span></label>
+        <label class="check-line"><input type="checkbox" checked><span>显示闲置的会话（等输入超时）</span></label>
+      </div>
+      <div class="field">
+        <span class="field-label">背景透明度 <span class="value">55%</span></span>
+        <div class="slider"><div class="slider-track"><div class="slider-fill" style="width:55%"></div><div class="slider-knob" style="left:55%"></div></div></div>
+      </div>
+    </section>
+
+    <section class="update-section">
+      <div class="row"><span>版本 cc-view 0.3.0</span><button>检查更新</button></div>
+      <p class="muted">已是最新版本</p>
+    </section>
+
+    <p class="repo"><a href="#">GitHub →</a></p>
+
+  </div></div></div>
+</body>
+</html>

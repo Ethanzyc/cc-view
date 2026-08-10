@@ -14,23 +14,19 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ## 截图
 
-**命令面板（⌥Space 呼出）— 混合状态**
+**命令面板（⌥Space 呼出）— 多项目多状态 + token 列**
 
 ![命令面板](doc/screenshots/overlay.png)
+
+**会话详情（点行内 📊）— 上下文曲线 + 回合消耗明细**
+
+![会话详情](doc/screenshots/detail.png)
 
 **常驻模式（贴桌面 · 待介入闪动提醒）**
 
 ![常驻](doc/screenshots/resident.png)
 
-**等权限突出（橙边提醒）**
-
-![等权限](doc/screenshots/overlay-permission.png)
-
-**闲置降级（灰显 + 下沉）**
-
-![闲置](doc/screenshots/overlay-idle.png)
-
-**偏好设置（外观开关 · 按钮组）**
+**偏好设置（token 单位 · 外观 · 按钮组）**
 
 ![偏好设置](doc/screenshots/preferences.png)
 

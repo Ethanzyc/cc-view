@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>cc-view 命令面板 demo</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  /* overlay 命令面板内部样式（从 src/components/PanelView.vue 抄，静态 demo） */
+  .panel { display: flex; flex-direction: column; width: 560px; }
+
+  .search-bar {
+    display: flex; align-items: center; gap: var(--gap);
+    padding: var(--pad-y) var(--pad-x);
+  }
+  .search-icon { color: var(--color-tertiary); flex-shrink: 0; }
+  .search {
+    flex: 1; min-width: 0;
+    background: transparent; border: none; outline: none;
+    font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+    color: var(--color-fg); font-family: inherit;
+  }
+  .overlay-count {
+    font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-utility);
+    color: var(--color-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0;
+  }
+  .toggle {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: none; border: none; padding: 0;
+    font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
+    color: var(--color-muted); flex-shrink: 0;
+  }
+  .switch-knob {
+    position: relative; width: 26px; height: 15px;
+    background: var(--color-border); border-radius: 8px;
+  }
+  .switch-knob::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 11px; height: 11px; background: #fff; border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .icon-btn {
+    background: none; border: none; color: var(--color-tertiary); cursor: pointer;
+    padding: 2px; display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; flex-shrink: 0;
+  }
+  .icon-btn.pinned { color: var(--color-primary); }
+
+  .divider { height: 1px; background: var(--color-border); margin: 0 var(--gap); }
+
+  .list { list-style: none; padding: var(--gap-xs) 0 var(--pad-y); }
+  .group-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 12px var(--pad-x) 5px;
+    font: 600 var(--fs-caption)/var(--lh-caption) var(--font-utility);
+    color: var(--color-muted); letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .group-head .cnt {
+    color: var(--color-tertiary); background: var(--color-border);
+    border-radius: 8px; padding: 0 6px; font-size: 10px; line-height: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .group-sep { height: 1px; background: var(--color-border); margin: 4px var(--gap) 0; }
+  .proj-head {
+    padding: 5px var(--pad-x) 2px;
+    font: 600 var(--fs-utility)/var(--lh-utility) var(--font-utility);
+    color: var(--color-muted);
+  }
+
+  .row {
+    display: flex; align-items: center; gap: var(--gap);
+    height: var(--row-overlay); padding: 0 var(--pad-x);
+    border-left: 2px solid transparent;
+  }
+  .row.perm { border-left-color: var(--status-permission); background: color-mix(in srgb, var(--status-permission) 10%, transparent); }
+  .row.reply { border-left-color: var(--status-reply); background: color-mix(in srgb, var(--status-reply) 10%, transparent); }
+  .row.dead { opacity: 0.45; }
+  .row.snoozed { opacity: 0.5; }
+
+  .status-icon { flex-shrink: 0; display: block; }
+  .info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: var(--lh-body); }
+  .line1 { display: flex; align-items: baseline; gap: var(--gap-sm); }
+  .name {
+    font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+    color: var(--color-fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .status-zh {
+    font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
+    color: var(--color-muted); flex-shrink: 0;
+  }
+  .status-zh.work { color: var(--status-working-ink); }
+  .status-zh.reply { color: var(--status-reply-ink); }
+  .status-zh.perm { color: var(--status-permission); }
+
+  .tok {
+    font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility);
+    color: var(--color-tertiary); flex-shrink: 0;
+    display: inline-flex; align-items: center; font-variant-numeric: tabular-nums;
+  }
+  .tok .arr { opacity: 0.6; margin: 0 1px; }
+
+  .ago {
+    font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-utility);
+    color: var(--color-tertiary); flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: var(--gap-xs); font-variant-numeric: tabular-nums;
+  }
+  .ago.fresh { color: var(--color-primary); }
+  .fresh-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-primary); display: inline-block; }
+
+  .actions { display: flex; gap: var(--gap-xs); flex-shrink: 0; opacity: 0.85; }
+  .act-btn {
+    background: var(--color-hover); border: none; color: var(--color-fg);
+    padding: var(--gap-xs) var(--gap); border-radius: 4px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .act-btn .ico { display: block; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="app">
+      <div class="panel">
+
+        <!-- 搜索栏 -->
+        <div class="search-bar">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 L14 14" />
+          </svg>
+          <input class="search" placeholder="搜索会话（名称 / 项目）..." readonly>
+          <span class="overlay-count">5 待介入</span>
+          <button class="toggle"><span class="switch-knob"></span><span>归档</span></button>
+          <button class="icon-btn" aria-label="定住">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="17" x2="12" y2="22" />
+              <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+            </svg>
+          </button>
+          <button class="icon-btn" aria-label="收起成常驻">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+              <path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+            </svg>
+          </button>
+        </div>
+        <div class="divider"></div>
+
+        <!-- 列表 -->
+        <ul class="list">
+          <!-- 待介入 -->
+          <li class="group-head">待介入 <span class="cnt">5</span></li>
+
+          <li class="proj-head">~/ai/cc-view</li>
+
+          <!-- 等权限（橙边） -->
+          <li class="row perm">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--status-permission)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2.75" y="7" width="10.5" height="6.5" rx="1.25" /><path d="M4.75 7 V4.75 A3.25 3.25 0 0 1 11.25 4.75 V7" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">token 统计详情</span>
+              <span class="status-zh perm">等权限</span>
+            </div></div>
+            <span class="tok">45.2k<span class="arr">↑</span>8.1k<span class="arr">↓</span></span>
+            <span class="ago">12s</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+
+          <!-- 工作中 -->
+          <li class="row">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--status-working-ink)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">截图美化方案</span>
+              <span class="status-zh work">工作中</span>
+            </div></div>
+            <span class="tok">12k<span class="arr">↑</span>3.4k<span class="arr">↓</span></span>
+            <span class="ago">8m</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+
+          <!-- 等回答（黄边） -->
+          <li class="row reply">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--status-reply)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6.06 6 a2 2 0 0 1 3.89 0.67 c0 1.33 -2 2 -2 2" /><circle cx="8" cy="11.3" r="0.6" fill="currentColor" stroke="none" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">snoozed 自动取消</span>
+              <span class="status-zh reply">等回答</span>
+            </div></div>
+            <span class="tok">67k<span class="arr">↑</span>5.1k<span class="arr">↓</span></span>
+            <span class="ago">2m</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+
+          <li class="proj-head">~/web/portfolio</li>
+
+          <!-- 等输入 + fresh 蓝点 -->
+          <li class="row">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" stroke="var(--status-waiting)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="4" cy="8" r="1.3" fill="var(--status-waiting)" stroke="none" /><circle cx="8" cy="8" r="1.3" fill="var(--status-waiting)" stroke="none" /><circle cx="12" cy="8" r="1.3" fill="var(--status-waiting)" stroke="none" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">首页 hero 改版</span>
+              <span class="status-zh">等输入</span>
+            </div></div>
+            <span class="tok">8.4k<span class="arr">↑</span>2.1k<span class="arr">↓</span></span>
+            <span class="ago fresh"><span class="fresh-dot"></span>45s</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+
+          <!-- 工作中 -->
+          <li class="row">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--status-working-ink)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">暗色模式适配</span>
+              <span class="status-zh work">工作中</span>
+            </div></div>
+            <span class="tok">3.2k<span class="arr">↑</span>980<span class="arr">↓</span></span>
+            <span class="ago">25m</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+
+          <!-- 已搁置 -->
+          <li class="group-sep"></li>
+          <li class="group-head">已搁置 <span class="cnt">1</span></li>
+          <li class="proj-head">~/ai/cc-view</li>
+
+          <li class="row snoozed">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" stroke="var(--status-waiting)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="4" cy="8" r="1.3" fill="var(--status-waiting)" stroke="none" /><circle cx="8" cy="8" r="1.3" fill="var(--status-waiting)" stroke="none" /><circle cx="12" cy="8" r="1.3" fill="var(--status-waiting)" stroke="none" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">README 文案润色</span>
+              <span class="status-zh">等输入</span>
+            </div></div>
+            <span class="tok">23k<span class="arr">↑</span>4.5k<span class="arr">↓</span></span>
+            <span class="ago">2h</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+
+          <!-- 已退出 -->
+          <li class="group-sep"></li>
+          <li class="group-head">已退出 <span class="cnt">1</span></li>
+          <li class="proj-head">~/exp/scraper</li>
+
+          <li class="row dead">
+            <svg class="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--status-working-ink)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="5.5" stroke-dasharray="9 100" transform="rotate(-90 8 8)" />
+            </svg>
+            <div class="info"><div class="line1">
+              <span class="name">爬虫调试</span>
+              <span class="status-zh work">工作中</span>
+            </div></div>
+            <span class="tok">156k<span class="arr">↑</span>89k<span class="arr">↓</span></span>
+            <span class="ago">3h</span>
+            <div class="actions">
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18" /><path d="M7 16v-5" /><path d="M12 16V8" /><path d="M17 16v-3" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
+              <button class="act-btn"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+            </div>
+          </li>
+        </ul>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>
