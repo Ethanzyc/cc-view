@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-10
+
+### Changed
+- 打开 app 后默认显示面板——启动即呼出 overlay，无需先点 menubar 图标（panel 居中 / resident 右上角，按当前模式走）
+
 ## [0.4.0] - 2026-08-10
 
 ### Added
