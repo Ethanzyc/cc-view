@@ -1483,6 +1483,10 @@ pub fn run() {
             // 启动后台轮询：每 3s 收集 sessions → reduce → hash 去重 → emit
             start_poll_loop(app.handle().clone());
 
+            // 启动即显示 overlay：复用 show_overlay（位置恢复/center 兜底 + makeKey + 失焦轮询），
+            // panel 居中、resident 右上角，按当前 mode 走，无需用户先点 tray。
+            show_overlay(app.handle());
+
             Ok(())
         })
         .run(tauri::generate_context!())
