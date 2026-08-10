@@ -158,6 +158,11 @@ fn animate_window_to(app: &tauri::AppHandle, tw: f64, th: f64, tx: f64, ty: f64)
 /// - panel：560×420，居中。
 /// - resident：宽度按 layout，高度沿用当前（动画结束后前端 set_resident_height 校正到内容高度），右上角。
 fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: prefs::ResidentLayout) {
+    let resident_width = if let Some(state) = app.try_state::<Mutex<prefs::Prefs>>() {
+        state.lock().ok().map(|p| p.resident_width).unwrap_or(None)
+    } else {
+        None
+    };
     let Some(w) = app.get_webview_window("overlay") else { return };
     let sf = w.scale_factor().ok().unwrap_or(1.0);
     let mon = w.current_monitor().ok().flatten();
@@ -176,7 +181,7 @@ fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: p
             (PANEL_W, PANEL_H, cx, cy)
         }
         prefs::OverlayMode::Resident => {
-            let width = resident_layout_width(layout);
+            let width = resident_width.unwrap_or_else(|| resident_layout_width(layout));
             let cur_h = w.outer_size()
                 .and_then(|s| w.scale_factor().map(|sf2| s.to_logical::<f64>(sf2).height))
                 .unwrap_or(PANEL_H);
@@ -815,14 +820,14 @@ fn set_resident_height(
     if ANIMATING.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
-    let (mode, layout) = state
+    let (mode, layout, resident_width) = state
         .lock()
-        .map(|p| (p.mode, p.resident_layout))
-        .unwrap_or((prefs::OverlayMode::Resident, prefs::ResidentLayout::B));
+        .map(|p| (p.mode, p.resident_layout, p.resident_width))
+        .unwrap_or((prefs::OverlayMode::Resident, prefs::ResidentLayout::B, None));
     if mode != prefs::OverlayMode::Resident {
         return;
     }
-    let width = resident_layout_width(layout);
+    let width = resident_width.unwrap_or_else(|| resident_layout_width(layout));
     let Some(w) = app.get_webview_window("overlay") else { return };
     let _ = w.set_size(tauri::LogicalSize::new(width, height));
 }
@@ -1184,6 +1189,17 @@ pub fn run() {
                 // 无记录时跳过——由呼出时的 center() 兜底。
                 if let Some(pos) = overlay_position::OverlayPosition::load() {
                     let _ = overlay.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                }
+
+                // mode=resident 时按持久化宽度初始化窗口尺寸（panel 保持 560×420 初始）。
+                let (startup_mode, startup_width, startup_layout) = app
+                    .state::<Mutex<prefs::Prefs>>()
+                    .lock()
+                    .map(|p| (p.mode, p.resident_width, p.resident_layout))
+                    .unwrap_or((prefs::OverlayMode::Resident, None, prefs::ResidentLayout::B));
+                if startup_mode == prefs::OverlayMode::Resident {
+                    let lw = startup_width.unwrap_or_else(|| resident_layout_width(startup_layout));
+                    let _ = overlay.set_size(tauri::LogicalSize::new(lw, PANEL_H));
                 }
 
                 let w = overlay.clone();
