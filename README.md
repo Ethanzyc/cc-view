@@ -50,12 +50,18 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 - 偏好设置手动切**浅色 / 深色**，默认浅色、**不跟随系统**
 - 毛玻璃（vibrancy）material 优化为 `UnderWindowBackground`：深色下文字清晰不糊、浅色透明度 0% 不再突兀白
 
+### 📊 Token 统计 & 上下文详情（v0.3.0 新）
+- 列表每行显示累计 token（输入↑ / 输出↓），一眼看出哪个会话烧得多
+- 点详情看会话 token 明细：**当前上下文**大数字 + sparkline 增长曲线 + 消耗三格（输入 / 输出 / 缓存命中）+ 按回合列表（背景进度条 + 上下文列）
+- compact 自动检测：相邻回合上下文大幅下降（降 30%+）即推断一次压缩（**不依赖 `compact_boundary` 标记**，新版 claude-code 也能识别）
+- token 单位可配置：**k/M**（国际，默认）或 **万/亿**（中文），偏好设置切换
+
 ### 🔔 menubar 聚合 + 系统通知
 - menubar 图标 tooltip「N 等我 · M 工作 / 等权限 / 等回答」；有 NeedsPermission / WaitingForReply 时染橙 + 红圆 badge
 - 会话进入「等权限 / 等输入 / 需要关注」时弹系统通知（按会话名区分，可关闭）
 
 ### 🗂️ 搁置 & 归档
-- **搁置**：暂时不管（不催促、不通知）
+- **搁置**：暂时不管（不催促、不通知）；会话被重新输入（状态更新）后**自动取消搁置**、冒泡回待介入
 - **归档**：收起不常看的会话（持久化，可恢复）
 
 ### 💤 闲置降级
@@ -87,7 +93,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 **要求**：macOS 13+，Apple Silicon（aarch64）。首次运行在系统设置里授权：
 - **通知**：系统通知
-- **辅助功能**：focus 跳全屏 app（点 Dock 切全屏 Space 需要）
+- **辅助功能**：focus 跳全屏 app（点 Dock 切全屏 Space 需要）；**首次 focus 会弹系统授权窗**引导
 
 ## 数据源
 
@@ -113,7 +119,7 @@ npm run tauri build   # 产出 .app / dmg / updater artifacts
 ## 已知限制
 
 - **focus 为 app 级**：点会话行 activate 宿主终端 **app**（Terminal / iTerm / Ghostty / Otty …），不区分同 app 的多窗口 / tab / pane——同一终端 app 多窗口时跳到哪个不确定。精确切 tab / window 待后续终端 app 集成（见路线图）。
-- **Compacting 检测为 post-compact**：通过 JSONL 末尾 `compact_boundary` 标记判定（compaction **完成**后写入）；compaction 进行中的 ~2min 内 JSONL 无写入，无法实时检测。
+- **Compacting 检测为 post-compact**：详情面板用上下文跳降启发式（不依赖 `compact_boundary`，适配新版 claude-code）；状态机的"压缩中"判定仍用 `compact_boundary`，compaction 进行中的 ~2min 内无法实时检测。
 - **updater 依赖网络**：检查更新走 `github.com`，不可达时报错（中文提示），需 GitHub 可达或代理。
 - **仅 Apple Silicon**：universal binary（Intel）待后续。
 

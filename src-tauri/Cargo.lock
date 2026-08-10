@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "cc-view"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "core-foundation",
  "dirs 5.0.1",
