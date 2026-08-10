@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>cc-view 会话详情 demo</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  /* 详情视图内部样式（从 src/components/DetailPanel.vue 抄，静态 demo） */
+  .detail { display: flex; flex-direction: column; width: 560px; }
+
+  .bar { display: flex; align-items: center; gap: var(--gap); padding: var(--pad-y) var(--pad-x); }
+  .back-btn {
+    background: none; border: none; color: var(--color-tertiary); cursor: pointer;
+    padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;
+  }
+  .title {
+    flex: 1; min-width: 0;
+    font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-body);
+    color: var(--color-fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .model {
+    font: var(--fw-utility) var(--fs-caption)/var(--lh-caption) var(--font-utility);
+    color: var(--color-muted); background: var(--color-hover);
+    padding: 3px 7px; border-radius: 5px; flex-shrink: 0;
+  }
+
+  .divider { height: 1px; background: var(--color-border); margin: 0 var(--gap); }
+
+  .hero {
+    display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto;
+    column-gap: 16px; row-gap: 4px; padding: 18px var(--pad-x) 16px; align-items: end;
+  }
+  .hero-label {
+    grid-column: 1; grid-row: 1; align-self: end; padding-bottom: 4px;
+    font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
+    color: var(--color-tertiary);
+  }
+  .hero-big {
+    grid-column: 1; grid-row: 2;
+    font: 700 30px/1 var(--font-utility); color: var(--color-fg);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .spark { grid-column: 2; grid-row: 1 / span 2; width: 100%; height: 56px; align-self: stretch; }
+  .hero-sub {
+    grid-column: 1 / -1; grid-row: 3; margin-top: 6px;
+    display: flex; gap: 14px;
+    font: var(--fw-utility) var(--fs-caption)/var(--lh-caption) var(--font-body);
+    color: var(--color-muted);
+  }
+  .hero-sub b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .section-label {
+    padding: 12px var(--pad-x) 5px;
+    font: 600 var(--fs-utility)/var(--lh-utility) var(--font-utility);
+    color: var(--color-tertiary); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+
+  .cost-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-xs);
+    padding: 0 var(--pad-x) 8px;
+  }
+  .cost-cell {
+    display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+    background: var(--color-hover); border-radius: 7px;
+  }
+  .cost-cell .v {
+    font: var(--fw-body) var(--fs-body)/var(--lh-body) var(--font-utility);
+    font-variant-numeric: tabular-nums; color: var(--color-fg);
+  }
+  .cost-cell .k {
+    font: var(--fw-caption) var(--fs-utility)/var(--lh-utility) var(--font-body);
+    color: var(--color-tertiary);
+  }
+
+  .turn-head {
+    display: grid; grid-template-columns: 28px 1fr auto auto auto;
+    align-items: center; gap: var(--gap); padding: 3px var(--pad-x);
+    font: 600 var(--fs-utility)/var(--lh-utility) var(--font-utility);
+    color: var(--color-tertiary); letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .turns { padding-bottom: var(--pad-y); }
+  .turn {
+    position: relative;
+    display: grid; grid-template-columns: 28px 1fr auto auto auto;
+    align-items: center; gap: var(--gap); padding: 5px var(--pad-x);
+    font: var(--fw-utility) var(--fs-caption)/var(--lh-caption) var(--font-body);
+  }
+  .turn::before {
+    content: ''; position: absolute; inset: 0 auto 0 0; width: var(--bar, 0%);
+    background: color-mix(in srgb, var(--color-primary) 9%, transparent); z-index: 0;
+  }
+  .turn > * { position: relative; z-index: 1; }
+  .t-idx { color: var(--color-tertiary); font-variant-numeric: tabular-nums; font-family: var(--font-utility); }
+  .t-prompt { min-width: 0; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-tok { font-family: var(--font-utility); color: var(--color-muted); font-variant-numeric: tabular-nums; }
+  .t-tok .arr { color: var(--color-tertiary); margin: 0 1px; }
+  .t-ctx { font-family: var(--font-utility); font-weight: 600; color: var(--color-primary); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+  .t-ago { font-family: var(--font-utility); color: var(--color-tertiary); font-variant-numeric: tabular-nums; min-width: 20px; text-align: right; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="app">
+      <div class="detail">
+
+        <div class="bar">
+          <button class="back-btn" aria-label="返回列表">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
+          </button>
+          <span class="title">优化 token 显示</span>
+          <span class="model">claude-sonnet-5</span>
+        </div>
+        <div class="divider"></div>
+
+        <!-- Hero：当前上下文 + sparkline -->
+        <div class="hero">
+          <div class="hero-label">当前上下文</div>
+          <div class="hero-big">137k</div>
+          <svg class="spark" viewBox="0 0 200 56" preserveAspectRatio="none" aria-hidden="true">
+            <polygon points="0,52 40,45.7 80,35.1 120,23.4 160,10.4 200,3 200,56 0,56" fill="var(--color-primary)" opacity="0.08" />
+            <polyline points="0,52 40,45.7 80,35.1 120,23.4 160,10.4 200,3" fill="none" stroke="var(--color-primary)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+            <circle cx="200" cy="3" r="2.5" fill="var(--color-primary)" />
+          </svg>
+          <div class="hero-sub">
+            <span>峰值 <b>140k</b></span>
+            <span>压缩 <b>0</b> 次</span>
+            <span>6 回合</span>
+          </div>
+        </div>
+
+        <div class="section-label">消耗</div>
+        <div class="cost-grid">
+          <div class="cost-cell"><span class="v">45.2k</span><span class="k">输入</span></div>
+          <div class="cost-cell"><span class="v">8.1k</span><span class="k">输出</span></div>
+          <div class="cost-cell"><span class="v">120.3k</span><span class="k">缓存命中</span></div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-label">按回合 · 18 工具 · 3 搜 / 1 抓</div>
+        <div class="turn-head">
+          <span>#</span><span>提问</span><span>token</span><span>上下文</span><span>时间</span>
+        </div>
+        <div class="turns">
+          <div class="turn" style="--bar: 24%"><span class="t-idx">#1</span><span class="t-prompt">帮我优化下，能获取到 token 量吗</span><span class="t-tok">1.2k<span class="arr">↑</span>340<span class="arr">↓</span></span><span class="t-ctx">12k</span><span class="t-ago">2h</span></div>
+          <div class="turn" style="--bar: 63%"><span class="t-idx">#2</span><span class="t-prompt">A 要的，B 详情怎么做</span><span class="t-tok">3.4k<span class="arr">↑</span>580<span class="arr">↓</span></span><span class="t-ctx">28k</span><span class="t-ago">1h</span></div>
+          <div class="turn" style="--bar: 100%"><span class="t-idx">#3</span><span class="t-prompt">速度砍掉，先做 A+B，按钮改图标</span><span class="t-tok">5.1k<span class="arr">↑</span>1.2k<span class="arr">↓</span></span><span class="t-ctx">55k</span><span class="t-ago">52m</span></div>
+          <div class="turn" style="--bar: 59%"><span class="t-idx">#4</span><span class="t-prompt">详情要按回合明细</span><span class="t-tok">2.8k<span class="arr">↑</span>900<span class="arr">↓</span></span><span class="t-ctx">85k</span><span class="t-ago">38m</span></div>
+          <div class="turn" style="--bar: 81%"><span class="t-idx">#5</span><span class="t-prompt">Inline 执行，开始 Task 1</span><span class="t-tok">4.0k<span class="arr">↑</span>1.1k<span class="arr">↓</span></span><span class="t-ctx">118k</span><span class="t-ago">12m</span></div>
+          <div class="turn" style="--bar: 45%"><span class="t-idx">#6</span><span class="t-prompt">加上下文信息，详情重设计</span><span class="t-tok">2.1k<span class="arr">↑</span>760<span class="arr">↓</span></span><span class="t-ctx">137k</span><span class="t-ago">2m</span></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>
