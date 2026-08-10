@@ -114,6 +114,12 @@ static ANIMATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 /// 窗口 resign key 抖动触发 hide（「常驻→放大闪消失」根因）。
 static LAST_MODE_CHANGE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// Moved debounce：最新待落盘坐标 + 最后移动时间戳 + 是否已有 debounce 线程在跑。
+/// 拖动时 Moved ~60Hz，直接每次落盘 = IO 风暴；debounce 静止 300ms 后落一次。
+static PENDING_MOVE_POS: std::sync::Mutex<Option<(i32, i32)>> = std::sync::Mutex::new(None);
+static LAST_MOVE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static DEBOUNCE_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// 用 macOS 原生 setFrame:display:animate: 做窗口缩放/移动动画（Core Animation，渲染层平滑）。
 /// 手动逐帧 set_size + set_position 每帧两次 NSWindow setFrame + webview reflow，顿挫明显；
 /// 原生动画一次 setFrame、系统在渲染层插值，顺很多。系统动画异步（~0.25s），ANIMATING 在
@@ -1206,8 +1212,37 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 overlay.on_window_event(move |e| match e {
                     tauri::WindowEvent::Moved(p) => {
-                        // 拖动后存位置（保留磁盘 pinned）。
-                        overlay_position::OverlayPosition::save(p.x, p.y);
+                        // debounce：更新待落盘坐标 + 时间戳；起单线程静止 300ms 后落盘。
+                        if let Ok(mut g) = PENDING_MOVE_POS.lock() {
+                            *g = Some((p.x, p.y));
+                        }
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis() as u64)
+                            .unwrap_or(0);
+                        LAST_MOVE_MS.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+                        // 仅当无 debounce 线程在跑时启动（单线程 trailing debounce）
+                        if !DEBOUNCE_ACTIVE.swap(true, std::sync::atomic::Ordering::AcqRel) {
+                            std::thread::spawn(|| loop {
+                                std::thread::sleep(std::time::Duration::from_millis(300));
+                                let last = LAST_MOVE_MS.load(std::sync::atomic::Ordering::Relaxed);
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map(|d| d.as_millis() as u64)
+                                    .unwrap_or(0);
+                                if now.saturating_sub(last) >= 300 {
+                                    let pos = PENDING_MOVE_POS
+                                        .lock()
+                                        .ok()
+                                        .and_then(|mut g| g.take());
+                                    if let Some((x, y)) = pos {
+                                        overlay_position::OverlayPosition::save(x, y);
+                                    }
+                                    DEBOUNCE_ACTIVE.store(false, std::sync::atomic::Ordering::Release);
+                                    return;
+                                }
+                            });
+                        }
                     }
                     tauri::WindowEvent::Focused(false) => {
                         // 常驻模式 = always-pinned（失焦不收起）；面板模式按 pin 决定。
