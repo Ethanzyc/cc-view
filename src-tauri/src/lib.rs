@@ -194,6 +194,37 @@ fn apply_mode_window(app: &tauri::AppHandle, mode: prefs::OverlayMode, layout: p
     animate_window_to(app, tw, th, tx, ty);
 }
 
+/// 一次 setFrame 更新常驻窗口宽+位置（右边锚定），不闪。仅 macOS。
+/// 高度沿用当前；x 由 anchored_x 算（右边缘不动）。窗口不存在/ns_window 失败静默返回。
+#[cfg(target_os = "macos")]
+fn set_resident_window_width(app: &tauri::AppHandle, new_width: f64) {
+    use objc2::{msg_send, runtime::AnyObject};
+    let Some(w) = app.get_webview_window("overlay") else { return };
+    let Ok(ptr) = w.ns_window() else { return };
+    let sf = w.scale_factor().ok().unwrap_or(1.0);
+    let pos = w.outer_position().ok();
+    let size = w.outer_size().ok();
+    let (Some(pos), Some(size)) = (pos, size) else { return };
+    let old_x = pos.x as f64;
+    let old_w = size.to_logical::<f64>(sf).width;
+    let old_h = size.to_logical::<f64>(sf).height;
+    let new_x = anchored_x(old_x, old_w, new_width);
+    // NS 坐标原点左下：y = screen_h - top_y - height
+    let screen_h = w.current_monitor().ok().flatten()
+        .map(|m| m.size().height as f64 / m.scale_factor())
+        .unwrap_or(800.0);
+    let rect = CGRect {
+        origin: CGPoint { x: new_x, y: screen_h - pos.y as f64 - old_h },
+        size: CGSize { width: new_width, height: old_h },
+    };
+    let obj = ptr as *mut AnyObject;
+    unsafe {
+        let yes = objc2::runtime::Bool::YES;
+        let no = objc2::runtime::Bool::NO;
+        let _: () = msg_send![obj, setFrame: rect, display: yes, animate: no];
+    }
+}
+
 /// 后台线程：每 3s collect → reduce → notify → hash 去重 → 仅变化时 emit("sessions")。
 /// 同时每轮聚合 need_attention/working 计数 → tray.set_tooltip + set_icon。
 fn start_poll_loop(handle: tauri::AppHandle) {
@@ -664,6 +695,36 @@ fn set_resident_opacity(
     Ok(())
 }
 
+/// 设置常驻面板宽度（140–480）：存 prefs + resident 模式下 setFrame 更新几何（右边锚定）。
+/// panel 模式只存 prefs 不动窗口（panel 固定 560×420）。越界返回 Err（fail fast）。
+#[tauri::command]
+fn set_resident_width(
+    width: f64,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    if !(140.0..=480.0).contains(&width) {
+        return Err(format!("width must be 140-480, got {}", width));
+    }
+    // 一次 lock 取 mode + 存 width（避免两次 lock 同一 Mutex）
+    let mode = if let Ok(mut p) = state.lock() {
+        let m = p.mode;
+        p.resident_width = Some(width);
+        p.save();
+        m
+    } else {
+        prefs::OverlayMode::Resident
+    };
+    #[cfg(target_os = "macos")]
+    {
+        if mode == prefs::OverlayMode::Resident {
+            set_resident_window_width(&app, width);
+        }
+    }
+    let _ = app.emit("prefs_changed", ());
+    Ok(())
+}
+
 /// 设置外观主题（light/dark）：存 prefs + 强制 overlay/prefs 窗口 appearance + emit prefs_changed。
 /// theme 参数为 prefs::Theme，非法值（非 light/dark）由 serde deserialize 失败自动返回 Err（fail fast）。
 #[tauri::command]
@@ -1058,6 +1119,7 @@ pub fn run() {
             set_resident_show_idle,
             set_show_archived,
             set_resident_opacity,
+            set_resident_width,
             set_theme,
             set_token_unit,
             set_mode,
