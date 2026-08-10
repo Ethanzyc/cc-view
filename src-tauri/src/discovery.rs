@@ -27,6 +27,54 @@ fn detect_host_via_ps(pid: u32) -> Host {
     Host::Unknown
 }
 
+/// 一次 `ps -ax -o pid=,ppid=,comm=` 读全进程表 → HashMap<pid, (ppid, comm)>。
+/// 供 detect_host_via_table 内存爬链，避免每会话每层 spawn ps（review P1-1）。
+/// ps 失败返回空 HashMap（调用方 fallback Host::Unknown）。
+pub fn read_ps_table() -> std::collections::HashMap<u32, (u32, String)> {
+    let out = Command::new("ps")
+        .args(["-ax", "-o", "pid=,ppid=,comm="])
+        .output();
+    let Ok(out) = out else {
+        return std::collections::HashMap::new();
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut map = std::collections::HashMap::new();
+    for line in text.lines() {
+        let mut parts = line.trim_start().split_whitespace();
+        let (Some(pid_s), Some(ppid_s)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Ok(pid), Ok(ppid)) = (pid_s.parse::<u32>(), ppid_s.parse::<u32>()) else {
+            continue;
+        };
+        let comm = parts.collect::<Vec<_>>().join(" ");
+        map.insert(pid, (ppid, comm));
+    }
+    map
+}
+
+/// 内存爬父链查 host（用 read_ps_table 全表），不 spawn ps。
+/// 链上每节点查 table 得 (ppid, comm)，match_host 判终端；到 launchd(ppid<=1) 或表缺失止。
+pub fn detect_host_via_table(
+    pid: u32,
+    table: &std::collections::HashMap<u32, (u32, String)>,
+) -> Host {
+    let mut current = pid;
+    for _ in 0..8 {
+        let Some((ppid, comm)) = table.get(&current) else {
+            return Host::Unknown;
+        };
+        if let Some(host) = match_host(comm, comm) {
+            return host;
+        }
+        if *ppid <= 1 {
+            return Host::Unknown;
+        }
+        current = *ppid;
+    }
+    Host::Unknown
+}
+
 /// `ps -o ppid=,comm= -p <pid>` → (ppid, comm)。失败/空输出返回 None。
 fn ps_ppid_comm(pid: u32) -> Option<(u32, String)> {
     let out = Command::new("ps")
@@ -115,5 +163,37 @@ mod tests {
     #[test]
     fn match_none_for_unrelated() {
         assert_eq!(match_host("claude", "/usr/local/bin/claude"), None);
+    }
+
+    #[test]
+    fn read_ps_table_returns_nonempty() {
+        // 集成：真实 ps -ax 必返回非空进程表（至少含 launchd）
+        let table = super::read_ps_table();
+        assert!(!table.is_empty(), "ps -ax should return processes");
+    }
+
+    #[test]
+    fn detect_host_via_table_walks_parent_chain() {
+        // 构造表：claude(100) ← shell(50) ← iTerm2(10) ← launchd(1)。从 100 爬应命中 iTerm。
+        let mut table = std::collections::HashMap::new();
+        table.insert(100, (50, "claude".into()));
+        table.insert(50, (10, "login".into()));
+        table.insert(10, (1, "iTerm2".into()));
+        assert_eq!(
+            super::detect_host_via_table(100, &table),
+            crate::models::Host::ITerm2
+        );
+    }
+
+    #[test]
+    fn detect_host_via_table_unknown_when_no_terminal() {
+        // 链上无终端 → Unknown
+        let mut table = std::collections::HashMap::new();
+        table.insert(100, (50, "claude".into()));
+        table.insert(50, (1, "launchd".into()));
+        assert_eq!(
+            super::detect_host_via_table(100, &table),
+            crate::models::Host::Unknown
+        );
     }
 }
