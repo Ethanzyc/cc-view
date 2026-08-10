@@ -51,6 +51,7 @@ const now = ref(Date.now());
 let nowTimer: number | undefined;
 // listen 返回的 unlisten，onBeforeUnmount 调（避免反复 mount 累积 listener）。
 let unlistenSessions: (() => void) | undefined;
+let unlistenFocus: (() => void) | undefined;
 const searchRef = ref<HTMLInputElement>();
 
 // visible：按 showArchived toggle 过滤 hidden。off→只未归档；on→全显示。
@@ -272,7 +273,7 @@ onMounted(async () => {
 
   // 窗口获焦时 focus + select 搜索框（overlay show/hide 复用，autofocus 仅首次生效）
   const win = getCurrentWebviewWindow();
-  await win.onFocusChanged(({ payload: focused }) => {
+  unlistenFocus = await win.onFocusChanged(({ payload: focused }) => {
     if (focused && searchRef.value) {
       searchRef.value.focus();
       searchRef.value.select();
@@ -285,6 +286,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (nowTimer) clearInterval(nowTimer);
   if (unlistenSessions) unlistenSessions();
+  if (unlistenFocus) unlistenFocus();
 });
 </script>
 
