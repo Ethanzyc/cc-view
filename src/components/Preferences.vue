@@ -208,11 +208,11 @@ async function downloadAndInstall() {
           <h2 class="group">通用</h2>
           <div class="row">
             <div class="txt"><div class="t">开机自启动</div><div class="d">登录 macOS 时自动启动 cc-view</div></div>
-            <div class="ctl"><input type="checkbox" :checked="autostart" :disabled="saving === 'autostart'" @change="onAutostart(($event.target as HTMLInputElement).checked)" /></div>
+            <div class="ctl"><button class="toggle" :class="{ on: autostart }" :disabled="saving === 'autostart'" @click="onAutostart(!autostart)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
             <div class="txt"><div class="t">通知</div><div class="d">会话进入待介入时弹系统通知</div></div>
-            <div class="ctl"><input type="checkbox" :checked="notify" :disabled="saving === 'notify'" @change="onNotify(($event.target as HTMLInputElement).checked)" /></div>
+            <div class="ctl"><button class="toggle" :class="{ on: notify }" :disabled="saving === 'notify'" @click="onNotify(!notify)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
             <div class="txt"><div class="t">全局快捷键</div><div class="d">呼出 / 收起命令面板（⌘, 开偏好已独立注册）</div></div>
@@ -266,11 +266,12 @@ async function downloadAndInstall() {
             </div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">显示搁置 / 闲置会话</div><div class="d">搁置的会话与闲置等输入（超时）是否在常驻面板显示</div></div>
-            <div class="ctl">
-              <label class="check-line"><input type="checkbox" :checked="showSnoozed" :disabled="saving === 'showSnoozed'" @change="onShowSnoozed(($event.target as HTMLInputElement).checked)" /><span>搁置</span></label>
-              <label class="check-line"><input type="checkbox" :checked="showIdle" :disabled="saving === 'showIdle'" @change="onShowIdle(($event.target as HTMLInputElement).checked)" /><span>闲置</span></label>
-            </div>
+            <div class="txt"><div class="t">显示搁置的会话</div><div class="d">搁置 = 你手动标记「暂时不管」的会话（不催促、不通知）</div></div>
+            <div class="ctl"><button class="toggle" :class="{ on: showSnoozed }" :disabled="saving === 'showSnoozed'" @click="onShowSnoozed(!showSnoozed)"><span class="switch-knob"></span></button></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示闲置的会话</div><div class="d">闲置 = 等输入超过 30 分钟未给下一条指令，自动降级</div></div>
+            <div class="ctl"><button class="toggle" :class="{ on: showIdle }" :disabled="saving === 'showIdle'" @click="onShowIdle(!showIdle)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
             <div class="txt"><div class="t">背景透明度</div><div class="d">常驻面板贴桌面的透明度</div></div>
@@ -371,12 +372,18 @@ main.settings { flex: 1; overflow-y: auto; padding: 8px 28px 28px; }
   gap: 24px;
 }
 .txt { flex: 1; min-width: 0; }
-.txt .t { font-weight: 600; color: var(--color-fg); }
-.txt .d { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
+.txt .t { font-weight: 600; color: var(--color-fg); font-size: 12px; }
+.txt .d { font-size: 11px; color: var(--color-muted); margin-top: 2px; }
 .ctl { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
 
 /* controls */
-input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-primary); }
+/* macOS 风格 toggle switch（替代 checkbox） */
+.toggle { display: inline-flex; align-items: center; background: none; border: none; padding: 0; cursor: pointer; }
+.toggle:disabled { cursor: default; opacity: 0.5; }
+.switch-knob { position: relative; width: 28px; height: 16px; background: var(--color-border); border-radius: 8px; transition: background var(--motion-duration) var(--motion-easing); }
+.switch-knob::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform var(--motion-duration) var(--motion-easing); }
+.toggle.on .switch-knob { background: var(--color-primary); }
+.toggle.on .switch-knob::after { transform: translateX(12px); }
 .num { width: 56px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; font: inherit; text-align: center; background: var(--prefs-bg); color: var(--color-fg); }
 .unit { font-size: 12px; color: var(--color-muted); }
 
