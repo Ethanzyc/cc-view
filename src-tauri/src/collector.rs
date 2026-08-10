@@ -2,7 +2,10 @@
 // 依赖 models + statemachine::decide 决定最终 Status。
 use crate::models::{FocusHint, Session, Source, Status};
 use crate::statemachine::{decide, DecideInput};
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{LazyLock, Mutex};
+use std::time::SystemTime;
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -91,7 +94,7 @@ pub fn collect_sessions() -> Vec<Session> {
                     // custom-title（/rename 用户改名）优先，否则 ai-title（Claude 生成）。
                     // 无两者则保留 sessions.json 的 name（derived/sessionId 短码）。
                     // 实测：cc-view-45(无custom,ai=了解...)→了解...；述职(custom=述职)→述职。
-                    if let Some(scan) = scan_session_jsonl(&s.id, &s.cwd) {
+                    if let Some(scan) = scan_session_jsonl_cached(&s.id, &s.cwd) {
                         if let Some(t) = scan.title {
                             s.name = t;
                         }
@@ -574,9 +577,50 @@ pub fn scan_session_jsonl(session_id: &str, cwd: &str) -> Option<SessionScan> {
     Some(scan_session_jsonl_from_text(&text))
 }
 
+/// JSONL token 缓存：session_id -> (mtime, size, tokens_in, tokens_out, title)。
+/// 每 3s 全文扫描的优化——文件 mtime+size 未变则复用上次结果，变了才重算。
+/// 进程内缓存，重启清空（下一轮 3s 重算，无妨）。
+static JSONL_CACHE: LazyLock<Mutex<HashMap<String, (SystemTime, u64, u64, u64, Option<String>)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// 带 mtime+size 缓存的 scan：文件未变则复用上次结果，避免每 3s 全文重扫。
+/// 失效条件：modified time 或 size 任一变化（追加写必然改 size）。
+pub fn scan_session_jsonl_cached(session_id: &str, cwd: &str) -> Option<SessionScan> {
+    let home = dirs::home_dir()?;
+    let encoded = cwd.replace('/', "-");
+    let path = home
+        .join(".claude/projects")
+        .join(&encoded)
+        .join(format!("{}.jsonl", session_id));
+    let meta = std::fs::metadata(&path).ok()?;
+    let mtime = meta.modified().ok()?;
+    let size = meta.len();
+    // 命中：mtime + size 都未变 → 复用缓存
+    if let Ok(cache) = JSONL_CACHE.lock() {
+        if let Some((c_mtime, c_size, t_in, t_out, title)) = cache.get(session_id) {
+            if *c_mtime == mtime && *c_size == size {
+                return Some(SessionScan {
+                    title: title.clone(),
+                    tokens_in: *t_in,
+                    tokens_out: *t_out,
+                });
+            }
+        }
+    }
+    // 未命中：全文重算并写回缓存
+    let scan = scan_session_jsonl(session_id, cwd)?;
+    if let Ok(mut cache) = JSONL_CACHE.lock() {
+        cache.insert(
+            session_id.to_string(),
+            (mtime, size, scan.tokens_in, scan.tokens_out, scan.title.clone()),
+        );
+    }
+    Some(scan)
+}
+
 /// 对单个活会话填充累计 token（不碰 name）。roster/agents 共用。
 fn fill_tokens(s: &mut Session) {
-    if let Some(scan) = scan_session_jsonl(&s.id, &s.cwd) {
+    if let Some(scan) = scan_session_jsonl_cached(&s.id, &s.cwd) {
         s.tokens_in = scan.tokens_in;
         s.tokens_out = scan.tokens_out;
     }
@@ -1085,5 +1129,21 @@ mod tests {
         assert_eq!(d.turns[1].ctx, 50000); // 中断回合继承回合1 ctx，非 0
         assert_eq!(d.turns[2].ctx, 60000);
         assert_eq!(d.compact_count, 0); // 继承不算 compact 跳降
+    }
+
+    #[test]
+    fn cached_scan_returns_same_as_plain_for_real_session() {
+        // 集成：对真实 ~/.claude 会话，cached 版与原版返回相同 token（若有运行会话）
+        let sessions = super::collect_sessions();
+        for s in sessions.iter().take(2) {
+            let plain = super::scan_session_jsonl(&s.id, &s.cwd);
+            let cached = super::scan_session_jsonl_cached(&s.id, &s.cwd);
+            assert_eq!(plain.is_some(), cached.is_some());
+            if let (Some(p), Some(c)) = (plain, cached) {
+                assert_eq!(p.tokens_in, c.tokens_in);
+                assert_eq!(p.tokens_out, c.tokens_out);
+                assert_eq!(p.title, c.title);
+            }
+        }
     }
 }
