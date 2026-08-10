@@ -16,12 +16,12 @@ impl SnoozeMap {
         let Some(home) = dirs::home_dir() else { return Self::empty(); };
         let path = home.join(".claude/cc-view/snoozed.json");
         let Ok(json) = std::fs::read_to_string(&path) else {
-            eprintln!("snoozed load: failed to read ~/.claude/cc-view/snoozed.json");
+            log::warn!("snoozed load: failed to read ~/.claude/cc-view/snoozed.json");
             return Self::empty();
         };
         Self {
             map: serde_json::from_str(&json).unwrap_or_else(|e| {
-                eprintln!("snoozed load: invalid json, ignoring: {e}");
+                log::warn!("snoozed load: invalid json, ignoring: {e}");
                 HashMap::new()
             }),
         }
