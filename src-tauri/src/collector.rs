@@ -320,7 +320,7 @@ struct RosterSeed {
 /// 解析失败返回空 vec，不崩溃（fail fast：坏数据不拖垮 collect）。
 pub fn parse_roster(json: &str) -> Vec<Session> {
     let Ok(f) = serde_json::from_str::<RosterFile>(json) else {
-        eprintln!("parse_roster: invalid roster json, skipping");
+        log::warn!("parse_roster: invalid roster json, skipping");
         return vec![]
     };
     f.workers.into_values().map(|w| {
@@ -406,7 +406,7 @@ struct AgentsEntry {
 /// 解析失败返回空 vec（fail fast：坏数据不拖垮 collect）。
 pub fn parse_agents(json: &str) -> Vec<Session> {
     let Ok(entries) = serde_json::from_str::<Vec<AgentsEntry>>(json) else {
-        eprintln!("parse_agents: invalid agents json, skipping");
+        log::warn!("parse_agents: invalid agents json, skipping");
         return vec![];
     };
     entries.into_iter().map(|a| {
@@ -470,7 +470,7 @@ pub fn read_agents() -> Vec<Session> {
     {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("read_agents: failed to spawn claude: {}", e);
+            log::warn!("read_agents: failed to spawn claude: {}", e);
             return vec![];
         }
     };
@@ -483,12 +483,12 @@ pub fn read_agents() -> Vec<Session> {
             Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait(); // reap zombie
-                eprintln!("read_agents: claude agents --json timed out after 10s");
+                log::warn!("read_agents: claude agents --json timed out after 10s");
                 return vec![];
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(100)),
             Err(e) => {
-                eprintln!("read_agents: wait error: {}", e);
+                log::warn!("read_agents: wait error: {}", e);
                 return vec![];
             }
         }

@@ -198,7 +198,7 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         // 加载嵌入的单色剪影（template image）。
         // tauri::image::Image::from_bytes 解码 PNG（需 tauri feature "image-png"）。
         let tray_icon = tauri::image::Image::from_bytes(TRAY_PNG)
-            .map_err(|e| eprintln!("poll_loop: embedded tray.png decode failed: {e}"))
+            .map_err(|e| log::error!("poll_loop: embedded tray.png decode failed: {e}"))
             .ok();
         // urgent_count 防抖：仅在必须响应计数（权限+回答）变化时重画 badge
         let mut last_urgent_count: usize = 0;
@@ -303,7 +303,7 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 if let Ok(mut c) = cache.lock() {
                     *c = derived.clone();
                 } else {
-                    eprintln!("poll_loop: sessions cache lock poisoned");
+                    log::warn!("poll_loop: sessions cache lock poisoned");
                 }
             }
 
@@ -334,7 +334,7 @@ fn archive_session(state: tauri::State<'_, Mutex<archived::ArchivedList>>, id: S
             h.add(&id);
             h.save();
         }
-        Err(_) => eprintln!("archive_session: archived state lock poisoned"),
+        Err(_) => log::warn!("archive_session: archived state lock poisoned"),
     }
 }
 
@@ -346,7 +346,7 @@ fn unarchive_session(state: tauri::State<'_, Mutex<archived::ArchivedList>>, id:
             h.remove(&id);
             h.save();
         }
-        Err(_) => eprintln!("unarchive_session: archived state lock poisoned"),
+        Err(_) => log::warn!("unarchive_session: archived state lock poisoned"),
     }
 }
 
@@ -357,7 +357,7 @@ fn list_archived(state: tauri::State<'_, Mutex<archived::ArchivedList>>) -> Vec<
         .lock()
         .map(|h| h.to_vec())
         .unwrap_or_else(|_| {
-            eprintln!("list_archived: archived state lock poisoned");
+            log::warn!("list_archived: archived state lock poisoned");
             vec![]
         })
 }
@@ -377,7 +377,7 @@ fn snooze_session(state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>, id: String
             m.add(&id, now_ms);
             m.save();
         }
-        Err(_) => eprintln!("snooze_session: snoozed state lock poisoned"),
+        Err(_) => log::warn!("snooze_session: snoozed state lock poisoned"),
     }
 }
 
@@ -389,7 +389,7 @@ fn unsnooze_session(state: tauri::State<'_, Mutex<snoozed::SnoozeMap>>, id: Stri
             m.remove(&id);
             m.save();
         }
-        Err(_) => eprintln!("unsnooze_session: snoozed state lock poisoned"),
+        Err(_) => log::warn!("unsnooze_session: snoozed state lock poisoned"),
     }
 }
 
@@ -402,7 +402,7 @@ fn list_snoozed(
         .lock()
         .map(|m| m.to_map())
         .unwrap_or_else(|_| {
-            eprintln!("list_snoozed: snoozed state lock poisoned");
+            log::warn!("list_snoozed: snoozed state lock poisoned");
             std::collections::HashMap::new()
         })
 }
@@ -420,7 +420,7 @@ fn get_sessions(
     let derived = apply_snoozed(&merged, Some(snoozed.inner()));
     match cache.lock() {
         Ok(mut c) => *c = derived.clone(),
-        Err(_) => eprintln!("get_sessions: cache lock poisoned"),
+        Err(_) => log::warn!("get_sessions: cache lock poisoned"),
     }
     derived
 }
@@ -772,7 +772,7 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
     use objc2::runtime::AnyObject;
 
     let Ok(ptr) = w.ns_window() else {
-        eprintln!("join_all_spaces: ns_window unavailable, overlay will not cross spaces");
+        log::warn!("join_all_spaces: ns_window unavailable, overlay will not cross spaces");
         return;
     };
     let obj = ptr as *mut AnyObject;
@@ -786,7 +786,7 @@ fn join_all_spaces(w: &tauri::WebviewWindow) {
         let _: () = msg_send![obj, setLevel: level];
         // 读回确认（诊断用）。
         let val: objc2::ffi::NSUInteger = msg_send![obj, collectionBehavior];
-        eprintln!("overlay collectionBehavior = {} (expect 257), level = 101", val);
+        log::debug!("overlay collectionBehavior = {} (expect 257), level = 101", val);
     }
 }
 
@@ -846,7 +846,7 @@ fn make_panel(w: &tauri::WebviewWindow) {
     use objc2::runtime::AnyObject;
 
     let Ok(ptr) = w.ns_window() else {
-        eprintln!("make_panel: ns_window unavailable");
+        log::warn!("make_panel: ns_window unavailable");
         return;
     };
     let obj = ptr as *mut AnyObject;
@@ -879,7 +879,7 @@ fn make_panel(w: &tauri::WebviewWindow) {
         // becomesKeyOnlyIfNeeded = false：nonActivatingPanel 默认 true（只在 hit view 的
         // needsPanelToBecomeKey 返回 true 时才 become key），WKWebView 不触发 → makeKey 不成 key。
         let _: () = msg_send![obj, setBecomesKeyOnlyIfNeeded: false];
-        eprintln!("overlay swizzled to NSPanel (canBecomeKeyWindow forced true)");
+        log::debug!("overlay swizzled to NSPanel (canBecomeKeyWindow forced true)");
     }
 }
 
@@ -996,6 +996,12 @@ fn open_prefs(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 日志：默认 warn（release 静默诊断），RUST_LOG=debug 开调试。
+    // try_init 容忍 tauri 自身可能已初始化 logger，不 panic。
+    let _ = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("warn"),
+    )
+    .try_init();
     let loaded_prefs = prefs::Prefs::load();
     let poll_secs = loaded_prefs.poll_interval;
     tauri::Builder::default()
@@ -1133,7 +1139,7 @@ pub fn run() {
                         // mode 切换后 1.5s 内不 hide：动画期间窗口可能瞬间 resign key
                         let in_grace = now_ms.saturating_sub(last_mode) < 1500;
                         let will_hide = mode != prefs::OverlayMode::Resident && !pinned && !in_grace;
-                        eprintln!(
+                        log::debug!(
                             "overlay Focused(false): will_hide={} mode={:?} pinned={} in_grace={}",
                             will_hide, mode, pinned, in_grace
                         );

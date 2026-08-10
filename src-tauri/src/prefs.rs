@@ -102,11 +102,11 @@ impl Prefs {
         let Some(home) = dirs::home_dir() else { return Self::default() };
         let path = home.join(".claude/cc-view/prefs.json");
         let Ok(txt) = std::fs::read_to_string(&path) else {
-            eprintln!("prefs load: failed to read ~/.claude/cc-view/prefs.json");
+            log::warn!("prefs load: failed to read ~/.claude/cc-view/prefs.json");
             return Self::default();
         };
         serde_json::from_str(&txt).unwrap_or_else(|e| {
-            eprintln!("prefs load: invalid json, using defaults: {}", e);
+            log::warn!("prefs load: invalid json, using defaults: {}", e);
             Self::default()
         })
     }

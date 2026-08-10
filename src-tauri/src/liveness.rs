@@ -80,6 +80,6 @@ mod tests {
         }
         // 本机通常有正在跑的 claude 会话；没有就跳过（不 fail，CI/无会话环境兼容）
         if any_alive { return; }
-        eprintln!("warn: no alive claude session detected (may be none running)");
+        log::debug!("warn: no alive claude session detected (may be none running)");
     }
 }

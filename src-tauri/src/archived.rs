@@ -25,7 +25,7 @@ impl ArchivedList {
         };
         Self {
             ids: serde_json::from_str(&json).unwrap_or_else(|e| {
-                eprintln!("archived load: invalid json, ignoring: {e}");
+                log::warn!("archived load: invalid json, ignoring: {e}");
                 vec![]
             }),
         }
