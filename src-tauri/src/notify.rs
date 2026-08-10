@@ -32,7 +32,10 @@ impl Notifier {
             // 活 session 且未搁置且状态为需介入（权限/提问/等输入）时判定通知
             if s.alive
                 && !s.snoozed
-                && matches!(s.status, Status::NeedsPermission | Status::WaitingForReply | Status::WaitingForInput)
+                && matches!(
+                    s.status,
+                    Status::NeedsPermission | Status::WaitingForReply | Status::WaitingForInput
+                )
             {
                 if self.last.get(&s.id) != Some(&s.status) {
                     to_notify.push((s.name.clone(), s.status.clone()));

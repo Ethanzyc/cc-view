@@ -26,7 +26,9 @@ mod ax {
 
 #[cfg(not(target_os = "macos"))]
 mod ax {
-    pub fn trusted(_prompt: bool) -> bool { true }
+    pub fn trusted(_prompt: bool) -> bool {
+        true
+    }
 }
 
 /// 辅助功能权限查询。focus 切全屏 Space（点 Dock）需要；未授权时调 prompt=true 弹系统窗。
@@ -85,5 +87,8 @@ pub fn activate_host(host: &Host) {
 end tell"#,
         app
     );
-    let _ = Command::new("/usr/bin/osascript").arg("-e").arg(script).spawn();
+    let _ = Command::new("/usr/bin/osascript")
+        .arg("-e")
+        .arg(script)
+        .spawn();
 }

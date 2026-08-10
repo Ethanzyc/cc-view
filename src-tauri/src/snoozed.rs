@@ -9,11 +9,15 @@ pub struct SnoozeMap {
 
 impl SnoozeMap {
     pub fn empty() -> Self {
-        Self { map: HashMap::new() }
+        Self {
+            map: HashMap::new(),
+        }
     }
 
     pub fn load() -> Self {
-        let Some(home) = dirs::home_dir() else { return Self::empty(); };
+        let Some(home) = dirs::home_dir() else {
+            return Self::empty();
+        };
         let path = home.join(".claude/cc-view/snoozed.json");
         let Ok(json) = std::fs::read_to_string(&path) else {
             log::warn!("snoozed load: failed to read ~/.claude/cc-view/snoozed.json");
@@ -28,7 +32,9 @@ impl SnoozeMap {
     }
 
     pub fn save(&self) {
-        let Some(home) = dirs::home_dir() else { return; };
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
         let dir = home.join(".claude/cc-view");
         let _ = std::fs::create_dir_all(&dir);
         if let Ok(json) = serde_json::to_string(&self.map) {
@@ -53,7 +59,9 @@ impl SnoozeMap {
     ///        working 还是等输入）即视为重新关注 → 自动取消搁置、冒泡回待介入。
     /// 边界：statusUpdatedAt == snoozedAt 不算更新（同刻搁置不立即失效）。
     pub fn is_effectively_snoozed(&self, s: &Session) -> bool {
-        let Some(at) = self.map.get(&s.id).copied() else { return false; };
+        let Some(at) = self.map.get(&s.id).copied() else {
+            return false;
+        };
         s.status_updated_at <= at
     }
 }
@@ -65,9 +73,17 @@ mod tests {
 
     fn sess(id: &str, st: Status, updated_at: i64) -> Session {
         Session {
-            id: id.into(), source: Source::Interactive, pid: 1, project: "p".into(),
-            cwd: "/c".into(), name: id.into(), status: st, started_at: 0,
-            status_updated_at: updated_at, alive: true, focus_hint: FocusHint::default(),
+            id: id.into(),
+            source: Source::Interactive,
+            pid: 1,
+            project: "p".into(),
+            cwd: "/c".into(),
+            name: id.into(),
+            status: st,
+            started_at: 0,
+            status_updated_at: updated_at,
+            alive: true,
+            focus_hint: FocusHint::default(),
             snoozed: false,
             tokens_in: 0,
             tokens_out: 0,

@@ -73,7 +73,11 @@ mod tests {
 
     #[test]
     fn serde_roundtrip() {
-        let pos = OverlayPosition { x: 100, y: 200, pinned: true };
+        let pos = OverlayPosition {
+            x: 100,
+            y: 200,
+            pinned: true,
+        };
         let json = serde_json::to_string(&pos).unwrap();
         let back: OverlayPosition = serde_json::from_str(&json).unwrap();
         assert_eq!(back.x, 100);

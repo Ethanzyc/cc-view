@@ -47,7 +47,11 @@ pub fn draw_badge(src: &tauri::image::Image<'_>, count: usize) -> tauri::image::
         }
     }
     // 数字：count>9 显示 9+（两位：'9' 与 '+'），否则单数字
-    let digits: Vec<usize> = if count > 9 { vec![9, 10] } else { vec![count.min(9)] };
+    let digits: Vec<usize> = if count > 9 {
+        vec![9, 10]
+    } else {
+        vec![count.min(9)]
+    };
     // 在圆内居中画点阵（每个数字 3 宽，像素步长 1，居中起点）
     let scale = 1; // menu bar 图标小，1px/点
     let total_w = (digits.len() as i32 * 3 * scale) as i32;
@@ -62,7 +66,12 @@ pub fn draw_badge(src: &tauri::image::Image<'_>, count: usize) -> tauri::image::
                     for sy in 0..scale {
                         for sx in 0..scale {
                             // col/row 是 usize（索引上下文），转 i32 参与坐标算术
-                            put(&mut out, ox + col as i32 * scale + sx, start_y + row as i32 * scale + sy, (255, 255, 255));
+                            put(
+                                &mut out,
+                                ox + col as i32 * scale + sx,
+                                start_y + row as i32 * scale + sy,
+                                (255, 255, 255),
+                            );
                         }
                     }
                 }

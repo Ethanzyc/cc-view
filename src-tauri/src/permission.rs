@@ -206,7 +206,11 @@ mod tests {
     fn merge_local_allow_suppresses_unknown() {
         let dir = test_subdir("local_allow");
         let user = write_in(&dir, "user.json", r#"{"permissions":{"allow":["Read"]}}"#);
-        let local = write_in(&dir, "local.json", r#"{"permissions":{"allow":["Skill(gstack)"]}}"#);
+        let local = write_in(
+            &dir,
+            "local.json",
+            r#"{"permissions":{"allow":["Skill(gstack)"]}}"#,
+        );
         let checker = merge_layers(&user, None, Some(&local)).unwrap();
         // Skill 在 local allow → 不报警（翻转前：Skill 未知 → 误报 true）
         assert!(!checker.needs_permission("Skill", None));
@@ -219,7 +223,11 @@ mod tests {
     fn merge_ask_from_local_layer() {
         let dir = test_subdir("ask_local");
         let user = write_in(&dir, "u.json", r#"{"permissions":{"allow":["Read"]}}"#);
-        let local = write_in(&dir, "l.json", r#"{"permissions":{"ask":["Bash(kill *)"]}}"#);
+        let local = write_in(
+            &dir,
+            "l.json",
+            r#"{"permissions":{"ask":["Bash(kill *)"]}}"#,
+        );
         let checker = merge_layers(&user, None, Some(&local)).unwrap();
         assert!(checker.needs_permission("Bash", Some("kill 1"))); // local ask 生效
         assert!(!checker.needs_permission("Read", None)); // user allow 生效
@@ -240,8 +248,11 @@ mod tests {
     fn merge_user_allow_and_local_ask_coexist() {
         let dir = test_subdir("allow_ask");
         let user = write_in(&dir, "u.json", r#"{"permissions":{"allow":["Bash"]}}"#);
-        let local =
-            write_in(&dir, "l.json", r#"{"permissions":{"ask":["Bash(git push --force *)"]}}"#);
+        let local = write_in(
+            &dir,
+            "l.json",
+            r#"{"permissions":{"ask":["Bash(git push --force *)"]}}"#,
+        );
         let checker = merge_layers(&user, None, Some(&local)).unwrap();
         // 普通 Bash：user allow → 不报警
         assert!(!checker.needs_permission("Bash", Some("ls")));

@@ -26,7 +26,7 @@ pub fn reduce(sessions: Vec<Session>) -> Vec<Session> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{Source, Status, FocusHint};
+    use crate::models::{FocusHint, Source, Status};
 
     fn mk(id: &str, alive: bool) -> Session {
         Session {

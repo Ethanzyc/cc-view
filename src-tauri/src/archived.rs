@@ -61,7 +61,10 @@ impl ArchivedList {
     /// 过滤掉已归档的 session（保留备用：当前前端按 list_archived 过滤）
     #[allow(dead_code)]
     pub fn filter<'a>(&self, sessions: &'a [Session]) -> Vec<&'a Session> {
-        sessions.iter().filter(|s| !self.is_archived(&s.id)).collect()
+        sessions
+            .iter()
+            .filter(|s| !self.is_archived(&s.id))
+            .collect()
     }
 }
 
