@@ -5,6 +5,7 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type Update } from '@tauri-apps/plugin-updater';
+import { shallowRef } from 'vue';
 import { relaunch } from '@tauri-apps/plugin-process';
 import type { Prefs, ResidentLayout, Theme, TokenUnit } from '../types';
 import { applyTheme } from '../utils/theme';
@@ -30,7 +31,9 @@ const saving = ref<string | null>(null);
 const error = ref<string | null>(null);
 const appVersion = ref('');
 const checking = ref(false);
-const updateAvailable = ref<Update | null>(null);
+// shallowRef：Update 继承 Resource，内部用 WeakMap 存私有 rid 字段。
+// ref() 会用 Proxy 包装对象 → this.rid 的 WeakMap 查不到 Proxy → "Cannot read private member"。
+const updateAvailable = shallowRef<Update | null>(null);
 const upToDate = ref(false);
 const installing = ref(false);
 const installError = ref<string | null>(null);
