@@ -278,9 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn read_tty_map_returns_nonempty() {
-        // 集成：真实 ps 必返回非空 tty 表
-        let map = super::read_tty_map();
-        assert!(!map.is_empty(), "ps -ax should return tty entries");
+    fn read_tty_map_runs_without_panic() {
+        // 集成：read_tty_map 不应 panic。CI runner 无终端会话（tty 全 ??）→ map 可能为空，
+        // 本地有终端时则有条目。只验证可正常调用，不断言非空。
+        let _map = super::read_tty_map();
     }
 }
