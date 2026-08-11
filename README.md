@@ -2,6 +2,8 @@
 
 > 跨终端 Claude Code 会话状态总览 · macOS menubar
 
+[English](README.en.md) · 简体中文
+
 [![release](https://img.shields.io/github/v/release/Ethanzyc/cc-view?color=blue)](https://github.com/Ethanzyc/cc-view/releases)
 [![platform](https://img.shields.io/badge/platform-macOS%2013%2B-black)](#安装)
 [![arch](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-silver)](#安装)
@@ -82,6 +84,11 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 - 开关统一 **macOS toggle switch**；搁置 / 闲置分项带说明（搁置＝手动暂停不催促不通知；闲置＝等输入超 30min 自动降级）
 - 基于 [tauri-plugin-updater](https://v2.tauri.app/plugin/updater/) 的自动检查 + 下载安装 + 重启
 - **双源兜底**：GitHub 为主 → Gitee 为国内网络兜底（updater 按序自动 fallback）
+
+### 🌐 国际化
+- 支持**简体中文**和**英语**，自动检测系统语言
+- 偏好设置 → 通用 → 语言切换（跟随系统 / 简体中文 / English）
+- menubar 菜单、tooltip、通知文本全部本地化
 
 ## 快捷键
 

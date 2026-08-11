@@ -28,6 +28,8 @@ export type ResidentLayout = 'b' | 'a';
 export type Theme = 'light' | 'dark';
 // 更新源（与后端 prefs::UpdateSource serde lowercase 对齐）
 export type UpdateSource = 'auto' | 'gitee';
+// 界面语言（与后端 prefs::Locale serde lowercase 对齐）
+export type Locale = 'auto' | 'zh' | 'en';
 
 // get_prefs 返回的完整偏好（与 Rust Prefs 字段一一对应）
 export interface Prefs {
@@ -49,6 +51,7 @@ export interface Prefs {
   show_tokens: boolean;
   show_actions: boolean;
   update_source: UpdateSource;
+  locale: Locale;
 }
 
 // host 枚举 → 短显示名（后端 serde camelCase）

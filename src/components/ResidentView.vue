@@ -6,10 +6,13 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { useI18n } from 'vue-i18n';
 import type { Session, Status, ResidentLayout } from '../types';
 import StatusIcon from './StatusIcon.vue';
-import { STATUS_ZH, projShort, isStaleInput } from '../utils/session';
+import { statusLabel, projShort, isStaleInput } from '../utils/session';
 import { processUnread, clearUnread, unread } from '../utils/unread';
+
+const { t } = useI18n();
 
 const all = ref<Session[]>([]);
 // now tick：isStaleInput 依赖时间，需前端定期刷新（后端 emit 有 hash 去重不随时间触发）。
@@ -112,10 +115,10 @@ const groups = computed<Section[]>(() => {
       if (aStale !== bStale) return aStale ? 1 : -1;
       return 0;
     });
-    result.push({ key: 'active', label: '待介入', total: active.length, projs: activeProjs });
+    result.push({ key: 'active', label: t('group.active'), total: active.length, projs: activeProjs });
   }
   if (snoozedAlive.length) {
-    result.push({ key: 'snoozed', label: '已搁置', total: snoozedAlive.length, projs: byProj(snoozedAlive) });
+    result.push({ key: 'snoozed', label: t('group.snoozed'), total: snoozedAlive.length, projs: byProj(snoozedAlive) });
   }
   return result;
 });
@@ -126,7 +129,7 @@ async function focusSession(id: string) {
     clearUnread(id);
   } catch (e) {
     if (e === 'accessibility') {
-      alert('需要辅助功能权限才能切换到终端窗口（尤其全屏空间）。\n请到 系统设置 → 隐私与安全性 → 辅助功能 授权 cc-view，然后重新点击。');
+      alert(t('alert.accessibility'));
     } else {
       console.error('focus_session failed', e);
     }
@@ -259,8 +262,8 @@ onBeforeUnmount(() => {
       :style="flashStatus ? { '--flash-color': flashColor(flashStatus) } : undefined"></div>
     <button
       class="expand-btn"
-      title="展开成命令面板"
-      aria-label="展开成命令面板"
+      :title="t('resident.expand')"
+      :aria-label="t('resident.expand')"
       data-tauri-drag-region="false"
       @click="expandToPanel"
     >
@@ -292,7 +295,7 @@ onBeforeUnmount(() => {
           :style="flashId === s.id ? { '--flash-color': flashColor(s.status) } : undefined"
           role="button"
           tabindex="0"
-          :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
+          :aria-label="`${s.name || s.project}，${statusLabel(s.status)}`"
           data-tauri-drag-region="false"
           @click="focusSession(s.id)"
           @keydown.enter.prevent="focusSession(s.id)"
@@ -304,11 +307,11 @@ onBeforeUnmount(() => {
             work: s.status === 'working',
             reply: s.status === 'waitingForReply',
             perm: s.status === 'needsPermission',
-          }">{{ STATUS_ZH[s.status] }}</span>
+          }">{{ statusLabel(s.status) }}</span>
         </div>
       </template>
     </template>
-    <div v-if="!groups.length" class="empty">暂无会话</div>
+    <div v-if="!groups.length" class="empty">{{ t('resident.noSessions') }}</div>
   </div>
 </template>
 
