@@ -38,6 +38,10 @@ const checking = ref(false);
 const updateAvailable = shallowRef<Update | null>(null);
 const upToDate = ref(false);
 const installing = ref(false);
+const installPhase = ref<'idle' | 'downloading' | 'installing' | 'restarting'>('idle');
+const downloadProgress = ref(0); // 0-100
+const downloadTotal = ref(0);    // bytes
+const downloadLoaded = ref(0);   // bytes
 const installError = ref<string | null>(null);
 
 function defaultWidthForLayout(layout: ResidentLayout): number {
@@ -203,18 +207,51 @@ async function checkForUpdates() {
   }
 }
 
+function fmtBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 async function downloadAndInstall() {
   if (!updateAvailable.value) return;
   installing.value = true;
   installError.value = null;
+  installPhase.value = 'downloading';
+  downloadProgress.value = 0;
+  downloadTotal.value = 0;
+  downloadLoaded.value = 0;
   try {
-    await updateAvailable.value.downloadAndInstall();
+    await updateAvailable.value.downloadAndInstall((event) => {
+      if (event.event === 'Started' && event.data.contentLength) {
+        downloadTotal.value = event.data.contentLength;
+      } else if (event.event === 'Progress' && event.data.chunkLength) {
+        downloadLoaded.value += event.data.chunkLength;
+        if (downloadTotal.value > 0) {
+          downloadProgress.value = Math.round((downloadLoaded.value / downloadTotal.value) * 100);
+        }
+      } else if (event.event === 'Finished') {
+        installPhase.value = 'installing';
+        downloadProgress.value = 100;
+      }
+    });
+    installPhase.value = 'restarting';
     await relaunch();
   } catch (e: unknown) {
     installError.value = typeof e === 'string' ? e : (e as Error)?.message ?? '安装失败';
     installing.value = false;
+    installPhase.value = 'idle';
   }
 }
+
+const installLabel = computed(() => {
+  switch (installPhase.value) {
+    case 'downloading': return `下载中 ${downloadProgress.value}%`;
+    case 'installing': return '安装中…';
+    case 'restarting': return '重启中…';
+    default: return '下载并安装';
+  }
+});
 </script>
 
 <template>
@@ -357,7 +394,17 @@ async function downloadAndInstall() {
                 <span>新版本 <strong>{{ updateAvailable.version }}</strong></span>
                 <span class="update-diff">从 {{ appVersion }} 更新</span>
               </div>
-              <button class="btn btn-primary" @click="downloadAndInstall" :disabled="installing">{{ installing ? '安装中…' : '下载并安装' }}</button>
+              <button class="btn btn-primary" @click="downloadAndInstall" :disabled="installing">{{ installLabel }}</button>
+            </div>
+            <!-- 下载进度条 -->
+            <div v-if="installing && installPhase === 'downloading'" class="download-progress">
+              <div class="progress-track">
+                <div class="progress-fill" :style="{ width: downloadProgress + '%' }"></div>
+              </div>
+              <span class="progress-size">{{ fmtBytes(downloadLoaded) }} / {{ fmtBytes(downloadTotal) }}</span>
+            </div>
+            <div v-if="installing && installPhase !== 'downloading'" class="download-progress">
+              <span class="progress-size">{{ installLabel }}</span>
             </div>
             <div v-if="updateAvailable.body" class="changelog">
               <div class="changelog-title">更新内容</div>
@@ -507,6 +554,12 @@ main.settings { flex: 1; overflow-y: auto; padding: 8px 28px 28px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn-primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .btn-primary:not(:disabled):hover { filter: brightness(1.1); }
+
+/* 下载进度 */
+.download-progress { padding: 0 16px 14px; display: flex; align-items: center; gap: 12px; }
+.progress-track { flex: 1; height: 4px; background: var(--color-border); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--color-primary); border-radius: 2px; transition: width 0.2s ease; }
+.progress-size { font-size: 11px; color: var(--color-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .error { color: var(--status-permission); }
 .footer-error { margin: 12px 20px 0; }
