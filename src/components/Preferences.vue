@@ -371,7 +371,11 @@ async function downloadAndInstall() {
       </main>
     </div>
     <p v-if="error" class="error footer-error">⚠ {{ error }}</p>
-    <p class="repo"><a href="https://github.com/Ethanzyc/cc-view" target="_blank" rel="noopener">GitHub →</a></p>
+    <p class="repo">
+      <a href="https://github.com/Ethanzyc/cc-view" target="_blank" rel="noopener">GitHub →</a>
+      <span class="repo-sep">·</span>
+      <a href="https://gitee.com/Ethanzyc/cc-view" target="_blank" rel="noopener">Gitee →</a>
+    </p>
   </div>
 </template>
 
@@ -506,7 +510,8 @@ main.settings { flex: 1; overflow-y: auto; padding: 8px 28px 28px; }
 
 .error { color: var(--status-permission); }
 .footer-error { margin: 12px 20px 0; }
-.repo { padding: 10px 20px; border-top: 1px solid var(--color-border); text-align: center; flex-shrink: 0; }
+.repo { padding: 10px 20px; border-top: 1px solid var(--color-border); text-align: center; flex-shrink: 0; display: flex; justify-content: center; gap: 8px; align-items: center; }
 .repo a { color: var(--color-primary); text-decoration: none; font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body); }
 .repo a:hover { text-decoration: underline; }
+.repo-sep { color: var(--color-border); font-size: 12px; }
 </style>
