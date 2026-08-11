@@ -18,12 +18,7 @@ import { tokenUnit } from './utils/session';
 
 const isPrefs = computed(() => getCurrentWebviewWindow().label === 'prefs');
 const mode = ref<OverlayMode>('resident');
-// 模式切换过渡态：true 时显示 loading，隐藏真实视图（避免动画期间内容在变窗口里错位）。
 const transitioning = ref(false);
-
-// 更新成功提示：重启后 get_pending_update 读到 → 显示 banner
-const updateBanner = ref<{ version: string; notes: string } | null>(null);
-function dismissBanner() { updateBanner.value = null; }
 
 onMounted(async () => {
   // theme 两窗口都要应用（prefs 窗口也渲染偏好 UI），先于 isPrefs 分支。
@@ -38,12 +33,11 @@ onMounted(async () => {
       return;
     }
     mode.value = p.mode;
-    // 更新后首次打开：读 pending_update → 弹通知 + banner
+    // 更新后首次打开：读 pending_update → 系统通知（banner 已去掉）
     try {
       const pending = await invoke<{ version: string; notes: string } | null>('get_pending_update');
       if (pending) {
-        updateBanner.value = { version: pending.version, notes: pending.notes };
-        // 系统通知由后端发（复用 notify::send_notification）
+        // 系统通知由后端 get_pending_update 发
       }
     } catch { /* non-critical */ }
   } catch (e) {
@@ -89,15 +83,6 @@ onMounted(async () => {
   <Preferences v-if="isPrefs" />
   <TransitionOverlay v-else-if="transitioning" />
   <template v-else>
-    <!-- 更新成功 banner（仅 panel 模式，常驻面板太窄） -->
-    <div v-if="updateBanner && mode === 'panel'" class="update-banner">
-      <div class="update-banner-icon">✓</div>
-      <div class="update-banner-text">
-        <div class="update-banner-title">CC View 已更新到 {{ updateBanner.version }}</div>
-        <pre v-if="updateBanner.notes" class="update-banner-notes">{{ updateBanner.notes }}</pre>
-      </div>
-      <button class="update-banner-close" @click="dismissBanner">×</button>
-    </div>
     <PanelView v-if="mode === 'panel'" />
     <ResidentView v-else />
   </template>
@@ -172,31 +157,4 @@ html, body {
 /* prefs 窗口（非透明、无 vibrancy）：实色背景跟 theme，避免深色下 webview 白底。 */
 html.prefs-win,
 html.prefs-win body { background: var(--prefs-bg); }
-
-/* 更新成功 banner */
-.update-banner {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 10px 12px; margin: 8px 10px 0;
-  background: color-mix(in srgb, var(--status-working) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--status-working) 30%, transparent);
-  border-radius: 10px;
-}
-.update-banner-icon {
-  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
-  background: var(--status-working); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700;
-}
-.update-banner-text { flex: 1; min-width: 0; }
-.update-banner-title { font-size: 12px; font-weight: 700; color: var(--color-fg); }
-.update-banner-notes {
-  font-size: 11px; line-height: 1.5; color: var(--color-muted);
-  margin: 4px 0 0; white-space: pre-wrap;
-  max-height: 80px; overflow-y: auto;
-}
-.update-banner-close {
-  flex-shrink: 0; background: none; border: none; cursor: pointer;
-  color: var(--color-muted); font-size: 16px; line-height: 1; padding: 0;
-}
-.update-banner-close:hover { color: var(--color-fg); }
 </style>

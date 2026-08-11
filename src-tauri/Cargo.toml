@@ -1,6 +1,6 @@
 [package]
 name = "cc-view"
-version = "0.5.9"
+version = "0.6.0"
 description = "Cross-terminal Claude Code session monitor for macOS menubar"
 authors = ["zhuyuchen"]
 edition = "2021"
@@ -32,6 +32,7 @@ libc = "0.2"
 dirs = "5"
 log = "0.4"
 env_logger = "0.11"
+url = "2.5.8"
 
 # macOS 原生 NSWindow 调用：给 overlay 设 collectionBehavior 跨 Space（全屏可见）
 # objc2 已被 tauri 间接依赖（v0.6.4），此处显式声明仅复用同一版本，不触发重复编译。

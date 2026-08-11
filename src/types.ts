@@ -26,6 +26,8 @@ export type TokenUnit = 'km' | 'wan';
 export type ResidentLayout = 'b' | 'a';
 // 外观主题（与后端 prefs::Theme serde lowercase 对齐）
 export type Theme = 'light' | 'dark';
+// 更新源（与后端 prefs::UpdateSource serde lowercase 对齐）
+export type UpdateSource = 'auto' | 'gitee';
 
 // get_prefs 返回的完整偏好（与 Rust Prefs 字段一一对应）
 export interface Prefs {
@@ -46,6 +48,7 @@ export interface Prefs {
   show_host: boolean;
   show_tokens: boolean;
   show_actions: boolean;
+  update_source: UpdateSource;
 }
 
 // host 枚举 → 短显示名（后端 serde camelCase）
