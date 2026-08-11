@@ -236,6 +236,13 @@ async function downloadAndInstall() {
       }
     });
     installPhase.value = 'restarting';
+    // 保存更新信息，重启后弹「更新成功」提示
+    try {
+      await invoke('set_pending_update', {
+        version: updateAvailable.value.version,
+        notes: updateAvailable.value.body || '',
+      });
+    } catch { /* non-critical */ }
     await relaunch();
   } catch (e: unknown) {
     installError.value = typeof e === 'string' ? e : (e as Error)?.message ?? '安装失败';

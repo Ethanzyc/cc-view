@@ -1200,6 +1200,41 @@ fn open_prefs(app: &tauri::AppHandle) {
     }
 }
 
+/// 更新完成后写入 pending 文件——重启后前端读取，弹「更新成功」提示。
+fn data_dir() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".claude/cc-view"))
+}
+
+#[tauri::command]
+fn set_pending_update(version: String, notes: String) {
+    if let Some(dir) = data_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        let data = serde_json::json!({ "version": version, "notes": notes });
+        let _ = std::fs::write(dir.join("pending_update.json"), data.to_string());
+    }
+}
+
+#[tauri::command]
+fn get_pending_update(app: tauri::AppHandle) -> Option<serde_json::Value> {
+    let dir = data_dir()?;
+    let path = dir.join("pending_update.json");
+    let result: Option<serde_json::Value> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    if let Some(ref data) = result {
+        let _ = std::fs::remove_file(&path);
+        // 弹系统通知
+        let version = data.get("version").and_then(|v| v.as_str()).unwrap_or("");
+        let notes = data.get("notes").and_then(|v| v.as_str()).unwrap_or("");
+        notify::send_notification(
+            &app,
+            &format!("CC View 已更新到 {}", version),
+            if notes.is_empty() { "点击查看更新内容" } else { notes },
+        );
+    }
+    result
+}
+
 /// 清除 .app bundle 的 com.apple.quarantine 标记。
 /// DMG 安装的 app 被浏览器加了 quarantine，Gatekeeper 拦截非公证 app。
 /// 用户右键打开一次后 app 能运行，此时清掉 quarantine 后续启动不再弹警告。
@@ -1280,7 +1315,9 @@ pub fn run() {
             set_show_actions,
             set_mode,
             do_animate,
-            set_resident_height
+            set_resident_height,
+            set_pending_update,
+            get_pending_update
         ])
         .setup(|app| {
             // DMG 安装的 app 带 com.apple.quarantine 标记，Gatekeeper 拦截非公证 app。
