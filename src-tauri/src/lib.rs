@@ -1229,7 +1229,11 @@ fn get_pending_update(app: tauri::AppHandle) -> Option<serde_json::Value> {
         notify::send_notification(
             &app,
             &format!("CC View 已更新到 {}", version),
-            if notes.is_empty() { "点击查看更新内容" } else { notes },
+            if notes.is_empty() {
+                "点击查看更新内容"
+            } else {
+                notes
+            },
         );
     }
     result
