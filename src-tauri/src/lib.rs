@@ -1200,6 +1200,28 @@ fn open_prefs(app: &tauri::AppHandle) {
     }
 }
 
+/// 清除 .app bundle 的 com.apple.quarantine 标记。
+/// DMG 安装的 app 被浏览器加了 quarantine，Gatekeeper 拦截非公证 app。
+/// 用户右键打开一次后 app 能运行，此时清掉 quarantine 后续启动不再弹警告。
+/// updater 更新的 app 不带 quarantine，此函数是 no-op。
+#[cfg(target_os = "macos")]
+fn strip_quarantine() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    // exe = .../cc-view.app/Contents/MacOS/cc-view → 上溯 3 级到 .app
+    let Some(app_bundle) = exe.ancestors().nth(3) else {
+        return;
+    };
+    let _ = std::process::Command::new("xattr")
+        .args(["-dr", "com.apple.quarantine"])
+        .arg(app_bundle)
+        .output();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn strip_quarantine() {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 日志：默认 warn（release 静默诊断），RUST_LOG=debug 开调试。
@@ -1261,6 +1283,10 @@ pub fn run() {
             set_resident_height
         ])
         .setup(|app| {
+            // DMG 安装的 app 带 com.apple.quarantine 标记，Gatekeeper 拦截非公证 app。
+            // 启动时自动清除（用户右键打开一次后 app 能跑，清掉后后续启动不再弹警告）。
+            strip_quarantine();
+
             // Tauri 默认 activation policy = Regular（有 dock），覆盖 Info.plist LSUIElement。
             // cc-view 平时 accessory（无 dock）——启动显式 set Accessory；打开偏好设置时切 Regular。
             let _ = app
