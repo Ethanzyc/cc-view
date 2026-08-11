@@ -13,11 +13,12 @@ def main():
     p.add_argument("--url-aarch64", required=True)
     p.add_argument("--url-x86-64", required=True)
     p.add_argument("--output", required=True)
+    p.add_argument("--notes", default="", help="Release notes (changelog text)")
     args = p.parse_args()
 
     data = {
         "version": args.version,
-        "notes": f"v{args.version}",
+        "notes": args.notes or f"v{args.version}",
         "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platforms": {
             "darwin-aarch64": {

@@ -12,8 +12,9 @@
 #   - 版本号已同步改好 Cargo.toml + tauri.conf.json + git push
 set -euo pipefail
 
-VERSION="${1:?用法: ./scripts/publish.sh <version> 例: ./scripts/publish.sh 0.5.1}"
+VERSION="${1:?用法: ./scripts/publish.sh <version> [changelog_file]}"
 TAG="v${VERSION}"
+NOTES_FILE="${2:-}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
@@ -85,13 +86,18 @@ gh release upload "$TAG" \
 
 # GitHub latest.json（URL 指向 GitHub）
 GITHUB_LATEST="${STAGING}/latest.json"
+NOTES_ARG=""
+if [ -n "$NOTES_FILE" ] && [ -f "$NOTES_FILE" ]; then
+  NOTES_ARG="--notes\n$(cat "$NOTES_FILE")"
+fi
 python3 "$REPO_DIR/scripts/gen-latest-json.py" \
   --version "$VERSION" \
   --aarch64-sig "${STAGING}/cc-view_aarch64.app.tar.gz.sig" \
   --x86-64-sig "${STAGING}/cc-view_x86_64.app.tar.gz.sig" \
   --url-aarch64 "https://github.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_aarch64.app.tar.gz" \
   --url-x86-64 "https://github.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_x86_64.app.tar.gz" \
-  --output "$GITHUB_LATEST"
+  --output "$GITHUB_LATEST" \
+  ${NOTES_FILE:+--notes "$(cat "$NOTES_FILE")"}
 gh release upload "$TAG" "$GITHUB_LATEST" --clobber
 
 # ── 5. Gitee release ────────────────────
@@ -136,7 +142,8 @@ python3 "$REPO_DIR/scripts/gen-latest-json.py" \
   --x86-64-sig "${STAGING}/cc-view_x86_64.app.tar.gz.sig" \
   --url-aarch64 "https://gitee.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_aarch64.app.tar.gz" \
   --url-x86-64 "https://gitee.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_x86_64.app.tar.gz" \
-  --output "$GITEE_LATEST"
+  --output "$GITEE_LATEST" \
+  ${NOTES_FILE:+--notes "$(cat "$NOTES_FILE")"}
 curl -sf -X POST "${GITEE_API}?access_token=${GITEE_TOKEN}" -F "file=@${GITEE_LATEST}" >/dev/null
 echo "  Gitee release latest.json 上传完成"
 
