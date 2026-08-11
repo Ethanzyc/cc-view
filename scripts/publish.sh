@@ -42,6 +42,11 @@ export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 npm run tauri build -- --target aarch64-apple-darwin --bundles app 2>&1 | tail -5
 npm run tauri build -- --target x86_64-apple-darwin --bundles app 2>&1 | tail -5
 
+# 重签：用 Apple Development 证书替换 ad-hoc，使 DR 跨构建稳定（解决 TCC 更新后失效）
+echo "  重签双架构..."
+./scripts/resign.sh aarch64-apple-darwin 2>&1 | grep -E "✅|WARNING|证书"
+./scripts/resign.sh x86_64-apple-darwin 2>&1 | grep -E "✅|WARNING|证书"
+
 # ── 2. 打 DMG ───────────────────────────
 echo ""
 echo "[2/6] 打 DMG..."
