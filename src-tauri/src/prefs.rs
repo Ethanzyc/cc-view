@@ -103,6 +103,15 @@ pub struct Prefs {
     /// 常驻面板宽度（logical px）。None = 用 resident_layout 默认（A=180/B=285）。
     #[serde(default = "default_resident_width")]
     pub resident_width: Option<f64>,
+    /// 显示终端 app 名（如 Otty、iTerm）。默认 false。
+    #[serde(default = "default_false")]
+    pub show_host: bool,
+    /// 显示 token 用量。默认 true。
+    #[serde(default = "default_true")]
+    pub show_tokens: bool,
+    /// 显示操作按钮（仅面板模式）。默认 true。
+    #[serde(default = "default_true")]
+    pub show_actions: bool,
 }
 
 impl Default for Prefs {
@@ -120,6 +129,9 @@ impl Default for Prefs {
             show_archived: false,
             token_unit: default_token_unit(),
             resident_width: default_resident_width(),
+            show_host: false,
+            show_tokens: true,
+            show_actions: true,
         }
     }
 }
@@ -175,6 +187,9 @@ mod tests {
         assert!(!p.show_archived);
         assert_eq!(p.token_unit, TokenUnit::Km);
         assert_eq!(p.resident_width, None);
+        assert!(!p.show_host);
+        assert!(p.show_tokens);
+        assert!(p.show_actions);
     }
 
     #[test]
@@ -210,6 +225,9 @@ mod tests {
             show_archived: true,
             token_unit: TokenUnit::Wan,
             resident_width: Some(300.0),
+            show_host: true,
+            show_tokens: false,
+            show_actions: false,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();

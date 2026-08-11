@@ -9,7 +9,7 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import type { Prefs, ResidentLayout, Theme, TokenUnit } from '../types';
 import { applyTheme } from '../utils/theme';
 
-type Category = 'general' | 'appearance' | 'resident' | 'update';
+type Category = 'general' | 'display' | 'update';
 const activeCategory = ref<Category>('general');
 
 const notify = ref(true);
@@ -23,6 +23,9 @@ const showIdle = ref(true);
 const opacity = ref(55);
 const tokenUnitPref = ref<TokenUnit>('km');
 const residentWidth = ref<number>(285);
+const showHost = ref(false);
+const showTokens = ref(true);
+const showActions = ref(true);
 const saving = ref<string | null>(null);
 const error = ref<string | null>(null);
 const appVersion = ref('');
@@ -56,6 +59,9 @@ onMounted(async () => {
     opacity.value = p.resident_opacity;
     tokenUnitPref.value = p.token_unit;
     residentWidth.value = p.resident_width ?? defaultWidthForLayout(p.resident_layout);
+    showHost.value = p.show_host;
+    showTokens.value = p.show_tokens;
+    showActions.value = p.show_actions;
   } catch (e) {
     console.error('get_prefs failed', e);
   }
@@ -96,6 +102,9 @@ const onLayout = (v: ResidentLayout) => wrap('layout', async () => { await invok
 const onShowSnoozed = (v: boolean) => wrap('showSnoozed', async () => { await invoke('set_resident_show_snoozed', { show: v }); showSnoozed.value = v; });
 const onShowIdle = (v: boolean) => wrap('showIdle', async () => { await invoke('set_resident_show_idle', { show: v }); showIdle.value = v; });
 const onTokenUnit = (v: TokenUnit) => wrap('tokenUnit', async () => { await invoke('set_token_unit', { unit: v }); tokenUnitPref.value = v; });
+const onShowHost = (v: boolean) => wrap('showHost', async () => { await invoke('set_show_host', { show: v }); showHost.value = v; });
+const onShowTokens = (v: boolean) => wrap('showTokens', async () => { await invoke('set_show_tokens', { show: v }); showTokens.value = v; });
+const onShowActions = (v: boolean) => wrap('showActions', async () => { await invoke('set_show_actions', { show: v }); showActions.value = v; });
 
 let opacityTimer: number | undefined;
 const onOpacity = (v: number) => {
@@ -197,8 +206,7 @@ async function downloadAndInstall() {
     <div class="body">
       <nav class="cats">
         <div class="cat" :class="{ active: activeCategory === 'general' }" @click="activeCategory = 'general'">通用</div>
-        <div class="cat" :class="{ active: activeCategory === 'appearance' }" @click="activeCategory = 'appearance'">外观</div>
-        <div class="cat" :class="{ active: activeCategory === 'resident' }" @click="activeCategory = 'resident'">常驻面板</div>
+        <div class="cat" :class="{ active: activeCategory === 'display' }" @click="activeCategory = 'display'">显示</div>
         <div class="cat" :class="{ active: activeCategory === 'update' }" @click="activeCategory = 'update'">更新</div>
       </nav>
 
@@ -230,8 +238,8 @@ async function downloadAndInstall() {
           </div>
         </section>
 
-        <!-- 外观 -->
-        <section v-show="activeCategory === 'appearance'">
+        <!-- 显示（合并外观 + 常驻面板） -->
+        <section v-show="activeCategory === 'display'">
           <h2 class="group">外观</h2>
           <div class="row">
             <div class="txt"><div class="t">主题</div><div class="d">浅色 / 深色（不跟随系统）</div></div>
@@ -251,10 +259,21 @@ async function downloadAndInstall() {
               </div>
             </div>
           </div>
-        </section>
 
-        <!-- 常驻面板 -->
-        <section v-show="activeCategory === 'resident'">
+          <h2 class="group">列表显示</h2>
+          <div class="row">
+            <div class="txt"><div class="t">显示终端名</div><div class="d">在会话名旁标注终端 app（如 Otty、iTerm）</div></div>
+            <div class="ctl"><button class="toggle" :class="{ on: showHost }" :disabled="saving === 'showHost'" @click="onShowHost(!showHost)"><span class="switch-knob"></span></button></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示 token 用量</div><div class="d">每行的输入/输出累计 token</div></div>
+            <div class="ctl"><button class="toggle" :class="{ on: showTokens }" :disabled="saving === 'showTokens'" @click="onShowTokens(!showTokens)"><span class="switch-knob"></span></button></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示操作按钮</div><div class="d">面板模式每行的详情/搁置/归档/复制按钮</div></div>
+            <div class="ctl"><button class="toggle" :class="{ on: showActions }" :disabled="saving === 'showActions'" @click="onShowActions(!showActions)"><span class="switch-knob"></span></button></div>
+          </div>
+
           <h2 class="group">常驻面板 <span class="tag">仅常驻</span></h2>
           <div class="row">
             <div class="txt"><div class="t">常驻布局</div><div class="d">B 精简（带状态文字）/ A 极简（仅图标名称）</div></div>

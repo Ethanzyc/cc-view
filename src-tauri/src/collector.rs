@@ -86,6 +86,8 @@ pub fn collect_sessions() -> Vec<Session> {
     );
     // host 探测用 ps 全表（一次 ps -ax），避免每会话每层 spawn ps（review P1-1）。
     let ps_table = crate::discovery::read_ps_table();
+    // tty 映射独立一次 ps（macOS ps 加 tty 列会压缩 command 列宽 → 路径截断）。
+    let tty_map = crate::discovery::read_tty_map();
     for entry in entries.flatten() {
         let path = entry.path();
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -139,6 +141,9 @@ pub fn collect_sessions() -> Vec<Session> {
                     }
                     // host 探测仅对活进程有意义（死进程的父进程链可能已失效）
                     s.focus_hint.host = crate::discovery::detect_host_via_table(pid, &ps_table);
+                    // 取 claude pid 的控制 TTY（与 shell 共享同一 PTY），供精确 tab 切换用。
+                    // 无终端（tmux/SSH 后台）或表缺失 → None，focus 时 fallback app 级 activate。
+                    s.focus_hint.tty = crate::discovery::tty_of_pid(pid, &tty_map);
                 }
                 out.push(s);
             }
@@ -151,6 +156,7 @@ pub fn collect_sessions() -> Vec<Session> {
         if w.alive {
             fill_tokens(&mut w);
             w.focus_hint.host = crate::discovery::detect_host_via_table(w.pid, &ps_table);
+            w.focus_hint.tty = crate::discovery::tty_of_pid(w.pid, &tty_map);
         }
         out.push(w);
     }

@@ -10,6 +10,7 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { Session, SessionDetail } from '../types';
+import { hostLabel } from '../types';
 import StatusIcon from './StatusIcon.vue';
 import DetailPanel from './DetailPanel.vue';
 import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
@@ -44,6 +45,10 @@ async function toggleShowArchived(show: boolean) {
 }
 // 图钉（pin = 失焦不收起）：后端 command + overlay_position.json 驱动。
 const pinned = ref(false);
+// 显示控制（从 prefs 读，prefs_changed 时重读）
+const showHost = ref(false);
+const showTokens = ref(true);
+const showActions = ref(true);
 // 复制成功反馈：id → true，1.2s 后清除（让用户知道复制生效）
 const copiedId = ref<string | null>(null);
 // now tick：后端 sessions emit 有 hash 去重（数据不变不 emit），isStaleInput 依赖时间，
@@ -53,6 +58,7 @@ let nowTimer: number | undefined;
 // listen 返回的 unlisten，onBeforeUnmount 调（避免反复 mount 累积 listener）。
 let unlistenSessions: (() => void) | undefined;
 let unlistenFocus: (() => void) | undefined;
+let unlistenPrefs: (() => void) | undefined;
 const searchRef = ref<HTMLInputElement>();
 
 // visible：按 showArchived toggle 过滤 hidden。off→只未归档；on→全显示。
@@ -262,8 +268,11 @@ onMounted(async () => {
     console.error('get_overlay_pinned on mount failed', e);
   }
   try {
-    const p = await invoke<{ show_archived: boolean }>('get_prefs');
+    const p = await invoke<{ show_archived: boolean; show_host: boolean; show_tokens: boolean; show_actions: boolean }>('get_prefs');
     showArchived.value = p.show_archived;
+    showHost.value = p.show_host;
+    showTokens.value = p.show_tokens;
+    showActions.value = p.show_actions;
   } catch (e) {
     console.error('get_prefs(show_archived) on mount failed', e);
   }
@@ -271,6 +280,21 @@ onMounted(async () => {
     unlistenSessions = await listen<Session[]>('sessions', e => { processUnread(e.payload); all.value = e.payload; });
   } catch (e) {
     console.error('overlay listen sessions failed', e);
+  }
+  try {
+    unlistenPrefs = await listen('prefs_changed', async () => {
+      try {
+        const p = await invoke<{ show_host: boolean; show_tokens: boolean; show_actions: boolean; show_archived: boolean }>('get_prefs');
+        showHost.value = p.show_host;
+        showTokens.value = p.show_tokens;
+        showActions.value = p.show_actions;
+        showArchived.value = p.show_archived;
+      } catch (e) {
+        console.error('prefs_changed reload in panel failed', e);
+      }
+    });
+  } catch (e) {
+    console.error('listen prefs_changed in panel failed', e);
   }
 
   // 窗口获焦时 focus + select 搜索框（overlay show/hide 复用，autofocus 仅首次生效）
@@ -289,6 +313,7 @@ onBeforeUnmount(() => {
   if (nowTimer) clearInterval(nowTimer);
   if (unlistenSessions) unlistenSessions();
   if (unlistenFocus) unlistenFocus();
+  if (unlistenPrefs) unlistenPrefs();
 });
 </script>
 
@@ -400,9 +425,10 @@ onBeforeUnmount(() => {
                 :key="i"
                 :class="{ hl: seg.hl }"
               >{{ seg.text }}</span>
+              <span v-if="showHost && hostLabel(s.focusHint.host)" class="host-badge">· {{ hostLabel(s.focusHint.host) }}</span>
             </div>
           </div>
-          <span v-if="s.tokensIn || s.tokensOut" class="tok">
+          <span v-if="showTokens && (s.tokensIn || s.tokensOut)" class="tok">
             {{ fmtTok(s.tokensIn) }}<span class="arr">↑</span>{{ fmtTok(s.tokensOut) }}<span class="arr">↓</span>
           </span>
           <span class="ago" :class="{ fresh: isFresh(s) }">
@@ -411,7 +437,7 @@ onBeforeUnmount(() => {
             <span v-if="archived.has(s.id)" class="archived-tag">已归档</span>
             <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
           </span>
-          <div class="actions">
+          <div v-if="showActions" class="actions">
             <button
               class="act-btn detail"
               title="详情"
@@ -487,10 +513,11 @@ onBeforeUnmount(() => {
               <div class="info">
                 <div class="line1">
                   <span class="name">{{ s.name || s.project }}</span>
+                  <span v-if="showHost && hostLabel(s.focusHint.host)" class="host-badge">· {{ hostLabel(s.focusHint.host) }}</span>
                   <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
                 </div>
               </div>
-              <span v-if="s.tokensIn || s.tokensOut" class="tok">
+              <span v-if="showTokens && (s.tokensIn || s.tokensOut)" class="tok">
                 {{ fmtTok(s.tokensIn) }}<span class="arr">↑</span>{{ fmtTok(s.tokensOut) }}<span class="arr">↓</span>
               </span>
               <span class="ago" :class="{ fresh: isFresh(s) }">
@@ -499,7 +526,7 @@ onBeforeUnmount(() => {
                 <span v-if="archived.has(s.id)" class="archived-tag">已归档</span>
                 <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
               </span>
-              <div class="actions">
+              <div v-if="showActions" class="actions">
                 <button
                   class="act-btn detail"
                   title="详情"
@@ -848,6 +875,14 @@ onBeforeUnmount(() => {
 .status-zh.work { color: var(--status-working-ink); }
 .status-zh.reply { color: var(--status-reply-ink); }
 .status-zh.perm { color: var(--status-permission); }
+
+/* 终端名 badge：tertiary 色 + 小字号 */
+.host-badge {
+  font: var(--fw-utility) var(--fs-utility)/var(--lh-utility) var(--font-body);
+  color: var(--color-tertiary);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .line2 {
   font: var(--fw-caption) var(--fs-caption)/var(--lh-caption) var(--font-body);
   color: var(--color-muted);

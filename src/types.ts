@@ -42,6 +42,30 @@ export interface Prefs {
   token_unit: TokenUnit;
   // 常驻面板宽度（null = 用 layout 默认 A=180/B=285）。后端 Option<f64>。
   resident_width: number | null;
+  // 显示控制
+  show_host: boolean;
+  show_tokens: boolean;
+  show_actions: boolean;
+}
+
+// host 枚举 → 短显示名（后端 serde camelCase）
+const HOST_LABELS: Record<string, string> = {
+  unknown: '',
+  iTerm2: 'iTerm',
+  ghostty: 'Ghostty',
+  kitty: 'Kitty',
+  vscode: 'VSCode',
+  idea: 'IDEA',
+  terminal: 'Terminal',
+  otty: 'Otty',
+  cmux: 'cmux',
+  tmux: 'tmux',
+  warp: 'Warp',
+  wezTerm: 'WezTerm',
+  alacritty: 'Alacritty',
+};
+export function hostLabel(host: string): string {
+  return HOST_LABELS[host] ?? '';
 }
 
 // 按回合的消耗明细（与后端 TurnStat camelCase 对齐）
