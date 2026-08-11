@@ -56,8 +56,10 @@ rm -f "$BUNDLE_DIR/cc-view.app.tar.gz" "$BUNDLE_DIR/cc-view.app.tar.gz.sig"
 tar czf "$BUNDLE_DIR/cc-view.app.tar.gz" -C "$BUNDLE_DIR" cc-view.app
 
 # 3. 用 Tauri signer 重新签名 updater archive（从仓库根目录跑 npx）
+# 清除可能残留的 env，避免和 -f 参数冲突
 echo "  重新签名 updater archive..."
 cd "$REPO_DIR"
+unset TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PATH
 npx tauri signer sign \
   -f ~/.tauri/cc-view.key \
   -p "" \
