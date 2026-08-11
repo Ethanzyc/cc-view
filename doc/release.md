@@ -1,6 +1,7 @@
 # 发布流程
 
-cc-view 手动发布（无 CI）。每个版本产出**两个架构**的 dmg + updater artifacts。
+cc-view 手动发布（无 CI）。每个版本产出**两个架构**的 dmg + updater artifacts，
+同步发布到 **GitHub + Gitee** 双平台（Gitee 为国内网络兜底）。
 
 ## 架构说明
 
@@ -9,9 +10,36 @@ cc-view 手动发布（无 CI）。每个版本产出**两个架构**的 dmg + u
 | Apple Silicon | `cc-view_<ver>_aarch64.dmg` | `darwin-aarch64` | 已验证 |
 | Intel | `cc-view_<ver>_x86_64.dmg` | `darwin-x86_64` | **未经实机测试** |
 
-> x86_64 包由 Apple Silicon 开发机**交叉编译**产出。依赖均为纯 Rust + macOS 系统框架绑定（无 C 库、无 sidecar），交叉编译无障碍；但未在真实 Intel Mac 上运行验证。遇到问题请[提 issue](https://github.com/Ethanzyc/cc-view/issues)。
+## 双平台 + updater 兜底架构
 
-## 前置（一次性）
+```
+updater endpoints (tauri.conf.json):
+  1. github.com/.../releases/latest/download/latest.json   ← 主（GitHub 有 latest 重定向）
+  2. gitee.com/.../raw/main/latest.json                     ← 兜底（Gitee 无 latest 重定向，文件提交到仓库）
+```
+
+Tauri v2 updater 按序尝试 endpoints，首个网络失败自动 fallback 到下一个。
+
+| 平台 | latest.json 来源 | updater 包 URL |
+|------|-----------------|----------------|
+| GitHub | release asset（`releases/latest/download/latest.json` 自动重定向到最新版） | `github.com/.../releases/download/v<ver>/...` |
+| Gitee | 仓库根目录 `latest.json`（`raw/main/latest.json`，每次发版 commit 更新） | `gitee.com/.../releases/download/v<ver>/...` |
+
+## 一键发布
+
+```bash
+# 1. 改版本号（Cargo.toml + tauri.conf.json），commit + push
+# 2. 运行发布脚本
+./scripts/publish.sh 0.5.1
+```
+
+脚本自动完成：构建双架构 → 打 DMG → GitHub release → Gitee release → 更新 latest.json → commit + push。
+
+## 手动发布（脚本内部步骤）
+
+以版本 `0.5.0`、tag `v0.5.0` 为例。
+
+### 前置（一次性）
 
 ```bash
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -19,79 +47,62 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
 updater 签名密钥——构建时设环境变量（密钥本身不进仓库）：
 
-- `TAURI_SIGNING_PRIVATE_KEY`：minisign 私钥
+- `TAURI_SIGNING_PRIVATE_KEY`：minisign 私钥（`~/.tauri/cc-view.key`）
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：空（本项目密钥无密码）
 
-## 每次发版
-
-以版本 `0.3.1`、tag `v0.3.1` 为例。
+Gitee token：`~/.git-credentials` 中 gitee.com 条目的密码部分。
 
 ### 1. 改版本号
 
-同步两处：`src-tauri/tauri.conf.json` 的 `version` 与 `src-tauri/Cargo.toml` 的 `version`。
+同步两处：`src-tauri/tauri.conf.json` 的 `version` 与 `src-tauri/Cargo.toml` 的 `version`。`cargo generate-lockfile` 更新 Cargo.lock。commit + push。
 
 ### 2. 构建两个架构
 
 ```bash
-# Apple Silicon
-TAURI_SIGNING_PRIVATE_KEY=<key> TAURI_SIGNING_PRIVATE_KEY_PASSWORD='' \
+TAURI_SIGNING_PRIVATE_KEY=$(cat ~/.tauri/cc-view.key) TAURI_SIGNING_PRIVATE_KEY_PASSWORD='' \
   npm run tauri build -- --target aarch64-apple-darwin --bundles app
 
-# Intel（交叉编译）
-TAURI_SIGNING_PRIVATE_KEY=<key> TAURI_SIGNING_PRIVATE_KEY_PASSWORD='' \
+TAURI_SIGNING_PRIVATE_KEY=$(cat ~/.tauri/cc-view.key) TAURI_SIGNING_PRIVATE_KEY_PASSWORD='' \
   npm run tauri build -- --target x86_64-apple-darwin --bundles app
 ```
 
-每个架构产出三样（在 `src-tauri/target/<triple>/release/bundle/macos/`）：
-
-- `cc-view.app` — 应用本体
-- `cc-view.app.tar.gz` — updater 增量包
-- `cc-view.app.tar.gz.sig` — minisign 签名
-
-### 3. 打 dmg
+### 3. 打 DMG
 
 ```bash
-./scripts/make-dmg.sh aarch64   # → cc-view_0.3.1_aarch64.dmg
-./scripts/make-dmg.sh x86_64    # → cc-view_0.3.1_x86_64.dmg
+./scripts/make-dmg.sh aarch64
+./scripts/make-dmg.sh x86_64
 ```
 
-### 4. 上传 release assets
+### 4. GitHub release
 
-两个架构的 updater 包都叫 `cc-view.app.tar.gz`，**上传前必须重命名**避免互相覆盖：
-
-| 源文件 | 上传为 |
-|--------|--------|
-| `target/aarch64-apple-darwin/.../cc-view.app.tar.gz` | `cc-view_aarch64.app.tar.gz` |
-| `target/x86_64-apple-darwin/.../cc-view.app.tar.gz` | `cc-view_x86_64.app.tar.gz` |
-| `cc-view_0.3.1_aarch64.dmg` | 同名 |
-| `cc-view_0.3.1_x86_64.dmg` | 同名 |
-
-### 5. 写 latest.json
-
-两个 platform 条目；`signature` 取各自 `.sig` 文件的完整内容（一整段 base64）：
-
-```json
-{
-  "version": "0.3.1",
-  "notes": "...",
-  "pub_date": "2026-08-10T00:00:00Z",
-  "platforms": {
-    "darwin-aarch64": {
-      "signature": "<target/aarch64-apple-darwin/.../cc-view.app.tar.gz.sig 的内容>",
-      "url": "https://github.com/Ethanzyc/cc-view/releases/download/v0.3.1/cc-view_aarch64.app.tar.gz"
-    },
-    "darwin-x86_64": {
-      "signature": "<target/x86_64-apple-darwin/.../cc-view.app.tar.gz.sig 的内容>",
-      "url": "https://github.com/Ethanzyc/cc-view/releases/download/v0.3.1/cc-view_x86_64.app.tar.gz"
-    }
-  }
-}
+```bash
+gh release create v0.5.0 --latest --title "v0.5.0" --notes "..."
+gh release upload v0.5.0 \
+  cc-view_0.5.0_aarch64.dmg cc-view_0.5.0_x86_64.dmg \
+  <aarch64 updater 包 + sig> \
+  <x86_64 updater 包 + sig> \
+  github-latest.json#latest.json   # GitHub 版 latest.json（URL 指向 GitHub）
 ```
 
-把 `latest.json` 也作为 asset 上传到 release。
+### 5. Gitee release
 
-### 6. 发布
+```bash
+# 创建 release（或用已有的 tag 自动创建的）
+GITEE_TOKEN=$(grep gitee.com ~/.git-credentials | head -1 | sed 's|.*:\([^@]*\)@.*|\1|')
+GITEE_API="https://gitee.com/api/v5/repos/Ethanzyc/cc-view/releases/<id>/attach_files"
 
-Release 由 draft 改 published。updater 客户端按自身架构匹配 `darwin-aarch64` / `darwin-x86_64` 条目，自动更新。
+curl -X POST "${GITEE_API}?access_token=${GITEE_TOKEN}" -F "file=@<file>" -F "name=<name>"
+# 上传所有 assets（dmg + updater 包 + sig），重命名带后缀避免覆盖
+```
 
-> **注意 asset 命名**：从双架构版本起，aarch64 的 updater 包也带后缀（`cc-view_aarch64.app.tar.gz`），不再是裸 `cc-view.app.tar.gz`——否则与 x86_64 同名覆盖。新 `latest.json` 整体替换旧文件，对存量 aarch64 用户的下一次更新无影响。
+### 6. 更新 latest.json 到仓库（Gitee updater 兜底）
+
+仓库根目录的 `latest.json`（`.gitignore` 排除了，用 `git add -f`）：
+URL 指向 Gitee release assets。commit + push（双推自动同步到 GitHub + Gitee）。
+
+## 注意事项
+
+- **updater 包命名**：双架构起，updater 包必须带架构后缀（`cc-view_aarch64.app.tar.gz` / `cc-view_x86_64.app.tar.gz`），否则同名覆盖。
+- **Gitee latest.json**：提交到仓库根目录（`raw/main/latest.json`），每次发版更新。`.gitignore` 排除 `latest.json`（本地构建产物），需 `git add -f`。
+- **git 双推**：`git push origin` 自动推 GitHub + Gitee（`origin` 配了双 push URL）。
+- **macOS Gatekeeper**：.app 未做 Apple 公证，用户需 `xattr -dr com.apple.quarantine`。
