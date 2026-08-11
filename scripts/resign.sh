@@ -52,12 +52,12 @@ echo "  ✅ 签名验证通过"
 
 # 2. 重新创建 updater 包（.app 已变，旧的 .tar.gz 过期）
 echo "  重新打包 updater archive..."
-cd "$BUNDLE_DIR"
-rm -f cc-view.app.tar.gz cc-view.app.tar.gz.sig
-tar czf cc-view.app.tar.gz cc-view.app
+rm -f "$BUNDLE_DIR/cc-view.app.tar.gz" "$BUNDLE_DIR/cc-view.app.tar.gz.sig"
+tar czf "$BUNDLE_DIR/cc-view.app.tar.gz" -C "$BUNDLE_DIR" cc-view.app
 
-# 3. 用 Tauri signer 重新签名 updater archive
+# 3. 用 Tauri signer 重新签名 updater archive（从仓库根目录跑 npx）
 echo "  重新签名 updater archive..."
+cd "$REPO_DIR"
 npx tauri signer sign \
   -f ~/.tauri/cc-view.key \
   -p "" \
