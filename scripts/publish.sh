@@ -17,15 +17,17 @@ TAG="v${VERSION}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-AARCH64_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
-X8664_DIR="src-tauri/target/x86_64-apple-darwin/release/bundle/macos"
-GITEE_TOKEN=$(grep 'gitee.com' ~/.git-credentials | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
 GITEE_OWNER="Ethanzyc"
-
+GITEE_TOKEN=$(grep 'gitee.com' ~/.git-credentials | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
 if [ -z "$GITEE_TOKEN" ]; then
   echo "ERROR: 无法从 ~/.git-credentials 提取 Gitee token"
   exit 1
 fi
+
+AARCH64_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+X8664_DIR="src-tauri/target/x86_64-apple-darwin/release/bundle/macos"
+STAGING=$(mktemp -d)
+trap 'rm -rf "$STAGING"' EXIT
 
 echo "=========================================="
 echo "  cc-view ${TAG} 双平台发布"
@@ -46,28 +48,25 @@ echo "[2/6] 打 DMG..."
 ./scripts/make-dmg.sh aarch64
 ./scripts/make-dmg.sh x86_64
 
-# ── 3. 准备 artifacts ───────────────────
+# ── 3. 准备 artifacts（全部重命名到 STAGING）────
 echo ""
 echo "[3/6] 准备 artifacts..."
-STAGING=$(mktemp -d)
-cp "${AARCH64_DIR}/cc-view.app.tar.gz" "${STAGING}/cc-view_aarch64.app.tar.gz"
-cp "${AARCH64_DIR}/cc-view.app.tar.gz.sig" "${STAGING}/cc-view_aarch64.app.tar.gz.sig"
-cp "${X8664_DIR}/cc-view.app.tar.gz" "${STAGING}/cc-view_x86_64.app.tar.gz"
-cp "${X8664_DIR}/cc-view.app.tar.gz.sig" "${STAGING}/cc-view_x86_64.app.tar.gz.sig"
-SIG_AARCH64=$(cat "${STAGING}/cc-view_aarch64.app.tar.gz.sig")
-SIG_X8664=$(cat "${STAGING}/cc-view_x86_64.app.tar.gz.sig")
+cp "${AARCH64_DIR}/cc-view.app.tar.gz"      "${STAGING}/cc-view_aarch64.app.tar.gz"
+cp "${AARCH64_DIR}/cc-view.app.tar.gz.sig"  "${STAGING}/cc-view_aarch64.app.tar.gz.sig"
+cp "${X8664_DIR}/cc-view.app.tar.gz"        "${STAGING}/cc-view_x86_64.app.tar.gz"
+cp "${X8664_DIR}/cc-view.app.tar.gz.sig"    "${STAGING}/cc-view_x86_64.app.tar.gz.sig"
+# DMG 已在仓库根目录，名字正确
 
 # ── 4. GitHub release ───────────────────
 echo ""
 echo "[4/6] 创建 GitHub release ${TAG}..."
-RELEASE_NOTES="> ⚠️ 首次打开提示「已损坏」？终端跑：\`xattr -dr com.apple.quarantine /Applications/cc-view.app\`"
 
 if gh release view "$TAG" >/dev/null 2>&1; then
   echo "  GitHub release ${TAG} 已存在，跳过创建"
 else
   gh release create "$TAG" --latest \
     --title "${TAG}" \
-    --notes "$RELEASE_NOTES"
+    --notes "> ⚠️ 首次打开提示「已损坏」？终端跑：\`xattr -dr com.apple.quarantine /Applications/cc-view.app\`"
 fi
 
 gh release upload "$TAG" \
@@ -80,66 +79,37 @@ gh release upload "$TAG" \
   --clobber
 
 # GitHub latest.json（URL 指向 GitHub）
-python3 -c "
-import json
-data = {
-    'version': '${VERSION}',
-    'notes': '${TAG}',
-    'pub_date': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
-    'platforms': {
-        'darwin-aarch64': {
-            'signature': open('${STAGING}/cc-view_aarch64.app.tar.gz.sig').read(),
-            'url': 'https://github.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_aarch64.app.tar.gz'
-        },
-        'darwin-x86_64': {
-            'signature': open('${STAGING}/cc-view_x86_64.app.tar.gz.sig').read(),
-            'url': 'https://github.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_x86_64.app.tar.gz'
-        }
-    }
-}
-with open('${STAGING}/github-latest.json', 'w') as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-"
-gh release upload "$TAG" "${STAGING}/github-latest.json#latest.json" --clobber
+GITHUB_LATEST="${STAGING}/latest.json"
+python3 "$REPO_DIR/scripts/gen-latest-json.py" \
+  --version "$VERSION" \
+  --aarch64-sig "${STAGING}/cc-view_aarch64.app.tar.gz.sig" \
+  --x86-64-sig "${STAGING}/cc-view_x86_64.app.tar.gz.sig" \
+  --url-aarch64 "https://github.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_aarch64.app.tar.gz" \
+  --url-x86-64 "https://github.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_x86_64.app.tar.gz" \
+  --output "$GITHUB_LATEST"
+gh release upload "$TAG" "$GITHUB_LATEST" --clobber
 
 # ── 5. Gitee release ────────────────────
 echo ""
 echo "[5/6] 创建 Gitee release ${TAG}..."
 
-# 查找/创建 Gitee release
-GITEE_RELEASE_ID=$(curl -s "https://gitee.com/api/v5/repos/${GITEE_OWNER}/cc-view/releases?access_token=${GITEE_TOKEN}&per_page=100" \
-  | python3 -c "
-import sys, json
-releases = json.load(sys.stdin)
-for r in releases:
-    if r['tag_name'] == '${TAG}':
-        print(r['id'])
-        break
-" 2>/dev/null)
+# 查找已有 release
+GITEE_RELEASE_ID=$(curl -sf "https://gitee.com/api/v5/repos/${GITEE_OWNER}/cc-view/releases?access_token=${GITEE_TOKEN}&per_page=100" \
+  | python3 -c "import sys,json; [print(r['id']) for r in json.load(sys.stdin) if r['tag_name']=='${TAG}']" 2>/dev/null || true)
 
 if [ -z "$GITEE_RELEASE_ID" ]; then
-  GITEE_RELEASE_ID=$(python3 -c "
-import json, urllib.request
-body = {
-    'access_token': '${GITEE_TOKEN}',
-    'tag_name': '${TAG}',
-    'name': '${TAG}',
-    'body': '${RELEASE_NOTES}',
-    'prerelease': False,
-    'target_commitish': 'main'
-}
-req = urllib.request.Request(
-    'https://gitee.com/api/v5/repos/${GITEE_OWNER}/cc-view/releases',
-    data=json.dumps(body).encode('utf-8'),
-    headers={'Content-Type': 'application/json'}
-)
-resp = urllib.request.urlopen(req)
-print(json.loads(resp.read())['id'])
-")
+  # 创建 release（用 form-data 避免 JSON 编码问题）
+  GITEE_RELEASE_ID=$(curl -sf -X POST "https://gitee.com/api/v5/repos/${GITEE_OWNER}/cc-view/releases" \
+    -F "access_token=${GITEE_TOKEN}" \
+    -F "tag_name=${TAG}" \
+    -F "name=${TAG}" \
+    -F "body=cc-view ${TAG}" \
+    -F "target_commitish=main" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 fi
 echo "  Gitee release ID: ${GITEE_RELEASE_ID}"
 
-# 上传 assets 到 Gitee
+# 上传 assets 到 Gitee（文件名决定 asset 名，所以从 STAGING 拷的带后缀文件直接用）
 GITEE_API="https://gitee.com/api/v5/repos/${GITEE_OWNER}/cc-view/releases/${GITEE_RELEASE_ID}/attach_files"
 for f in \
   "cc-view_${VERSION}_aarch64.dmg" \
@@ -150,42 +120,28 @@ for f in \
   "${STAGING}/cc-view_x86_64.app.tar.gz.sig"; do
   BASENAME=$(basename "$f")
   echo "  上传 ${BASENAME}..."
-  curl -s -X POST "${GITEE_API}?access_token=${GITEE_TOKEN}" \
-    -F "file=@${f}" \
-    -F "name=${BASENAME}" >/dev/null
+  curl -sf -X POST "${GITEE_API}?access_token=${GITEE_TOKEN}" -F "file=@${f}" >/dev/null
 done
+
+# Gitee release latest.json（文件名必须叫 latest.json）
+GITEE_LATEST="${STAGING}/latest.json"
+python3 "$REPO_DIR/scripts/gen-latest-json.py" \
+  --version "$VERSION" \
+  --aarch64-sig "${STAGING}/cc-view_aarch64.app.tar.gz.sig" \
+  --x86-64-sig "${STAGING}/cc-view_x86_64.app.tar.gz.sig" \
+  --url-aarch64 "https://gitee.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_aarch64.app.tar.gz" \
+  --url-x86-64 "https://gitee.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_x86_64.app.tar.gz" \
+  --output "$GITEE_LATEST"
+curl -sf -X POST "${GITEE_API}?access_token=${GITEE_TOKEN}" -F "file=@${GITEE_LATEST}" >/dev/null
+echo "  Gitee release latest.json 上传完成"
 
 # ── 6. 更新 latest.json 到仓库（Gitee raw 兜底用）──
 echo ""
 echo "[6/6] 更新 latest.json 到仓库（Gitee updater 兜底）..."
-python3 -c "
-import json
-data = {
-    'version': '${VERSION}',
-    'notes': '${TAG}',
-    'pub_date': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
-    'platforms': {
-        'darwin-aarch64': {
-            'signature': '''${SIG_AARCH64}''',
-            'url': 'https://gitee.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_aarch64.app.tar.gz'
-        },
-        'darwin-x86_64': {
-            'signature': '''${SIG_X8664}''',
-            'url': 'https://gitee.com/${GITEE_OWNER}/cc-view/releases/download/${TAG}/cc-view_x86_64.app.tar.gz'
-        }
-    }
-}
-with open('latest.json', 'w') as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-print('  latest.json 已更新')
-"
-
+cp "$GITEE_LATEST" "$REPO_DIR/latest.json"
 git add -f latest.json
 git commit -m "release: ${TAG} 更新 Gitee updater latest.json" || echo "  无需提交（内容未变）"
 git push
-
-# 清理
-rm -rf "$STAGING"
 
 echo ""
 echo "=========================================="
