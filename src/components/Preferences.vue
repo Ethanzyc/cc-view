@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // 偏好设置（VSCode Settings 风格：左 nav 分类 + 右设置项行）。
-// 分类：通用 / 外观 / 常驻面板 / 更新。⌘, 全局快捷键打开（lib.rs 注册）。
-import { ref, computed, onMounted } from 'vue';
+// 分类：通用 / 显示 / 更新。⌘, 全局快捷键打开（lib.rs 注册）。
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
+import { listen } from '@tauri-apps/api/event';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { shallowRef } from 'vue';
 import { relaunch } from '@tauri-apps/plugin-process';
 import type { Prefs, ResidentLayout, Theme, TokenUnit } from '../types';
 import { applyTheme } from '../utils/theme';
+import iconUrl from '../assets/cc-view-icon.png';
 
 type Category = 'general' | 'display' | 'update';
 const activeCategory = ref<Category>('general');
@@ -79,6 +81,18 @@ onMounted(async () => {
     console.error('getVersion failed', e);
   }
 });
+
+// 菜单「检查更新…」→ 后端 emit "prefs_action" → 切更新 tab + 自动检查
+let unlistenPrefsAction: (() => void) | undefined;
+onMounted(async () => {
+  unlistenPrefsAction = await listen<string>('prefs_action', (e) => {
+    if (e.payload === 'check_update') {
+      activeCategory.value = 'update';
+      checkForUpdates();
+    }
+  });
+});
+onBeforeUnmount(() => { unlistenPrefsAction?.(); });
 
 async function wrap(key: string, fn: () => Promise<unknown>) {
   error.value = null;
@@ -182,7 +196,7 @@ async function checkForUpdates() {
   } catch (e: unknown) {
     const msg = typeof e === 'string' ? e : (e as Error)?.message ?? '检查失败';
     error.value = /sending request|fetch|network|timeout|connect/i.test(msg)
-      ? '⚠ 无法连接 GitHub（网络/代理问题）'
+      ? '⚠ 无法连接更新服务器（GitHub + Gitee 均不可达）'
       : msg;
   } finally {
     checking.value = false;
@@ -205,9 +219,12 @@ async function downloadAndInstall() {
 
 <template>
   <div class="prefs">
-    <header class="topbar"><h1>cc-view 偏好设置</h1></header>
     <div class="body">
       <nav class="cats">
+        <div class="brand">
+          <img :src="iconUrl" alt="CC View" class="brand-icon" />
+          <span class="brand-name">CC View</span>
+        </div>
         <div class="cat" :class="{ active: activeCategory === 'general' }" @click="activeCategory = 'general'">通用</div>
         <div class="cat" :class="{ active: activeCategory === 'display' }" @click="activeCategory = 'display'">显示</div>
         <div class="cat" :class="{ active: activeCategory === 'update' }" @click="activeCategory = 'update'">更新</div>
@@ -326,16 +343,29 @@ async function downloadAndInstall() {
           <h2 class="group">更新</h2>
           <div class="update-box">
             <div>
-              <div class="t">版本 cc-view {{ appVersion }}</div>
-              <p v-if="upToDate" class="muted">已是最新版本</p>
+              <div class="t">当前版本 CC View {{ appVersion }}</div>
+              <p v-if="upToDate" class="muted">✓ 已是最新版本</p>
             </div>
             <button class="btn" @click="checkForUpdates" :disabled="checking">{{ checking ? '检查中…' : '检查更新' }}</button>
           </div>
-          <div v-if="updateAvailable" class="update-detail">
-            <p>发现新版本 {{ updateAvailable.version }}</p>
-            <pre v-if="updateAvailable.body">{{ updateAvailable.body }}</pre>
-            <button class="btn" @click="downloadAndInstall" :disabled="installing">{{ installing ? '安装中…' : '下载并安装' }}</button>
+
+          <!-- 发现新版本 -->
+          <div v-if="updateAvailable" class="update-available">
+            <div class="update-header">
+              <div class="update-version">
+                <span class="update-arrow">↑</span>
+                <span>新版本 <strong>{{ updateAvailable.version }}</strong></span>
+                <span class="update-diff">从 {{ appVersion }} 更新</span>
+              </div>
+              <button class="btn btn-primary" @click="downloadAndInstall" :disabled="installing">{{ installing ? '安装中…' : '下载并安装' }}</button>
+            </div>
+            <div v-if="updateAvailable.body" class="changelog">
+              <div class="changelog-title">更新内容</div>
+              <pre class="changelog-body">{{ updateAvailable.body }}</pre>
+            </div>
+            <a class="full-changelog" href="https://github.com/Ethanzyc/cc-view/releases" target="_blank" rel="noopener">查看完整更新日志 →</a>
           </div>
+
           <p v-if="installError" class="error">⚠ {{ installError }}</p>
         </section>
       </main>
@@ -352,20 +382,20 @@ async function downloadAndInstall() {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 顶栏 */
-.topbar {
-  padding: 14px 20px; border-bottom: 1px solid var(--color-border);
-  background: var(--prefs-bg); flex-shrink: 0;
-}
-.topbar h1 { font-size: 16px; font-weight: 700; margin: 0; }
-
-/* 双栏 */
+/* 双栏（无 topbar——native title bar 已显示标题） */
 .body { flex: 1; display: flex; overflow: hidden; }
 nav.cats {
   width: 180px; border-right: 1px solid var(--color-border);
-  padding: 8px 0; overflow-y: auto; flex-shrink: 0;
+  padding: 0 0 8px; overflow-y: auto; flex-shrink: 0;
   background: color-mix(in srgb, var(--prefs-bg) 60%, var(--color-hover));
 }
+/* 品牌区（logo + 名称） */
+.brand {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px 12px;
+}
+.brand-icon { width: 20px; height: 20px; border-radius: 5px; }
+.brand-name { font-size: 14px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
 .cat {
   padding: 8px 16px 8px 14px; cursor: pointer; color: var(--color-muted);
   font-size: 13px; border-left: 2px solid transparent; transition: background var(--motion-duration) var(--motion-easing);
@@ -441,9 +471,29 @@ main.settings { flex: 1; overflow-y: auto; padding: 8px 28px 28px; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; background: var(--color-hover); border-radius: 8px; margin-top: 8px;
 }
-.update-box .muted { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
-.update-detail { margin-top: 12px; padding: 12px; background: var(--color-hover); border-radius: 8px; }
-.update-detail pre { white-space: pre-wrap; margin: 8px 0; font-size: 12px; }
+.update-box .t { font-weight: 600; font-size: 12px; color: var(--color-fg); }
+.update-box .muted { color: var(--status-working-ink); font-size: 12px; margin-top: 4px; }
+
+/* 发现新版本面板 */
+.update-available {
+  margin-top: 12px; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden;
+}
+.update-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: color-mix(in srgb, var(--color-primary) 8%, var(--prefs-bg));
+}
+.update-version { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-fg); }
+.update-arrow { font-size: 16px; color: var(--color-primary); font-weight: 700; }
+.update-version strong { font-size: 14px; }
+.update-diff { font-size: 11px; color: var(--color-muted); margin-left: 4px; }
+
+.changelog { padding: 12px 16px; border-top: 1px solid var(--color-border); }
+.changelog-title { font-size: 11px; font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.changelog-body { white-space: pre-wrap; font-size: 12px; line-height: 1.6; color: var(--color-fg); margin: 0; font-family: var(--font-body); }
+
+.full-changelog { display: block; padding: 10px 16px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-primary); text-decoration: none; }
+.full-changelog:hover { text-decoration: underline; }
+
 .btn {
   padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px;
   background: var(--prefs-bg); color: var(--color-fg); cursor: pointer; font: inherit;
@@ -451,6 +501,8 @@ main.settings { flex: 1; overflow-y: auto; padding: 8px 28px 28px; }
 }
 .btn:not(:disabled):hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .btn:disabled { opacity: 0.5; cursor: default; }
+.btn-primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.btn-primary:not(:disabled):hover { filter: brightness(1.1); }
 
 .error { color: var(--status-permission); }
 .footer-error { margin: 12px 20px 0; }

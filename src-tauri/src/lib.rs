@@ -1468,7 +1468,7 @@ pub fn run() {
             let version_item = MenuItem::with_id(
                 app.handle(),
                 "version",
-                &format!("cc-view {version}"),
+                &format!("CC View {version}"),
                 false,
                 None::<&str>,
             )?;
@@ -1508,7 +1508,11 @@ pub fn run() {
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "show" => show_overlay(app),
                 "prefs" => open_prefs(app),
-                "update" => open_prefs(app),
+                "update" => {
+                    open_prefs(app);
+                    // 通知前端切到更新 tab 并自动检查
+                    let _ = app.emit("prefs_action", "check_update");
+                }
                 "quit" => app.exit(0),
                 _ => {}
             });

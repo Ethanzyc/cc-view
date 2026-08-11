@@ -36,7 +36,7 @@
         "height": 800,
         "center": true,
         "skipTaskbar": false,
-        "title": "cc-view 偏好设置"
+        "title": "CC View 偏好设置"
       }
     ],
     "trayIcon": {
