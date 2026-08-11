@@ -57,36 +57,12 @@
 
       <div class="body">
         <nav class="cats">
-          <div class="cat active">通用</div>
-          <div class="cat">外观</div>
-          <div class="cat">常驻面板</div>
+          <div class="cat">通用</div>
+          <div class="cat active">显示</div>
           <div class="cat">更新</div>
         </nav>
 
         <main class="settings">
-          <div class="group">通用</div>
-          <div class="row">
-            <div class="txt"><div class="t">开机自启动</div><div class="d">登录 macOS 时自动启动 cc-view</div></div>
-            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
-          </div>
-          <div class="row">
-            <div class="txt"><div class="t">通知</div><div class="d">会话进入待介入时弹系统通知</div></div>
-            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
-          </div>
-          <div class="row">
-            <div class="txt"><div class="t">全局快捷键</div><div class="d">呼出 / 收起命令面板（⌘, 开偏好已独立注册）</div></div>
-            <div class="ctl"><div class="opt-group">
-              <button class="opt-btn active">⌥Space</button>
-              <button class="opt-btn">⌘⌥Space</button>
-              <button class="opt-btn">⌃Space</button>
-              <button class="opt-btn">禁用</button>
-            </div></div>
-          </div>
-          <div class="row">
-            <div class="txt"><div class="t">轮询间隔</div><div class="d">采集会话状态的频率</div></div>
-            <div class="ctl"><input class="num" value="3"> <span class="unit">秒</span></div>
-          </div>
-
           <div class="group">外观</div>
           <div class="row">
             <div class="txt"><div class="t">主题</div><div class="d">浅色 / 深色（不跟随系统）</div></div>
@@ -101,6 +77,20 @@
               <button class="opt-btn active">k / M</button>
               <button class="opt-btn">万 / 亿</button>
             </div></div>
+          </div>
+
+          <div class="group">列表显示</div>
+          <div class="row">
+            <div class="txt"><div class="t">显示终端名</div><div class="d">在会话名旁标注终端 app（如 Otty、iTerm）</div></div>
+            <div class="ctl"><span class="toggle"><span class="switch-knob"></span></span></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示 token 用量</div><div class="d">每行的输入/输出累计 token</div></div>
+            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">显示操作按钮</div><div class="d">面板模式每行的详情/搁置/归档/复制按钮</div></div>
+            <div class="ctl"><span class="toggle on"><span class="switch-knob"></span></span></div>
           </div>
 
           <div class="group">常驻面板 <span class="tag">仅常驻</span></div>
@@ -132,12 +122,6 @@
               <div class="slider"><div class="fill" style="width:42%"></div><div class="knob" style="left:42%"></div></div>
               <span class="val">242px</span>
             </div></div>
-          </div>
-
-          <div class="group">更新</div>
-          <div class="update-box">
-            <span class="ver">版本 cc-view 0.4.0</span>
-            <button class="btn">检查更新</button>
           </div>
         </main>
       </div>
