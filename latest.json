@@ -1,0 +1,15 @@
+{
+  "version": "0.5.0",
+  "notes": "v0.5.0 — 精确切终端 tab + 偏好设置重构",
+  "pub_date": "2026-08-11T03:30:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkx0Qmtqb1pHQlFyZEp5OXBxQ2NOS2VuY01uTWU2NDZQaEVTaVI5OElMcUZFVUJQQWdvc0g5NkF4ejNTazljcEZFcmYvejFVdjJpeWgzTmxBd0s1SkFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NDE4Nzk5CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6ClVUdVgxMnlCRmcvOFoycmJsKzlHZTRLOVo1SFpRRzN3anZBYlppM1ZzYUl1S1ZjREFLSjFDWmFEWEZmbEtYZGdscXJBY3lPYVdVUitWbStPK0Z0Z0JBPT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.5.0/cc-view_aarch64.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkp2Z0ZtQUZrMVFRWmxKcWZscUZmT29ibnZQU0xWdGZTbmVlMmtja3hFNGZQRFJFVDR6a3dOS2ZEelgxNXBaTXpIaWt5QU9qSGhhYWxsdVhoZ3krOGdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NDE4ODY4CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6ClZJaFk5b1ZmOHg0Rzd1NkNIRDU4Q0ZHenJTcThjSnV3SldUUEJMbE9sTXcwazJyNFJ4eWhSU1pjRzVCYmNFZzNacmROa1pUWk9UT2d6ekZORDFxdEFBPT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.5.0/cc-view_x86_64.app.tar.gz"
+    }
+  }
+}
