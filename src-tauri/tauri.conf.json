@@ -71,7 +71,7 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0MDhBQ0FGNDg4NDY1NkUKUldSdVpZUklyNndJTk9SS3dnR1EvMjFmMHZYRFJDQ3A1N0dLR1JzemV1Zzk2TG9aYlQzWElhTHIK",
       "endpoints": [
         "https://github.com/Ethanzyc/cc-view/releases/latest/download/latest.json",
-        "https://gitee.com/Ethanzyc/cc-view/releases/download/latest/latest.json"
+        "https://gitee.com/Ethanzyc/cc-view/raw/main/latest.json"
       ]
     }
   }
