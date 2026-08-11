@@ -836,11 +836,7 @@ fn set_token_unit(
 
 /// 设置是否显示终端 app 名：存 prefs + emit prefs_changed。
 #[tauri::command]
-fn set_show_host(
-    show: bool,
-    state: tauri::State<'_, Mutex<prefs::Prefs>>,
-    app: tauri::AppHandle,
-) {
+fn set_show_host(show: bool, state: tauri::State<'_, Mutex<prefs::Prefs>>, app: tauri::AppHandle) {
     if let Ok(mut p) = state.lock() {
         p.show_host = show;
         p.save();

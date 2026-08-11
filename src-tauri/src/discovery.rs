@@ -86,9 +86,7 @@ pub fn detect_host_via_table(
 /// 独立于 read_ps_table（macOS ps 加 tty 列会压缩 command 列宽导致路径截断）。
 /// tty 规范化为 `/dev/ttysNNN`；`??`/无效 → 不入 map（lookup 返回 None）。
 pub fn read_tty_map() -> std::collections::HashMap<u32, String> {
-    let out = Command::new("ps")
-        .args(["-ax", "-o", "pid=,tty="])
-        .output();
+    let out = Command::new("ps").args(["-ax", "-o", "pid=,tty="]).output();
     let Ok(out) = out else {
         return std::collections::HashMap::new();
     };
@@ -97,7 +95,9 @@ pub fn read_tty_map() -> std::collections::HashMap<u32, String> {
     for line in text.lines() {
         let mut parts = line.trim_start().split_whitespace();
         let Some(pid_s) = parts.next() else { continue };
-        let Ok(pid) = pid_s.parse::<u32>() else { continue };
+        let Ok(pid) = pid_s.parse::<u32>() else {
+            continue;
+        };
         let tty_raw = parts.next().unwrap_or("");
         let tty = match tty_raw {
             "??" | "" => continue, // 无终端（daemon/GUI）
