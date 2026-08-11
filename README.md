@@ -12,6 +12,8 @@
 
 cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我 · M 工作」，需介入时染橙 + 红圆 badge）+ **⌥Space 命令面板**（搜索 / focus 跳终端 / 搁置 / 归档 / 复制 ID，失焦收起）+ **常驻精简面板**（贴桌面、状态色闪动提醒）+ **⌘, 偏好设置**（VSCode 风格）+ 系统通知——不用切窗口就能掌握全部会话、快速跳到要处理的那个。
 
+**点会话直接跳到正确的终端 tab**——不再是 app 级 activate（iTerm2 / Terminal / Otty 按 TTY 精确到 tab，Ghostty 按 cwd 精确到 terminal）。
+
 ## 截图
 
 **命令面板（⌥Space 呼出）— 多项目多状态 + token 列**
@@ -35,6 +37,14 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 ### 🎛️ 命令面板（⌥Space）
 - 全局快捷键呼出居中 overlay，**搜索**（名称 / 项目）/ **聚焦**（跳终端）/ **搁置** / **归档** / **复制 ID**
 - 失焦自动收起；可图钉钉住；位置记忆，拖动后持久化恢复
+- 列表显示可配置：终端名 / token 用量 / 操作按钮均可独立开关（偏好设置 → 显示）
+
+### 🎯 精确切终端 tab（v0.5.0 新）
+- 点会话行直接跳到**正确的终端 tab/window**，不再是 app 级 activate
+- **iTerm2 / Terminal.app / Otty**：TTY 匹配（`ps` 取控制 TTY → AppleScript 遍历 tab/session 找匹配）
+- **Ghostty ≥ 1.3.0**：OSC 7 marker 精确匹配（往 TTY 写唯一 cwd 标记 → AppleScript 匹配 → 恢复）
+- **其余终端**（Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty）：app 级 activate（无可编程 API 或需额外配置）
+- 全屏 Space 切换：统一 click Dock 图标（唯一可靠方式）
 
 ### 📌 常驻模式
 - 同一 overlay 的精简形态——贴桌面常驻、失焦不收起、背景透明度可调（0–100%）、**宽度可调**（拖右边缘 140–480px，右锚定不动，拖完持久化）
@@ -65,9 +75,9 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 - 等输入超 30min 自动灰显 + 标「闲置」，全闲置项目整组下沉；超时等回答同样灰显——不抢注意力
 
 ### ⚙️ 偏好设置 & 自动更新（v0.4.0 重做）
-- **VSCode 风格**：左侧分类导航（通用 / 外观 / 常驻面板 / 更新）+ 右侧设置项行，`⌘,` 全局快捷键打开
+- **VSCode 风格**：左侧分类导航（通用 / 显示 / 更新）+ 右侧设置项行，`⌘,` 全局快捷键打开
+- **显示**分类（v0.5.0 合并）：主题 / token 单位 / **显示终端名** / **显示 token 用量** / **显示操作按钮** / 常驻布局 / 搁置 / 闲置 / 透明度 / 面板宽度
 - 开关统一 **macOS toggle switch**；搁置 / 闲置分项带说明（搁置＝手动暂停不催促不通知；闲置＝等输入超 30min 自动降级）
-- 滑块：常驻宽度（140–480px）/ 背景透明度；按钮组：全局快捷键、常驻布局、外观、token 单位
 - 基于 [tauri-plugin-updater](https://v2.tauri.app/plugin/updater/) 的自动检查 + 下载安装 + 重启
 
 ## 快捷键
@@ -93,6 +103,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 **要求**：macOS 13+，Apple Silicon（aarch64，已验证）或 Intel（x86_64，**未经实机测试**，有问题[提 issue](https://github.com/Ethanzyc/cc-view/issues)）。首次运行在系统设置里授权：
 - **通知**：系统通知
 - **辅助功能**：focus 跳全屏 app（点 Dock 切全屏 Space 需要）；**首次 focus 会弹系统授权窗**引导
+- **自动化**：控制终端 app（iTerm / Terminal / Otty / Ghostty 的 AppleScript）；**首次切换到对应终端会弹授权窗**
 
 ## 数据源
 
@@ -118,15 +129,15 @@ npm run tauri build   # 产出 .app / dmg / updater artifacts
 ## 已知限制
 
 - **常驻拖动需先点击**：常驻面板是 nonActivating panel（贴桌面不抢焦点），失焦后再拖动需先点一下面板回归焦点才能拖——输入可用性（becomesKeyOnlyIfNeeded）与拖动便利的折衷，无法在不破坏终端输入的前提下消除。
-- **focus 为 app 级**：点会话行 activate 宿主终端 **app**（Terminal / iTerm / Ghostty / Otty …），不区分同 app 的多窗口 / tab / pane——同一终端 app 多窗口时跳到哪个不确定。精确切 tab / window 待后续终端 app 集成（见路线图）。
+- **精确切 tab 覆盖范围**：iTerm2 / Terminal / Otty（TTY 匹配）和 Ghostty（OSC 7 marker）已精确到 tab/terminal；Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty 因无可编程 API 或需额外配置，仍为 app 级 activate（同 app 多窗口不精确）。
 - **Compacting 检测为 post-compact**：详情面板用上下文跳降启发式（不依赖 `compact_boundary`，适配新版 claude-code）；状态机的"压缩中"判定仍用 `compact_boundary`，compaction 进行中的 ~2min 内无法实时检测。
 - **updater 依赖网络**：检查更新走 `github.com`，不可达时报错（中文提示），需 GitHub 可达或代理。
 - **Intel 版未经实机测试**：x86_64 包由 Apple Silicon 交叉编译产出（纯 Rust + 系统框架依赖，理论可用），未在真实 Intel Mac 上验证运行；遇到问题请[提 issue](https://github.com/Ethanzyc/cc-view/issues)。
 
 ## 路线图
 
-- [ ] **终端 app 精确切 tab / window**：iTerm2 / Otty / Ghostty / Warp / VSCode / IntelliJ / Terminal 各自的 AppleScript / CLI 集成（当前 app 级 activate，同 app 多窗口不精确）
-- [ ] 更多终端 host 自动识别
+- [ ] Kitty remote control 精确切换（需用户开 `allow_remote_control`）
+- [ ] VSCode / IntelliJ 打开项目窗口增强
 - [ ] 透明度 / 毛玻璃效果进一步可调
 
 ## 致谢

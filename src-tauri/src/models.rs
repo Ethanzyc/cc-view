@@ -30,6 +30,7 @@ pub enum Host {
     Unknown,
     ITerm2,
     Ghostty,
+    Kitty,
     Vscode,
     Idea,
     Terminal,
@@ -37,12 +38,17 @@ pub enum Host {
     Cmux,
     Tmux,
     Warp,
+    WezTerm,
+    Alacritty,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FocusHint {
     pub host: Host,
+    /// 精确切 tab 用：claude 进程的控制 TTY（如 `/dev/ttys003`）。
+    /// 终端 AppleScript 可遍历 tab/session 找 tty 匹配，精确 select。
+    pub tty: Option<String>,
     pub iterm_session_id: Option<String>,
     pub tmux_pane: Option<String>,
     pub term_program: Option<String>,
@@ -134,5 +140,6 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("\"statusUpdatedAt\""));
         assert!(json.contains("\"focusHint\""));
+        assert!(json.contains("\"tty\""));
     }
 }

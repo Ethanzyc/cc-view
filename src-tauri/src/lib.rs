@@ -551,15 +551,21 @@ fn focus_session(
     if need_perm {
         focus::ax_trusted(true); // 弹系统授权窗（首次进列表，重复调用安全）
     }
-    let host = match cache.lock() {
+    let (host, tty, cwd) = match cache.lock() {
         Ok(sessions) => sessions
             .iter()
             .find(|s| s.id == id)
-            .map(|s| s.focus_hint.host.clone())
+            .map(|s| {
+                (
+                    s.focus_hint.host.clone(),
+                    s.focus_hint.tty.clone(),
+                    s.cwd.clone(),
+                )
+            })
             .ok_or_else(|| format!("focus_session: session {} not in cache", id)),
         Err(_) => Err("focus_session: sessions cache lock poisoned".to_string()),
     }?;
-    focus::activate_host(&host);
+    focus::activate_host(&host, &tty, &cwd);
     if need_perm {
         Err("accessibility".into())
     } else {
@@ -823,6 +829,48 @@ fn set_token_unit(
 ) {
     if let Ok(mut p) = state.lock() {
         p.token_unit = unit;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 设置是否显示终端 app 名：存 prefs + emit prefs_changed。
+#[tauri::command]
+fn set_show_host(
+    show: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.show_host = show;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 设置是否显示 token 用量：存 prefs + emit prefs_changed。
+#[tauri::command]
+fn set_show_tokens(
+    show: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.show_tokens = show;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 设置是否显示操作按钮：存 prefs + emit prefs_changed。
+#[tauri::command]
+fn set_show_actions(
+    show: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.show_actions = show;
         p.save();
     }
     let _ = app.emit("prefs_changed", ());
@@ -1209,6 +1257,9 @@ pub fn run() {
             set_resident_width,
             set_theme,
             set_token_unit,
+            set_show_host,
+            set_show_tokens,
+            set_show_actions,
             set_mode,
             do_animate,
             set_resident_height
