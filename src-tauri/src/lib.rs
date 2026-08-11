@@ -4,6 +4,7 @@ mod badge;
 mod collector;
 mod discovery;
 mod focus;
+mod i18n;
 mod liveness;
 mod models;
 mod notify;
@@ -319,17 +320,24 @@ fn start_poll_loop(handle: tauri::AppHandle) {
                 .and_then(|s| s.lock().ok().map(|p| p.notify))
                 .unwrap_or(true);
             if notify_on {
+                let lang = i18n::resolve(
+                    handle
+                        .try_state::<Mutex<prefs::Prefs>>()
+                        .and_then(|s| s.lock().ok().map(|p| p.locale))
+                        .unwrap_or(prefs::Locale::Auto),
+                );
+                let s = lang.strings();
                 for (name, status) in to_notify {
-                    let status_zh = match status {
-                        models::Status::NeedsPermission => "等待权限确认",
-                        models::Status::WaitingForReply => "等待你回答",
-                        models::Status::WaitingForInput => "等待输入",
-                        _ => "需要关注",
+                    let status_text = match status {
+                        models::Status::NeedsPermission => s.notify_perm,
+                        models::Status::WaitingForReply => s.notify_reply,
+                        models::Status::WaitingForInput => s.notify_input,
+                        _ => s.notify_attention,
                     };
                     notify::send_notification(
                         &handle,
                         "cc-view",
-                        &format!("{}：{}", name, status_zh),
+                        &format!("{}：{}", name, status_text),
                     );
                 }
             }
@@ -361,25 +369,34 @@ fn start_poll_loop(handle: tauri::AppHandle) {
             let urgent = perm + reply;
 
             if let Some(tray) = handle.tray_by_id("main") {
+                let lang = i18n::resolve(
+                    handle
+                        .try_state::<Mutex<prefs::Prefs>>()
+                        .and_then(|s| s.lock().ok().map(|p| p.locale))
+                        .unwrap_or(prefs::Locale::Auto),
+                );
+                let s = lang.strings();
                 // tooltip：urgent>0 时按权限/回答/等我/工作分段（仅显示 >0 的段）；
                 //          否则 idle>0 → "等我·工作"；再否则 → "工作"。
                 let tip = if urgent > 0 {
                     let mut parts: Vec<String> = Vec::new();
                     if perm > 0 {
-                        parts.push(format!("{} 等权限", perm));
+                        parts.push(s.tip_perm.replace("{}", &perm.to_string()));
                     }
                     if reply > 0 {
-                        parts.push(format!("{} 等回答", reply));
+                        parts.push(s.tip_reply.replace("{}", &reply.to_string()));
                     }
                     if idle > 0 {
-                        parts.push(format!("{} 等我", idle));
+                        parts.push(s.tip_idle.replace("{}", &idle.to_string()));
                     }
-                    parts.push(format!("{} 工作", working));
-                    parts.join(" · ")
+                    parts.push(s.tip_working.replace("{}", &working.to_string()));
+                    parts.join(s.tip_sep)
                 } else if idle > 0 {
-                    format!("{} 等我 · {} 工作", idle, working)
+                    let idle_str = s.tip_idle.replace("{}", &idle.to_string());
+                    let work_str = s.tip_working.replace("{}", &working.to_string());
+                    format!("{}{}{}", idle_str, s.tip_sep, work_str)
                 } else {
-                    format!("{} 工作", working)
+                    s.tip_working.replace("{}", &working.to_string())
                 };
                 // set_tooltip 走 main-thread IPC 但开销极小，每轮更新无妨
                 let _ = tray.set_tooltip(Some(tip));
@@ -1298,6 +1315,69 @@ fn set_update_source(
     let _ = app.emit("prefs_changed", ());
 }
 
+/// 设置界面语言。同时 rebuild tray 菜单（菜单文案需跟语言变）。
+#[tauri::command]
+fn set_locale(
+    locale: String,
+    state: tauri::State<'_, std::sync::Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    let loc = match locale.as_str() {
+        "zh" => prefs::Locale::Zh,
+        "en" => prefs::Locale::En,
+        _ => prefs::Locale::Auto,
+    };
+    if let Ok(mut p) = state.lock() {
+        p.locale = loc;
+        p.save();
+    }
+    // rebuild tray 菜单（文案跟着 locale 变）
+    rebuild_tray_menu(&app);
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 按 prefs.locale 重建 tray 菜单（语言切换时调）。
+fn rebuild_tray_menu(app: &tauri::AppHandle) {
+    let Some(tray) = app.tray_by_id("main") else {
+        return;
+    };
+    let lang = i18n::resolve(
+        app.state::<Mutex<prefs::Prefs>>()
+            .lock()
+            .map(|p| p.locale)
+            .unwrap_or(prefs::Locale::Auto),
+    );
+    let s = lang.strings();
+    let version = env!("CARGO_PKG_VERSION");
+    let Ok(menu) = Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(
+                app,
+                "version",
+                &format!("CC View {version}"),
+                false,
+                None::<&str>,
+            )
+            .unwrap_or_else(|_| {
+                MenuItem::with_id(app, "version", "", false, None::<&str>)
+                    .expect("fallback version item")
+            }),
+            &PredefinedMenuItem::separator(app).expect("sep1"),
+            &MenuItem::with_id(app, "show", s.menu_show, true, None::<&str>).expect("show item"),
+            &PredefinedMenuItem::separator(app).expect("sep2"),
+            &MenuItem::with_id(app, "prefs", s.menu_prefs, true, None::<&str>).expect("prefs item"),
+            &MenuItem::with_id(app, "update", s.menu_update, true, None::<&str>)
+                .expect("update item"),
+            &PredefinedMenuItem::separator(app).expect("sep3"),
+            &MenuItem::with_id(app, "quit", s.menu_quit, true, None::<&str>).expect("quit item"),
+        ],
+    ) else {
+        return;
+    };
+    let _ = tray.set_menu(Some(menu));
+}
+
 #[tauri::command]
 fn get_pending_update(app: tauri::AppHandle) -> Option<serde_json::Value> {
     let dir = data_dir()?;
@@ -1307,14 +1387,21 @@ fn get_pending_update(app: tauri::AppHandle) -> Option<serde_json::Value> {
         .and_then(|s| serde_json::from_str(&s).ok());
     if let Some(ref data) = result {
         let _ = std::fs::remove_file(&path);
-        // 弹系统通知
+        // 弹系统通知（按当前 locale 翻译）
+        let lang = i18n::resolve(
+            app.state::<std::sync::Mutex<prefs::Prefs>>()
+                .lock()
+                .map(|p| p.locale)
+                .unwrap_or(prefs::Locale::Auto),
+        );
+        let s = lang.strings();
         let version = data.get("version").and_then(|v| v.as_str()).unwrap_or("");
         let notes = data.get("notes").and_then(|v| v.as_str()).unwrap_or("");
         notify::send_notification(
             &app,
-            &format!("CC View 已更新到 {}", version),
+            &s.update_title.replace("{}", version),
             if notes.is_empty() {
-                "点击查看更新内容"
+                s.update_body
             } else {
                 notes
             },
@@ -1407,7 +1494,8 @@ pub fn run() {
             set_pending_update,
             get_pending_update,
             check_update_custom,
-            set_update_source
+            set_update_source,
+            set_locale
         ])
         .setup(|app| {
             // DMG 安装的 app 带 com.apple.quarantine 标记，Gatekeeper 拦截非公证 app。
@@ -1591,6 +1679,13 @@ pub fn run() {
             }
 
             // 构建 menubar 托盘菜单：版本号(只读) / 显示面板 / 偏好设置(占位) / 检查更新(占位) / 退出。
+            // 菜单文案按 prefs.locale 翻译（set_locale 时 rebuild）。
+            let startup_lang = i18n::resolve(
+                app.state::<Mutex<prefs::Prefs>>()
+                    .lock()
+                    .map(|p| p.locale)
+                    .unwrap_or(prefs::Locale::Auto),
+            );
             let version = env!("CARGO_PKG_VERSION");
             let version_item = MenuItem::with_id(
                 app.handle(),
@@ -1600,16 +1695,17 @@ pub fn run() {
                 None::<&str>,
             )?;
             let sep1 = PredefinedMenuItem::separator(app.handle())?;
+            let mi = startup_lang.strings();
             let show_item =
-                MenuItem::with_id(app.handle(), "show", "显示面板", true, None::<&str>)?;
+                MenuItem::with_id(app.handle(), "show", mi.menu_show, true, None::<&str>)?;
             let sep2 = PredefinedMenuItem::separator(app.handle())?;
             let prefs_item =
-                MenuItem::with_id(app.handle(), "prefs", "偏好设置…", true, None::<&str>)?;
+                MenuItem::with_id(app.handle(), "prefs", mi.menu_prefs, true, None::<&str>)?;
             let update_item =
-                MenuItem::with_id(app.handle(), "update", "检查更新…", true, None::<&str>)?;
+                MenuItem::with_id(app.handle(), "update", mi.menu_update, true, None::<&str>)?;
             let sep3 = PredefinedMenuItem::separator(app.handle())?;
             let quit_item =
-                MenuItem::with_id(app.handle(), "quit", "退出 cc-view", true, None::<&str>)?;
+                MenuItem::with_id(app.handle(), "quit", mi.menu_quit, true, None::<&str>)?;
             let menu = Menu::with_items(
                 app.handle(),
                 &[

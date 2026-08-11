@@ -1,16 +1,21 @@
 // Overlay 会话展示工具（排序/分组/状态文案等，从原两组件去重合并而来）。
 import { ref } from 'vue';
 import type { Session, Status } from '../types';
+import { i18n } from '../i18n';
 
-// 状态中文名：保留 cc 真实状态（不因 snoozed 改成"已搁置"——分组标题已表达）
-export const STATUS_ZH: Record<Status, string> = {
-  working: '工作中',
-  waitingForInput: '等输入',
-  waitingForReply: '等回答',
-  needsPermission: '等权限',
-  shell: 'Shell',
-  compacting: '压缩中',
-};
+// 状态文案（i18n 响应式）：保留 cc 真实状态（不因 snoozed 改成"已搁置"——分组标题已表达）
+export function statusLabel(s: Status): string {
+  const t = i18n.global.t;
+  switch (s) {
+    case 'working': return t('status.working');
+    case 'waitingForInput': return t('status.waitingForInput');
+    case 'waitingForReply': return t('status.waitingForReply');
+    case 'needsPermission': return t('status.needsPermission');
+    case 'shell': return t('status.shell');
+    case 'compacting': return t('status.compacting');
+    default: return s;
+  }
+}
 
 // 排序档：等权限 > 等回答 > 等输入 > 工作 > Shell > 压缩 > 搁置(alive 6.5) > 已退出(7) > 搁置(dead 7.5)
 export function statusRank(s: Session): number {

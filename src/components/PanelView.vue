@@ -9,12 +9,15 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { useI18n } from 'vue-i18n';
 import type { Session, SessionDetail } from '../types';
 import { hostLabel } from '../types';
 import StatusIcon from './StatusIcon.vue';
 import DetailPanel from './DetailPanel.vue';
-import { STATUS_ZH, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
+import { statusLabel, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
 import { processUnread, clearUnread, unread } from '../utils/unread';
+
+const { t } = useI18n();
 
 const all = ref<Session[]>([]);
 // 详情子状态：selectedDetail 非空时切到 DetailPanel（不动全局 mode/窗口）。
@@ -131,18 +134,18 @@ const groups = computed<Section[]>(() => {
       if (aStale !== bStale) return aStale ? 1 : -1;
       return 0;
     });
-    result.push({ key: 'active', label: '待介入', total: active.length, projs: activeProjs, hidden: 0 });
+    result.push({ key: 'active', label: t('group.active'), total: active.length, projs: activeProjs, hidden: 0 });
   }
-  if (snoozedAlive.length) result.push({ key: 'snoozed', label: '已搁置', total: snoozedAlive.length, projs: byProj(snoozedAlive), hidden: 0 });
-  if (dead.length) result.push({ key: 'dead', label: '已退出', total: dead.length, projs: byProj(dead), hidden: deadHidden });
+  if (snoozedAlive.length) result.push({ key: 'snoozed', label: t('group.snoozed'), total: snoozedAlive.length, projs: byProj(snoozedAlive), hidden: 0 });
+  if (dead.length) result.push({ key: 'dead', label: t('group.dead'), total: dead.length, projs: byProj(dead), hidden: deadHidden });
   return result;
 });
 
 // 计数：搜索态显示结果数；非搜索态显示待介入数（active 组总数，无则 0）
 const overlayCount = computed(() =>
   searchActive.value
-    ? `${flatResults.value.length} 个结果`
-    : `${groups.value.find(g => g.key === 'active')?.total ?? 0} 待介入`,
+    ? t('panel.resultCount', { n: flatResults.value.length })
+    : t('panel.activeCount', { n: groups.value.find(g => g.key === 'active')?.total ?? 0 }),
 );
 
 // 搁置/恢复：成功后直接改 all.value 对应 session.snoozed（Overlay 自管，不等 3s poll）
@@ -174,7 +177,7 @@ async function focusSession(id: string) {
     await getCurrentWebviewWindow().hide();
   } catch (e) {
     if (e === 'accessibility') {
-      alert('需要辅助功能权限才能切换到终端窗口（尤其全屏空间）。\n请到 系统设置 → 隐私与安全性 → 辅助功能 授权 cc-view，然后重新点击。');
+      alert(t('alert.accessibility'));
     } else {
       console.error('focus_session failed', e);
     }
@@ -335,7 +338,7 @@ onBeforeUnmount(() => {
         ref="searchRef"
         class="search"
         v-model="q"
-        placeholder="搜索会话（名称 / 项目）..."
+        :placeholder="t('panel.searchPlaceholder')"
         autofocus
         spellcheck="false"
         data-tauri-drag-region="false"
@@ -345,19 +348,19 @@ onBeforeUnmount(() => {
       <button
         class="toggle"
         :class="{ on: showArchived }"
-        :title="showArchived ? '隐藏已归档' : '显示已归档'"
+        :title="showArchived ? t('panel.hideArchived') : t('panel.showArchived')"
         :aria-pressed="showArchived"
         data-tauri-drag-region="false"
         @click="toggleShowArchived(!showArchived)"
       >
         <span class="switch-knob"></span>
-        <span class="toggle-label">归档</span>
+        <span class="toggle-label">{{ t('panel.archived') }}</span>
       </button>
       <button
         class="pin-btn"
         :class="{ pinned }"
-        :title="pinned ? '取消定住' : '定住（失焦不收起）'"
-        :aria-label="pinned ? '取消定住' : '定住（失焦不收起）'"
+        :title="pinned ? t('panel.unpin') : t('panel.pin')"
+        :aria-label="pinned ? t('panel.unpin') : t('panel.pin')"
         :aria-pressed="pinned"
         data-tauri-drag-region="false"
         @click="togglePin"
@@ -370,8 +373,8 @@ onBeforeUnmount(() => {
       </button>
       <button
         class="collapse-btn"
-        title="收起成常驻（精简面板）"
-        aria-label="收起成常驻（精简面板）"
+        :title="t('panel.collapse')"
+        :aria-label="t('panel.collapse')"
         data-tauri-drag-region="false"
         @click="collapseToResident"
       >
@@ -401,7 +404,7 @@ onBeforeUnmount(() => {
           }"
           role="button"
           tabindex="0"
-          :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
+          :aria-label="`${s.name || s.project}，${statusLabel(s.status)}`"
           @click="focusSession(s.id)"
           @keydown.enter.prevent="focusSession(s.id)"
           @keydown.space.prevent="focusSession(s.id)"
@@ -417,7 +420,7 @@ onBeforeUnmount(() => {
                   :class="{ hl: seg.hl }"
                 >{{ seg.text }}</span>
               </span>
-              <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
+              <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ statusLabel(s.status) }}</span>
             </div>
             <div class="line2">
               <span
@@ -434,14 +437,14 @@ onBeforeUnmount(() => {
           <span class="ago" :class="{ fresh: isFresh(s) }">
             <span v-if="isFresh(s)" class="fresh-dot" />
             {{ agoF(s.statusUpdatedAt) }}
-            <span v-if="archived.has(s.id)" class="archived-tag">已归档</span>
-            <span v-if="isStaleInput(s, now)" class="idle-tag">闲置</span>
+            <span v-if="archived.has(s.id)" class="archived-tag">{{ t('panel.archivedTag') }}</span>
+            <span v-if="isStaleInput(s, now)" class="idle-tag">{{ t('panel.idleTag') }}</span>
           </span>
           <div v-if="showActions" class="actions">
             <button
               class="act-btn detail"
-              title="详情"
-              aria-label="详情"
+              :title="t('panel.detail')"
+              :aria-label="t('panel.detail')"
               @click.stop="openDetail(s)"
             >
               <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -451,33 +454,33 @@ onBeforeUnmount(() => {
             <button
               v-if="s.alive && s.snoozed"
               class="act-btn snooze"
-              title="恢复（取消搁置）"
-              aria-label="恢复（取消搁置）"
+              :title="t('panel.unsnooze')"
+              :aria-label="t('panel.unsnooze')"
               @click.stop="unsnooze(s.id)"
             ><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg></button>
             <button
               v-else-if="s.alive && (s.status === 'waitingForInput' || s.status === 'waitingForReply')"
               class="act-btn snooze"
-              title="搁置（暂时不管）"
-              aria-label="搁置（暂时不管）"
+              :title="t('panel.snooze')"
+              :aria-label="t('panel.snooze')"
               @click.stop="snooze(s.id)"
             ><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></button>
             <button
               class="act-btn archive"
-              :title="archived.has(s.id) ? '取消归档' : '归档'"
-              :aria-label="archived.has(s.id) ? '取消归档' : '归档'"
+              :title="archived.has(s.id) ? t('panel.unarchive') : t('panel.archive')"
+              :aria-label="archived.has(s.id) ? t('panel.unarchive') : t('panel.archive')"
               @click.stop="archived.has(s.id) ? unarchive(s.id) : archive(s.id)"
             ><svg v-if="archived.has(s.id)" class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M12 18v-6" /><path d="M9 15l3-3 3 3" /></svg><svg v-else class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></button>
             <button
               class="act-btn copy"
               :class="{ done: copiedId === s.id }"
-              :title="copiedId === s.id ? '已复制' : '复制'"
-              :aria-label="copiedId === s.id ? '已复制' : '复制'"
+              :title="copiedId === s.id ? t('panel.copied') : t('panel.copy')"
+              :aria-label="copiedId === s.id ? t('panel.copied') : t('panel.copy')"
               @click.stop="copyId(s.id)"
             ><svg v-if="copiedId === s.id" class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg><svg v-else class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
           </div>
         </li>
-        <li v-if="!flatResults.length" class="empty">无匹配 "{{ q.trim() }}"</li>
+        <li v-if="!flatResults.length" class="empty">{{ t('panel.noMatch', { q: q.trim() }) }}</li>
       </ul>
       <!-- 非搜索态：分组（同 HUD） -->
       <ul class="list" v-else-if="groups.length">
@@ -503,7 +506,7 @@ onBeforeUnmount(() => {
               }"
               role="button"
               tabindex="0"
-              :aria-label="`${s.name || s.project}，${STATUS_ZH[s.status]}`"
+              :aria-label="`${s.name || s.project}，${statusLabel(s.status)}`"
               @click="focusSession(s.id)"
               @keydown.enter.prevent="focusSession(s.id)"
               @keydown.space.prevent="focusSession(s.id)"
@@ -514,7 +517,7 @@ onBeforeUnmount(() => {
                 <div class="line1">
                   <span class="name">{{ s.name || s.project }}</span>
                   <span v-if="showHost && hostLabel(s.focusHint.host)" class="host-badge">· {{ hostLabel(s.focusHint.host) }}</span>
-                  <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ STATUS_ZH[s.status] }}</span>
+                  <span class="status-zh" :class="{ work: s.status === 'working', reply: s.status === 'waitingForReply', perm: s.status === 'needsPermission' }">{{ statusLabel(s.status) }}</span>
                 </div>
               </div>
               <span v-if="showTokens && (s.tokensIn || s.tokensOut)" class="tok">
@@ -568,11 +571,11 @@ onBeforeUnmount(() => {
             </li>
           </template>
           <li v-if="section.hidden > 0" class="dead-more">
-            +{{ section.hidden }} 个更早的已省略
+            {{ t('panel.deadMore', { n: section.hidden }) }}
           </li>
         </template>
       </ul>
-      <div v-else class="empty">暂无会话</div>
+      <div v-else class="empty">{{ t('panel.noSessions') }}</div>
     </div>
     </template>
   </div>

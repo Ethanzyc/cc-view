@@ -38,6 +38,9 @@ fn default_token_unit() -> TokenUnit {
 fn default_update_source() -> UpdateSource {
     UpdateSource::Auto
 }
+fn default_locale() -> Locale {
+    Locale::Auto
+}
 fn default_resident_width() -> Option<f64> {
     None
 }
@@ -85,6 +88,15 @@ pub enum UpdateSource {
     Gitee,
 }
 
+/// 界面语言：auto（跟随系统）/ zh / en。默认 auto。
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Locale {
+    Auto,
+    Zh,
+    En,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Prefs {
     #[serde(default = "default_true")]
@@ -126,6 +138,9 @@ pub struct Prefs {
     /// 更新源偏好。auto = GitHub 优先 → Gitee 兜底；gitee = Gitee 优先 → GitHub 兜底。
     #[serde(default = "default_update_source")]
     pub update_source: UpdateSource,
+    /// 界面语言。auto = 跟随系统。默认 auto。
+    #[serde(default = "default_locale")]
+    pub locale: Locale,
 }
 
 impl Default for Prefs {
@@ -147,6 +162,7 @@ impl Default for Prefs {
             show_tokens: true,
             show_actions: true,
             update_source: default_update_source(),
+            locale: default_locale(),
         }
     }
 }
@@ -206,6 +222,7 @@ mod tests {
         assert!(p.show_tokens);
         assert!(p.show_actions);
         assert_eq!(p.update_source, UpdateSource::Auto);
+        assert_eq!(p.locale, Locale::Auto);
     }
 
     #[test]
@@ -245,6 +262,7 @@ mod tests {
             show_tokens: false,
             show_actions: false,
             update_source: UpdateSource::Gitee,
+            locale: Locale::En,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();
@@ -294,5 +312,13 @@ mod tests {
         assert!(Prefs::is_valid_opacity(100));
         assert!(!Prefs::is_valid_opacity(101));
         assert!(!Prefs::is_valid_opacity(255));
+    }
+
+    #[test]
+    fn locale_serde_lowercase() {
+        let l: Locale = serde_json::from_str("\"auto\"").unwrap();
+        assert_eq!(l, Locale::Auto);
+        assert_eq!(serde_json::to_string(&Locale::Zh).unwrap(), "\"zh\"");
+        assert_eq!(serde_json::to_string(&Locale::En).unwrap(), "\"en\"");
     }
 }

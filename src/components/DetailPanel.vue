@@ -2,11 +2,13 @@
 // 会话 token 详情：上下文 hero + sparkline + 消耗 + 按回合。
 // PanelView 内部子状态切入，不动全局 mode/窗口。
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { SessionDetail, TurnStat } from '../types';
 import { fmtTok, agoF } from '../utils/session';
 
 const props = defineProps<{ detail: SessionDetail; name: string }>();
 defineEmits<{ back: [] }>();
+const { t } = useI18n();
 
 // sparkline：turns 的 ctx 归一化到 200×56 viewBox（纯相对增长，不需硬编码上限）。
 // 空数据返回空串，模板 v-if 不渲染 svg。
@@ -42,8 +44,8 @@ function barPercent(t: TurnStat): number {
     <div class="bar" data-tauri-drag-region="deep">
       <button
         class="back-btn"
-        title="返回列表"
-        aria-label="返回列表"
+        :title="t('detail2.back')"
+        :aria-label="t('detail2.back')"
         data-tauri-drag-region="false"
         @click="$emit('back')"
       >
@@ -56,7 +58,7 @@ function barPercent(t: TurnStat): number {
 
     <!-- Hero：当前上下文 + sparkline -->
     <div class="hero">
-      <div class="hero-label">当前上下文</div>
+      <div class="hero-label">{{ t('detail2.context') }}</div>
       <div class="hero-big">{{ fmtTok(detail.contextCurrent) }}</div>
       <svg v-if="spark.line" class="spark" viewBox="0 0 200 56" preserveAspectRatio="none" aria-hidden="true">
         <polygon :points="spark.fill" fill="var(--color-primary)" opacity="0.08" />
@@ -64,30 +66,30 @@ function barPercent(t: TurnStat): number {
         <circle :cx="spark.cx" :cy="spark.cy" r="2.5" fill="var(--color-primary)" />
       </svg>
       <div class="hero-sub">
-        <span>峰值 <b>{{ fmtTok(detail.contextPeak) }}</b></span>
-        <span>压缩 <b>{{ detail.compactCount }}</b> 次</span>
-        <span>{{ detail.turnCount }} 回合</span>
+        <span>{{ t('detail2.peak') }} <b>{{ fmtTok(detail.contextPeak) }}</b></span>
+        <span>{{ t('detail2.compact') }} <b>{{ detail.compactCount }}</b> {{ t('detail2.compactTimes') }}</span>
+        <span>{{ detail.turnCount }} {{ t('detail2.turns') }}</span>
       </div>
     </div>
 
-    <div class="section-label">消耗</div>
+    <div class="section-label">{{ t('detail2.usage') }}</div>
     <div class="cost-grid">
-      <div class="cost-cell"><span class="v">{{ fmtTok(detail.tokensIn) }}</span><span class="k">输入</span></div>
-      <div class="cost-cell"><span class="v">{{ fmtTok(detail.tokensOut) }}</span><span class="k">输出</span></div>
-      <div class="cost-cell"><span class="v">{{ fmtTok(detail.cacheRead) }}</span><span class="k">缓存命中</span></div>
+      <div class="cost-cell"><span class="v">{{ fmtTok(detail.tokensIn) }}</span><span class="k">{{ t('detail2.input') }}</span></div>
+      <div class="cost-cell"><span class="v">{{ fmtTok(detail.tokensOut) }}</span><span class="k">{{ t('detail2.output') }}</span></div>
+      <div class="cost-cell"><span class="v">{{ fmtTok(detail.cacheRead) }}</span><span class="k">{{ t('detail2.cacheHit') }}</span></div>
     </div>
 
     <div class="divider" />
     <div class="section-label">
-      按回合 · {{ detail.toolCalls }} 工具
-      <span v-if="detail.webSearches || detail.webFetches"> · {{ detail.webSearches }} 搜 / {{ detail.webFetches }} 抓</span>
+      {{ t('detail2.byTurn') }} · {{ detail.toolCalls }} {{ t('detail2.tools') }}
+      <span v-if="detail.webSearches || detail.webFetches"> · {{ detail.webSearches }} {{ t('detail2.searches') }} / {{ detail.webFetches }} {{ t('detail2.fetches') }}</span>
     </div>
     <div class="turn-head">
       <span class="t-idx">#</span>
-      <span class="t-prompt">提问</span>
-      <span class="t-tok">token</span>
-      <span class="t-ctx">上下文</span>
-      <span class="t-ago">时间</span>
+      <span class="t-prompt">{{ t('detail2.colPrompt') }}</span>
+      <span class="t-tok">{{ t('detail2.colToken') }}</span>
+      <span class="t-ctx">{{ t('detail2.colContext') }}</span>
+      <span class="t-ago">{{ t('detail2.colTime') }}</span>
     </div>
     <div class="turns">
       <div v-for="t in detail.turns" :key="t.idx" class="turn" :style="{ '--bar': barPercent(t) + '%' }">

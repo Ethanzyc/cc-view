@@ -7,10 +7,13 @@ import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { Channel } from '@tauri-apps/api/core';
 import { shallowRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { relaunch } from '@tauri-apps/plugin-process';
-import type { Prefs, ResidentLayout, Theme, TokenUnit, UpdateSource } from '../types';
+import type { Prefs, ResidentLayout, Theme, TokenUnit, UpdateSource, Locale } from '../types';
 import { applyTheme } from '../utils/theme';
 import iconUrl from '../assets/cc-view-icon.png';
+
+const { t } = useI18n();
 
 type Category = 'general' | 'display' | 'update';
 const activeCategory = ref<Category>('general');
@@ -30,6 +33,7 @@ const showHost = ref(false);
 const showTokens = ref(true);
 const showActions = ref(true);
 const updateSourcePref = ref<UpdateSource>('auto');
+const localePref = ref<Locale>('auto');
 const saving = ref<string | null>(null);
 const error = ref<string | null>(null);
 const appVersion = ref('');
@@ -50,12 +54,12 @@ function defaultWidthForLayout(layout: ResidentLayout): number {
   return layout === 'a' ? 180 : 285;
 }
 
-const shortcuts = [
-  { value: 'alt+space', label: '⌥Space（默认）' },
+const shortcuts = computed(() => [
+  { value: 'alt+space', label: t('prefs.shortcutDefault') },
   { value: 'cmd+alt+space', label: '⌘⌥Space' },
   { value: 'ctrl+space', label: '⌃Space' },
-  { value: 'off', label: '禁用' },
-];
+  { value: 'off', label: t('prefs.shortcutOff') },
+]);
 
 onMounted(async () => {
   try {
@@ -74,6 +78,7 @@ onMounted(async () => {
     showTokens.value = p.show_tokens;
     showActions.value = p.show_actions;
     updateSourcePref.value = p.update_source;
+    localePref.value = p.locale;
   } catch (e) {
     console.error('get_prefs failed', e);
   }
@@ -107,7 +112,7 @@ async function wrap(key: string, fn: () => Promise<unknown>) {
   try {
     await fn();
   } catch (e: unknown) {
-    error.value = typeof e === 'string' ? e : (e as Error)?.message ?? '保存失败';
+    error.value = typeof e === 'string' ? e : (e as Error)?.message ?? t('prefs.saveFailed');
   } finally {
     saving.value = null;
   }
@@ -130,6 +135,7 @@ const onShowHost = (v: boolean) => wrap('showHost', async () => { await invoke('
 const onShowTokens = (v: boolean) => wrap('showTokens', async () => { await invoke('set_show_tokens', { show: v }); showTokens.value = v; });
 const onShowActions = (v: boolean) => wrap('showActions', async () => { await invoke('set_show_actions', { show: v }); showActions.value = v; });
 const onUpdateSource = (v: UpdateSource) => wrap('updateSource', async () => { await invoke('set_update_source', { source: v }); updateSourcePref.value = v; });
+const onLocale = (v: Locale) => wrap('locale', async () => { await invoke('set_locale', { locale: v }); localePref.value = v; });
 
 let opacityTimer: number | undefined;
 const onOpacity = (v: number) => {
@@ -140,7 +146,7 @@ const onOpacity = (v: number) => {
     try {
       await invoke('set_resident_opacity', { opacity: v });
     } catch (e: unknown) {
-      error.value = typeof e === 'string' ? e : (e as Error)?.message ?? '保存失败';
+      error.value = typeof e === 'string' ? e : (e as Error)?.message ?? t('prefs.saveFailed');
     } finally {
       saving.value = null;
     }
@@ -156,7 +162,7 @@ const onWidth = (v: number) => {
     try {
       await invoke('set_resident_width', { width: v });
     } catch (e: unknown) {
-      error.value = typeof e === 'string' ? e : (e as Error)?.message ?? '保存失败';
+      error.value = typeof e === 'string' ? e : (e as Error)?.message ?? t('prefs.saveFailed');
     } finally {
       saving.value = null;
     }
@@ -202,9 +208,9 @@ async function checkForUpdates() {
     if (upd) updateAvailable.value = upd;
     else upToDate.value = true;
   } catch (e: unknown) {
-    const msg = typeof e === 'string' ? e : (e as Error)?.message ?? '检查失败';
+    const msg = typeof e === 'string' ? e : (e as Error)?.message ?? t('prefs.checkFailed');
     error.value = /sending request|fetch|network|timeout|connect/i.test(msg)
-      ? '⚠ 无法连接更新服务器（GitHub + Gitee 均不可达）'
+      ? t('prefs.networkError')
       : msg;
   } finally {
     checking.value = false;
@@ -255,7 +261,7 @@ async function downloadAndInstall() {
     } catch { /* non-critical */ }
     await relaunch();
   } catch (e: unknown) {
-    installError.value = typeof e === 'string' ? e : (e as Error)?.message ?? '安装失败';
+    installError.value = typeof e === 'string' ? e : (e as Error)?.message ?? t('prefs.installFailed');
     installing.value = false;
     installPhase.value = 'idle';
   }
@@ -263,10 +269,10 @@ async function downloadAndInstall() {
 
 const installLabel = computed(() => {
   switch (installPhase.value) {
-    case 'downloading': return `下载中 ${downloadProgress.value}%`;
-    case 'installing': return '安装中…';
-    case 'restarting': return '重启中…';
-    default: return '下载并安装';
+    case 'downloading': return t('prefs.downloading', { percent: downloadProgress.value });
+    case 'installing': return t('prefs.installing');
+    case 'restarting': return t('prefs.restarting');
+    default: return t('prefs.downloadInstall');
   }
 });
 </script>
@@ -279,25 +285,35 @@ const installLabel = computed(() => {
           <img :src="iconUrl" alt="CC View" class="brand-icon" />
           <span class="brand-name">CC View</span>
         </div>
-        <div class="cat" :class="{ active: activeCategory === 'general' }" @click="activeCategory = 'general'">通用</div>
-        <div class="cat" :class="{ active: activeCategory === 'display' }" @click="activeCategory = 'display'">显示</div>
-        <div class="cat" :class="{ active: activeCategory === 'update' }" @click="activeCategory = 'update'">更新</div>
+        <div class="cat" :class="{ active: activeCategory === 'general' }" @click="activeCategory = 'general'">{{ t('prefs.general') }}</div>
+        <div class="cat" :class="{ active: activeCategory === 'display' }" @click="activeCategory = 'display'">{{ t('prefs.display') }}</div>
+        <div class="cat" :class="{ active: activeCategory === 'update' }" @click="activeCategory = 'update'">{{ t('prefs.update') }}</div>
       </nav>
 
       <main class="settings">
         <!-- 通用 -->
         <section v-show="activeCategory === 'general'">
-          <h2 class="group">通用</h2>
+          <h2 class="group">{{ t('prefs.general') }}</h2>
           <div class="row">
-            <div class="txt"><div class="t">开机自启动</div><div class="d">登录 macOS 时自动启动 cc-view</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.autostart') }}</div><div class="d">{{ t('prefs.autostartDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: autostart }" :disabled="saving === 'autostart'" @click="onAutostart(!autostart)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">通知</div><div class="d">会话进入待介入时弹系统通知</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.notify') }}</div><div class="d">{{ t('prefs.notifyDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: notify }" :disabled="saving === 'notify'" @click="onNotify(!notify)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">全局快捷键</div><div class="d">呼出 / 收起命令面板（⌘, 开偏好已独立注册）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.language') }}</div><div class="d">{{ t('prefs.languageDesc') }}</div></div>
+            <div class="ctl">
+              <div class="opt-group">
+                <button type="button" class="opt-btn" :class="{ active: localePref === 'auto' }" :disabled="saving === 'locale'" @click="onLocale('auto')"><span class="opt-title">{{ t('prefs.langAuto') }}</span></button>
+                <button type="button" class="opt-btn" :class="{ active: localePref === 'zh' }" :disabled="saving === 'locale'" @click="onLocale('zh')"><span class="opt-title">{{ t('prefs.langZh') }}</span></button>
+                <button type="button" class="opt-btn" :class="{ active: localePref === 'en' }" :disabled="saving === 'locale'" @click="onLocale('en')"><span class="opt-title">{{ t('prefs.langEn') }}</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">{{ t('prefs.shortcut') }}</div><div class="d">{{ t('prefs.shortcutDesc') }}</div></div>
             <div class="ctl">
               <div class="opt-group">
                 <button v-for="s in shortcuts" :key="s.value" type="button" class="opt-btn" :class="{ active: shortcut === s.value }" :disabled="saving === 'shortcut'" @click="onShortcut(s.value)">
@@ -307,25 +323,25 @@ const installLabel = computed(() => {
             </div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">轮询间隔</div><div class="d">采集会话状态的频率（1–30 秒）</div></div>
-            <div class="ctl"><input type="number" class="num" min="1" max="30" :value="interval" :disabled="saving === 'interval'" @change="onInterval(Number(($event.target as HTMLInputElement).value))" /> <span class="unit">秒</span></div>
+            <div class="txt"><div class="t">{{ t('prefs.interval') }}</div><div class="d">{{ t('prefs.intervalDesc') }}</div></div>
+            <div class="ctl"><input type="number" class="num" min="1" max="30" :value="interval" :disabled="saving === 'interval'" @change="onInterval(Number(($event.target as HTMLInputElement).value))" /> <span class="unit">{{ t('prefs.seconds') }}</span></div>
           </div>
         </section>
 
         <!-- 显示（合并外观 + 常驻面板） -->
         <section v-show="activeCategory === 'display'">
-          <h2 class="group">外观</h2>
+          <h2 class="group">{{ t('prefs.appearance') }}</h2>
           <div class="row">
-            <div class="txt"><div class="t">主题</div><div class="d">浅色 / 深色（不跟随系统）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.theme') }}</div><div class="d">{{ t('prefs.themeDesc') }}</div></div>
             <div class="ctl">
               <div class="opt-group">
-                <button type="button" class="opt-btn" :class="{ active: theme === 'light' }" :disabled="saving === 'theme'" @click="onTheme('light')"><span class="opt-title">浅色</span></button>
-                <button type="button" class="opt-btn" :class="{ active: theme === 'dark' }" :disabled="saving === 'theme'" @click="onTheme('dark')"><span class="opt-title">深色</span></button>
+                <button type="button" class="opt-btn" :class="{ active: theme === 'light' }" :disabled="saving === 'theme'" @click="onTheme('light')"><span class="opt-title">{{ t('prefs.light') }}</span></button>
+                <button type="button" class="opt-btn" :class="{ active: theme === 'dark' }" :disabled="saving === 'theme'" @click="onTheme('dark')"><span class="opt-title">{{ t('prefs.dark') }}</span></button>
               </div>
             </div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">token 单位</div><div class="d">列表 / 详情 token 显示单位</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.tokenUnit') }}</div><div class="d">{{ t('prefs.tokenUnitDesc') }}</div></div>
             <div class="ctl">
               <div class="opt-group">
                 <button type="button" class="opt-btn" :class="{ active: tokenUnitPref === 'km' }" :disabled="saving === 'tokenUnit'" @click="onTokenUnit('km')"><span class="opt-title">k / M</span></button>
@@ -334,40 +350,40 @@ const installLabel = computed(() => {
             </div>
           </div>
 
-          <h2 class="group">列表显示</h2>
+          <h2 class="group">{{ t('prefs.listDisplay') }}</h2>
           <div class="row">
-            <div class="txt"><div class="t">显示终端名</div><div class="d">在会话名旁标注终端 app（如 Otty、iTerm）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.showHost') }}</div><div class="d">{{ t('prefs.showHostDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: showHost }" :disabled="saving === 'showHost'" @click="onShowHost(!showHost)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">显示 token 用量</div><div class="d">每行的输入/输出累计 token</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.showTokens') }}</div><div class="d">{{ t('prefs.showTokensDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: showTokens }" :disabled="saving === 'showTokens'" @click="onShowTokens(!showTokens)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">显示操作按钮</div><div class="d">面板模式每行的详情/搁置/归档/复制按钮</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.showActions') }}</div><div class="d">{{ t('prefs.showActionsDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: showActions }" :disabled="saving === 'showActions'" @click="onShowActions(!showActions)"><span class="switch-knob"></span></button></div>
           </div>
 
-          <h2 class="group">常驻面板 <span class="tag">仅常驻</span></h2>
+          <h2 class="group">{{ t('prefs.residentPanel') }} <span class="tag">{{ t('prefs.residentOnly') }}</span></h2>
           <div class="row">
-            <div class="txt"><div class="t">常驻布局</div><div class="d">B 精简（带状态文字）/ A 极简（仅图标名称）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.residentLayout') }}</div><div class="d">{{ t('prefs.residentLayoutDesc') }}</div></div>
             <div class="ctl">
               <div class="opt-group">
-                <button type="button" class="opt-btn" :class="{ active: residentLayout === 'b' }" :disabled="saving === 'layout'" @click="onLayout('b')"><span class="opt-title">B 精简</span></button>
-                <button type="button" class="opt-btn" :class="{ active: residentLayout === 'a' }" :disabled="saving === 'layout'" @click="onLayout('a')"><span class="opt-title">A 极简</span></button>
+                <button type="button" class="opt-btn" :class="{ active: residentLayout === 'b' }" :disabled="saving === 'layout'" @click="onLayout('b')"><span class="opt-title">{{ t('prefs.layoutB') }}</span></button>
+                <button type="button" class="opt-btn" :class="{ active: residentLayout === 'a' }" :disabled="saving === 'layout'" @click="onLayout('a')"><span class="opt-title">{{ t('prefs.layoutA') }}</span></button>
               </div>
             </div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">显示搁置的会话</div><div class="d">搁置 = 你手动标记「暂时不管」的会话（不催促、不通知）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.showSnoozed') }}</div><div class="d">{{ t('prefs.showSnoozedDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: showSnoozed }" :disabled="saving === 'showSnoozed'" @click="onShowSnoozed(!showSnoozed)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">显示闲置的会话</div><div class="d">闲置 = 等输入超过 30 分钟未给下一条指令，自动降级</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.showIdle') }}</div><div class="d">{{ t('prefs.showIdleDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: showIdle }" :disabled="saving === 'showIdle'" @click="onShowIdle(!showIdle)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">背景透明度</div><div class="d">常驻面板贴桌面的透明度</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.opacity') }}</div><div class="d">{{ t('prefs.opacityDesc') }}</div></div>
             <div class="ctl">
               <div class="slider" @pointerdown="onSliderDown">
                 <div class="slider-track" ref="sliderTrack">
@@ -379,7 +395,7 @@ const installLabel = computed(() => {
             </div>
           </div>
           <div class="row">
-            <div class="txt"><div class="t">面板宽度</div><div class="d">常驻面板宽度（右边锚定不动）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.panelWidth') }}</div><div class="d">{{ t('prefs.panelWidthDesc') }}</div></div>
             <div class="ctl">
               <div class="slider" @pointerdown="onSliderDownWidth">
                 <div class="slider-track" ref="sliderTrackWidth">
@@ -394,22 +410,22 @@ const installLabel = computed(() => {
 
         <!-- 更新 -->
         <section v-show="activeCategory === 'update'">
-          <h2 class="group">更新</h2>
+          <h2 class="group">{{ t('prefs.update') }}</h2>
           <div class="row">
-            <div class="txt"><div class="t">更新源</div><div class="d">GitHub 为主或 Gitee 为主（均带自动兜底）</div></div>
+            <div class="txt"><div class="t">{{ t('prefs.updateSource') }}</div><div class="d">{{ t('prefs.updateSourceDesc') }}</div></div>
             <div class="ctl">
               <div class="opt-group">
-                <button type="button" class="opt-btn" :class="{ active: updateSourcePref === 'auto' }" :disabled="saving === 'updateSource'" @click="onUpdateSource('auto')"><span class="opt-title">自动</span></button>
-                <button type="button" class="opt-btn" :class="{ active: updateSourcePref === 'gitee' }" :disabled="saving === 'updateSource'" @click="onUpdateSource('gitee')"><span class="opt-title">Gitee 优先</span></button>
+                <button type="button" class="opt-btn" :class="{ active: updateSourcePref === 'auto' }" :disabled="saving === 'updateSource'" @click="onUpdateSource('auto')"><span class="opt-title">{{ t('prefs.sourceAuto') }}</span></button>
+                <button type="button" class="opt-btn" :class="{ active: updateSourcePref === 'gitee' }" :disabled="saving === 'updateSource'" @click="onUpdateSource('gitee')"><span class="opt-title">{{ t('prefs.sourceGitee') }}</span></button>
               </div>
             </div>
           </div>
           <div class="update-box">
             <div>
-              <div class="t">当前版本 CC View {{ appVersion }}</div>
-              <p v-if="upToDate" class="muted">✓ 已是最新版本</p>
+              <div class="t">{{ t('prefs.currentVersion', { version: appVersion }) }}</div>
+              <p v-if="upToDate" class="muted">{{ t('prefs.upToDate') }}</p>
             </div>
-            <button class="btn" @click="checkForUpdates" :disabled="checking">{{ checking ? '检查中…' : '检查更新' }}</button>
+            <button class="btn" @click="checkForUpdates" :disabled="checking">{{ checking ? t('prefs.checking') : t('prefs.checkUpdate') }}</button>
           </div>
 
           <!-- 发现新版本 -->
@@ -417,8 +433,8 @@ const installLabel = computed(() => {
             <div class="update-header">
               <div class="update-version">
                 <span class="update-arrow">↑</span>
-                <span>新版本 <strong>{{ updateAvailable.version }}</strong></span>
-                <span class="update-diff">从 {{ appVersion }} 更新</span>
+                <span>{{ t('prefs.newVersion') }} <strong>{{ updateAvailable.version }}</strong></span>
+                <span class="update-diff">{{ t('prefs.updateFrom', { version: appVersion }) }}</span>
               </div>
               <button class="btn btn-primary" @click="downloadAndInstall" :disabled="installing">{{ installLabel }}</button>
             </div>
@@ -433,10 +449,10 @@ const installLabel = computed(() => {
               <span class="progress-size">{{ installLabel }}</span>
             </div>
             <div v-if="updateAvailable.body" class="changelog">
-              <div class="changelog-title">更新内容</div>
+              <div class="changelog-title">{{ t('prefs.changelog') }}</div>
               <pre class="changelog-body">{{ updateAvailable.body }}</pre>
             </div>
-            <a class="full-changelog" href="https://github.com/Ethanzyc/cc-view/releases" target="_blank" rel="noopener">查看完整更新日志 →</a>
+            <a class="full-changelog" href="https://github.com/Ethanzyc/cc-view/releases" target="_blank" rel="noopener">{{ t('prefs.fullChangelog') }}</a>
           </div>
 
           <p v-if="installError" class="error">⚠ {{ installError }}</p>
