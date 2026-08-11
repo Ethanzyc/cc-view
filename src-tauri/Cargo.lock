@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "cc-view"
-version = "0.5.8"
+version = "0.6.0"
 dependencies = [
  "core-foundation",
  "dirs 5.0.1",
@@ -518,6 +518,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "tempfile",
+ "url",
 ]
 
 [[package]]

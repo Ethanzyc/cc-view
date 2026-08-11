@@ -5,10 +5,10 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
-import { check, type Update } from '@tauri-apps/plugin-updater';
+import { Channel } from '@tauri-apps/api/core';
 import { shallowRef } from 'vue';
 import { relaunch } from '@tauri-apps/plugin-process';
-import type { Prefs, ResidentLayout, Theme, TokenUnit } from '../types';
+import type { Prefs, ResidentLayout, Theme, TokenUnit, UpdateSource } from '../types';
 import { applyTheme } from '../utils/theme';
 import iconUrl from '../assets/cc-view-icon.png';
 
@@ -29,13 +29,15 @@ const residentWidth = ref<number>(285);
 const showHost = ref(false);
 const showTokens = ref(true);
 const showActions = ref(true);
+const updateSourcePref = ref<UpdateSource>('auto');
 const saving = ref<string | null>(null);
 const error = ref<string | null>(null);
 const appVersion = ref('');
 const checking = ref(false);
-// shallowRef：Update 继承 Resource，内部用 WeakMap 存私有 rid 字段。
-// ref() 会用 Proxy 包装对象 → this.rid 的 WeakMap 查不到 Proxy → "Cannot read private member"。
-const updateAvailable = shallowRef<Update | null>(null);
+// 自定义更新检查：invoke('check_update_custom') → { rid, version, body }
+// downloadAndInstall 走插件原生 plugin:updater|download_and_install（通过 rid）
+interface CustomUpdate { version: string; body: string | null; rid: number }
+const updateAvailable = shallowRef<CustomUpdate | null>(null);
 const upToDate = ref(false);
 const installing = ref(false);
 const installPhase = ref<'idle' | 'downloading' | 'installing' | 'restarting'>('idle');
@@ -71,6 +73,7 @@ onMounted(async () => {
     showHost.value = p.show_host;
     showTokens.value = p.show_tokens;
     showActions.value = p.show_actions;
+    updateSourcePref.value = p.update_source;
   } catch (e) {
     console.error('get_prefs failed', e);
   }
@@ -126,6 +129,7 @@ const onTokenUnit = (v: TokenUnit) => wrap('tokenUnit', async () => { await invo
 const onShowHost = (v: boolean) => wrap('showHost', async () => { await invoke('set_show_host', { show: v }); showHost.value = v; });
 const onShowTokens = (v: boolean) => wrap('showTokens', async () => { await invoke('set_show_tokens', { show: v }); showTokens.value = v; });
 const onShowActions = (v: boolean) => wrap('showActions', async () => { await invoke('set_show_actions', { show: v }); showActions.value = v; });
+const onUpdateSource = (v: UpdateSource) => wrap('updateSource', async () => { await invoke('set_update_source', { source: v }); updateSourcePref.value = v; });
 
 let opacityTimer: number | undefined;
 const onOpacity = (v: number) => {
@@ -194,7 +198,7 @@ async function checkForUpdates() {
   upToDate.value = false;
   updateAvailable.value = null;
   try {
-    const upd = await check({ timeout: 8000 });
+    const upd = await invoke<CustomUpdate | null>('check_update_custom');
     if (upd) updateAvailable.value = upd;
     else upToDate.value = true;
   } catch (e: unknown) {
@@ -222,18 +226,24 @@ async function downloadAndInstall() {
   downloadTotal.value = 0;
   downloadLoaded.value = 0;
   try {
-    await updateAvailable.value.downloadAndInstall((event) => {
-      if (event.event === 'Started' && event.data.contentLength) {
-        downloadTotal.value = event.data.contentLength;
-      } else if (event.event === 'Progress' && event.data.chunkLength) {
-        downloadLoaded.value += event.data.chunkLength;
+    const channel = new Channel();
+    channel.onmessage = (event: unknown) => {
+      const e = event as { event: string; data: { contentLength?: number; chunkLength?: number } };
+      if (e.event === 'Started' && e.data.contentLength) {
+        downloadTotal.value = e.data.contentLength;
+      } else if (e.event === 'Progress' && e.data.chunkLength) {
+        downloadLoaded.value += e.data.chunkLength;
         if (downloadTotal.value > 0) {
           downloadProgress.value = Math.round((downloadLoaded.value / downloadTotal.value) * 100);
         }
-      } else if (event.event === 'Finished') {
+      } else if (e.event === 'Finished') {
         installPhase.value = 'installing';
         downloadProgress.value = 100;
       }
+    };
+    await invoke('plugin:updater|download_and_install', {
+      rid: updateAvailable.value.rid,
+      onEvent: channel,
     });
     installPhase.value = 'restarting';
     // 保存更新信息，重启后弹「更新成功」提示
@@ -385,6 +395,15 @@ const installLabel = computed(() => {
         <!-- 更新 -->
         <section v-show="activeCategory === 'update'">
           <h2 class="group">更新</h2>
+          <div class="row">
+            <div class="txt"><div class="t">更新源</div><div class="d">GitHub 为主或 Gitee 为主（均带自动兜底）</div></div>
+            <div class="ctl">
+              <div class="opt-group">
+                <button type="button" class="opt-btn" :class="{ active: updateSourcePref === 'auto' }" :disabled="saving === 'updateSource'" @click="onUpdateSource('auto')"><span class="opt-title">自动</span></button>
+                <button type="button" class="opt-btn" :class="{ active: updateSourcePref === 'gitee' }" :disabled="saving === 'updateSource'" @click="onUpdateSource('gitee')"><span class="opt-title">Gitee 优先</span></button>
+              </div>
+            </div>
+          </div>
           <div class="update-box">
             <div>
               <div class="t">当前版本 CC View {{ appVersion }}</div>

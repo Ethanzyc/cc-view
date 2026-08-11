@@ -35,6 +35,9 @@ fn default_false() -> bool {
 fn default_token_unit() -> TokenUnit {
     TokenUnit::Km
 }
+fn default_update_source() -> UpdateSource {
+    UpdateSource::Auto
+}
 fn default_resident_width() -> Option<f64> {
     None
 }
@@ -72,6 +75,14 @@ pub enum Theme {
 pub enum TokenUnit {
     Km,
     Wan,
+}
+
+/// 更新源：auto（GitHub 优先 → Gitee 兜底）/ gitee（Gitee 优先 → GitHub 兜底）。
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateSource {
+    Auto,
+    Gitee,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -112,6 +123,9 @@ pub struct Prefs {
     /// 显示操作按钮（仅面板模式）。默认 true。
     #[serde(default = "default_true")]
     pub show_actions: bool,
+    /// 更新源偏好。auto = GitHub 优先 → Gitee 兜底；gitee = Gitee 优先 → GitHub 兜底。
+    #[serde(default = "default_update_source")]
+    pub update_source: UpdateSource,
 }
 
 impl Default for Prefs {
@@ -132,6 +146,7 @@ impl Default for Prefs {
             show_host: false,
             show_tokens: true,
             show_actions: true,
+            update_source: default_update_source(),
         }
     }
 }
@@ -190,6 +205,7 @@ mod tests {
         assert!(!p.show_host);
         assert!(p.show_tokens);
         assert!(p.show_actions);
+        assert_eq!(p.update_source, UpdateSource::Auto);
     }
 
     #[test]
@@ -228,6 +244,7 @@ mod tests {
             show_host: true,
             show_tokens: false,
             show_actions: false,
+            update_source: UpdateSource::Gitee,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();

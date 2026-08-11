@@ -1214,6 +1214,90 @@ fn set_pending_update(version: String, notes: String) {
     }
 }
 
+/// 更新源 endpoint 常量。
+const ENDPOINT_GITHUB: &str =
+    "https://github.com/Ethanzyc/cc-view/releases/latest/download/latest.json";
+const ENDPOINT_GITEE: &str = "https://gitee.com/Ethanzyc/cc-view/raw/main/latest.json";
+
+/// 自定义检查更新：按 update_source 偏好构造 endpoint 顺序（都带兜底）。
+/// auto = [github, gitee]；gitee = [gitee, github]。
+/// 复用 updater 插件的 UpdaterBuilder + resource table，下载安装仍走插件原生命令。
+#[derive(serde::Serialize)]
+struct UpdateMetadata {
+    rid: u32,
+    version: String,
+    body: Option<String>,
+    current_version: String,
+}
+
+#[tauri::command]
+async fn check_update_custom(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, std::sync::Mutex<prefs::Prefs>>,
+) -> Result<Option<UpdateMetadata>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let source = state
+        .lock()
+        .map(|p| p.update_source)
+        .unwrap_or(prefs::UpdateSource::Auto);
+
+    let mut endpoints: Vec<url::Url> = match source {
+        prefs::UpdateSource::Auto => vec![ENDPOINT_GITHUB, ENDPOINT_GITEE],
+        prefs::UpdateSource::Gitee => vec![ENDPOINT_GITEE, ENDPOINT_GITHUB],
+    }
+    .into_iter()
+    .filter_map(|s| url::Url::parse(s).ok())
+    .collect();
+
+    let webview = app
+        .get_webview_window("prefs")
+        .or_else(|| app.get_webview_window("overlay"))
+        .ok_or("no webview available")?;
+
+    let builder = webview
+        .updater_builder()
+        .endpoints(endpoints)
+        .map_err(|e| e.to_string())?;
+    let updater = builder.build().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+
+    if let Some(update) = update {
+        let rid = webview.resources_table().add(update);
+        // 从 resource table 取回 update 读 metadata（add 后 update 被 move）
+        let update_ref = webview
+            .resources_table()
+            .get::<tauri_plugin_updater::Update>(rid)
+            .map_err(|e| e.to_string())?;
+        Ok(Some(UpdateMetadata {
+            rid,
+            version: update_ref.version.clone(),
+            body: update_ref.body.clone(),
+            current_version: update_ref.current_version.clone(),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// 设置更新源偏好。
+#[tauri::command]
+fn set_update_source(
+    source: String,
+    state: tauri::State<'_, std::sync::Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    let src = match source.as_str() {
+        "gitee" => prefs::UpdateSource::Gitee,
+        _ => prefs::UpdateSource::Auto,
+    };
+    if let Ok(mut p) = state.lock() {
+        p.update_source = src;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
 #[tauri::command]
 fn get_pending_update(app: tauri::AppHandle) -> Option<serde_json::Value> {
     let dir = data_dir()?;
@@ -1321,7 +1405,9 @@ pub fn run() {
             do_animate,
             set_resident_height,
             set_pending_update,
-            get_pending_update
+            get_pending_update,
+            check_update_custom,
+            set_update_source
         ])
         .setup(|app| {
             // DMG 安装的 app 带 com.apple.quarantine 标记，Gatekeeper 拦截非公证 app。
