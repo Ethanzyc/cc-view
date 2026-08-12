@@ -11,9 +11,10 @@ import { useI18n } from 'vue-i18n';
 import { relaunch } from '@tauri-apps/plugin-process';
 import type { Prefs, ResidentLayout, Theme, TokenUnit, UpdateSource, Locale } from '../types';
 import { applyTheme } from '../utils/theme';
+import { applyPrefsLocale } from '../i18n';
 import iconUrl from '../assets/cc-view-icon.png';
 
-const { t } = useI18n();
+const { t } = useI18n({ useScope: 'global' });
 
 type Category = 'general' | 'display' | 'update';
 const activeCategory = ref<Category>('general');
@@ -135,7 +136,7 @@ const onShowHost = (v: boolean) => wrap('showHost', async () => { await invoke('
 const onShowTokens = (v: boolean) => wrap('showTokens', async () => { await invoke('set_show_tokens', { show: v }); showTokens.value = v; });
 const onShowActions = (v: boolean) => wrap('showActions', async () => { await invoke('set_show_actions', { show: v }); showActions.value = v; });
 const onUpdateSource = (v: UpdateSource) => wrap('updateSource', async () => { await invoke('set_update_source', { source: v }); updateSourcePref.value = v; });
-const onLocale = (v: Locale) => wrap('locale', async () => { await invoke('set_locale', { locale: v }); localePref.value = v; });
+const onLocale = (v: Locale) => wrap('locale', async () => { await invoke('set_locale', { locale: v }); localePref.value = v; applyPrefsLocale(v); });
 
 let opacityTimer: number | undefined;
 const onOpacity = (v: number) => {

@@ -8,7 +8,7 @@ import { fmtTok, agoF } from '../utils/session';
 
 const props = defineProps<{ detail: SessionDetail; name: string }>();
 defineEmits<{ back: [] }>();
-const { t } = useI18n();
+const { t } = useI18n({ useScope: 'global' });
 
 // sparkline：turns 的 ctx 归一化到 200×56 viewBox（纯相对增长，不需硬编码上限）。
 // 空数据返回空串，模板 v-if 不渲染 svg。

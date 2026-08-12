@@ -12,7 +12,7 @@ import StatusIcon from './StatusIcon.vue';
 import { statusLabel, projShort, isStaleInput } from '../utils/session';
 import { processUnread, clearUnread, unread } from '../utils/unread';
 
-const { t } = useI18n();
+const { t } = useI18n({ useScope: 'global' });
 
 const all = ref<Session[]>([]);
 // now tick：isStaleInput 依赖时间，需前端定期刷新（后端 emit 有 hash 去重不随时间触发）。

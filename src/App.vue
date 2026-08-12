@@ -32,22 +32,21 @@ onMounted(async () => {
       // prefs 窗口非透明（无 vibrancy），html/body 默认 transparent 会露 webview 白底；
       // 加 .prefs-win 让背景用实色（跟 theme），深色下不至浅字白底。
       document.documentElement.classList.add('prefs-win');
-      return;
+    } else {
+      mode.value = p.mode;
+      // 更新后首次打开：读 pending_update → 系统通知（banner 已去掉）
+      try {
+        const pending = await invoke<{ version: string; notes: string } | null>('get_pending_update');
+        if (pending) {
+          // 系统通知由后端 get_pending_update 发
+        }
+      } catch { /* non-critical */ }
     }
-    mode.value = p.mode;
-    // 更新后首次打开：读 pending_update → 系统通知（banner 已去掉）
-    try {
-      const pending = await invoke<{ version: string; notes: string } | null>('get_pending_update');
-      if (pending) {
-        // 系统通知由后端 get_pending_update 发
-      }
-    } catch { /* non-critical */ }
   } catch (e) {
     console.error('get_prefs failed', e);
-    if (isPrefs.value) return;
   }
+  // prefs_changed：两窗口都要监听（语言/主题切换时同步）。
   try {
-    // prefs 变更（如 set_theme）→ 重读 theme 应用（overlay 跟随 prefs 窗口的切换）。
     await listen<{ theme?: Theme }>('prefs_changed', async () => {
       try {
         const p = await invoke<{ theme: Theme; token_unit: 'km' | 'wan'; locale: 'auto' | 'zh' | 'en' }>('get_prefs');
@@ -61,6 +60,8 @@ onMounted(async () => {
   } catch (e) {
     console.error('listen prefs_changed failed', e);
   }
+  // overlay 专属监听器：prefs 窗口不需要。
+  if (isPrefs.value) return;
   try {
     // set_mode → 后端 emit mode_changed（动画开始）：切 mode + 进过渡态；兜底 400ms 退出。
     await listen<OverlayMode>('mode_changed', e => {
