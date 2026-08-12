@@ -20,6 +20,10 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ## 截图
 
+**演示（⌥Space 呼出 → 搜索 → 聚焦终端）**
+
+![演示](doc/screenshots/demo.gif)
+
 **命令面板（⌥Space 呼出）— 多项目多状态 + token 列**
 
 ![命令面板](doc/screenshots/overlay.png)

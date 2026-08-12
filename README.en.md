@@ -20,6 +20,10 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 
 ## Screenshots
 
+**Demo (⌥Space → search → focus terminal)**
+
+![Demo](doc/screenshots/demo.gif)
+
 **Command Panel (⌥Space) — multi-project multi-status + token column**
 
 ![Command Panel](doc/screenshots/overlay.png)
