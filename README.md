@@ -173,6 +173,24 @@ npm run tauri build   # 产出 .app / dmg / updater artifacts
 - [ ] VSCode / IntelliJ 打开项目窗口增强
 - [ ] 透明度 / 毛玻璃效果进一步可调
 
+## 相关项目
+
+如果你需要更重的方案，推荐了解 [herdr](https://github.com/herdrdev/herdr)——专为 AI coding agent 设计的终端复用器（类似 tmux）。herdr 拥有自己的终端运行时，支持会话持久化、跨平台、agent 间通信、插件系统。
+
+**cc-view 与 herdr 的区别**：
+
+| | cc-view | herdr |
+|--|---------|-------|
+| **定位** | 监控层——在现有终端旁边读状态 | 运行时——agent 跑在 herdr 内部 |
+| **是否改工作流** | 不需要，装上即用 | 需要从 herdr 启动 agent |
+| **平台** | macOS | macOS / Linux / Windows |
+| **界面** | menubar + overlay（原生 GUI） | TUI（终端内） |
+| **通知** | 系统通知 + menubar badge | pane 内状态标记 |
+| **Token 统计** | 有（上下文曲线 + 回合明细） | 无 |
+| **会话持久化** | 无（仅监控） | 有（断网 / 重启后恢复） |
+
+简单来说：**想换个更强的终端运行时 → herdr；想在现有终端工作流上加一层监控和通知 → cc-view**。两者也可以互补使用。
+
 ## 致谢
 
 - [Tauri](https://tauri.app) · [Vue](https://vuejs.org) · [Claude Code](https://claude.com/claude-code)（Anthropic）

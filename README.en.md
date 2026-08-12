@@ -173,6 +173,24 @@ npm run tauri build   # produces .app / dmg / updater artifacts
 - [ ] VSCode / IntelliJ open project window enhancement
 - [ ] Further adjustable transparency / vibrancy effects
 
+## Related Projects
+
+For a heavier solution, check out [herdr](https://github.com/herdrdev/herdr) — a terminal multiplexer built for AI coding agents (like tmux for agents). herdr provides its own terminal runtime with session persistence, cross-platform support, inter-agent communication, and a plugin system.
+
+**How CC View differs from herdr**:
+
+| | CC View | herdr |
+|--|---------|-------|
+| **Role** | Monitoring layer — reads status from existing terminals | Runtime — agents run inside herdr |
+| **Workflow change** | None, install and go | Launch agents from herdr |
+| **Platform** | macOS | macOS / Linux / Windows |
+| **UI** | Menubar + overlay (native GUI) | TUI (in-terminal) |
+| **Notifications** | System notifications + menubar badge | In-pane status markers |
+| **Token stats** | Yes (context curve + per-turn breakdown) | No |
+| **Session persistence** | No (monitoring only) | Yes (survives network drops / reboots) |
+
+TL;DR: **Want a more powerful terminal runtime → herdr. Want a monitoring layer on top of your existing setup → CC View.** They can also complement each other.
+
 ## Credits
 
 - [Tauri](https://tauri.app) · [Vue](https://vuejs.org) · [Claude Code](https://claude.com/claude-code) (Anthropic)
