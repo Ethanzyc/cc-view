@@ -20,6 +20,20 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 
 ## Screenshots
 
+**Search + Focus Terminal (⌥Space → type → Enter)**
+
+![Search + Focus](doc/screenshots/demo-search.gif)
+
+**Task Done Notification → Click to Jump**
+
+![Notification](doc/screenshots/demo-notify.gif)
+
+**Resident Panel (desktop-anchored · expand/collapse)**
+
+![Resident Panel](doc/screenshots/demo-resident.gif)
+
+---
+
 **Command Panel (⌥Space) — multi-project multi-status + token column**
 
 ![Command Panel](doc/screenshots/overlay.png)
