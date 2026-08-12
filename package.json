@@ -2,6 +2,21 @@
   "name": "cc-view",
   "private": true,
   "version": "0.4.0",
+  "description": "Cross-terminal Claude Code session status overview for macOS menubar",
+  "author": "Ethanzhu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ethanzyc/cc-view.git"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "tauri",
+    "macos",
+    "menubar",
+    "session-monitor"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

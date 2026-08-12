@@ -31,6 +31,11 @@ docs/
 src-tauri/icons/android/
 src-tauri/icons/ios/
 
+# Maintainer-only（不入库）
+CLAUDE.md
+.claude/
+scripts/
+
 # release 本地产物（已上传 GitHub release，不入库）
 /*.dmg
 /latest.json
