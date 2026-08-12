@@ -42,8 +42,10 @@ pub fn ax_trusted(prompt: bool) -> bool {
 /// 1. **TTY 匹配**（iTerm2 / Terminal / Otty）：从 claude pid 取控制 TTY → AppleScript
 ///    遍历 windows/tabs/sessions 找 tty 匹配 → select tab + raise window。
 /// 2. **Remote control**（Kitty）：`kitten @ focus-window --match "pid:N"`（需 allow_remote_control）。
-/// 3. **cwd 匹配**（Ghostty ≥ 1.3.0）：AppleScript `every terminal whose working directory contains`。
-/// 4. **App 级 activate**（Warp / VSCode / IntelliJ / WezTerm / Alacritty / cmux / tmux / Unknown）：
+/// 3. **cwd 匹配**（Ghostty ≥ 1.3.0 / cmux）：基于 libghostty AppleScript 模型，
+///    用 OSC 7 marker 或 cwd 子串定位 terminal。cmux 继承 Ghostty 的 `terminal` 对象和
+///    `working directory` 属性（v0.63.0 修复），AppleScript 接口一致。
+/// 4. **App 级 activate**（Warp / VSCode / IntelliJ / WezTerm / Alacritty / tmux / Unknown）：
 ///    open -a + click Dock（保持原行为）。
 ///
 /// 全屏 Space：所有 host 统一在精确切换后 click Dock 切 Space。
@@ -73,7 +75,8 @@ pub fn activate_host(host: &Host, tty: &Option<String>, cwd: &str) {
         Host::Terminal => focus_via_tty("Terminal", tty),
         Host::Otty => focus_via_tty("Otty", tty),
         Host::Kitty => focus_kitty(),
-        Host::Ghostty => focus_ghostty(cwd, tty),
+        Host::Ghostty => focus_via_cwd("Ghostty", cwd, tty),
+        Host::Cmux => focus_via_cwd("cmux", cwd, tty),
         _ => false, // app 级终端不做精确切换
     };
 
@@ -178,14 +181,17 @@ fn focus_kitty() -> bool {
     false
 }
 
-/// Ghostty cwd 匹配（≥ 1.3.0）：用 OSC 7 marker 精确定位 terminal。
+/// cwd 匹配（Ghostty ≥ 1.3.0 / cmux）：基于 libghostty AppleScript 模型精确定位 terminal。
 ///
-/// Ghostty AppleScript 不暴露 tty 属性，多个 session 同 cwd 时无法区分。
-/// 解法（cctop 同款）：往目标 TTY 写唯一 OSC 7 cwd 标记 → Ghostty 更新该 terminal
-/// 的 working directory → AppleScript 匹配标记精确找到 → focus → 写回原始 cwd 恢复。
+/// Ghostty / cmux AppleScript 不暴露 tty 属性，多个 session 同 cwd 时无法区分。
+/// 解法（cctop 同款）：往目标 TTY 写唯一 OSC 7 cwd 标记 → 更新该 terminal 的
+/// working directory → AppleScript 匹配标记精确找到 → focus → 写回原始 cwd 恢复。
+///
+/// cmux 基于 libghostty，继承了 Ghostty 的 `terminal` 对象和 `working directory` 属性
+/// （cmux v0.63.0 修复了 AppleScript 返回值），接口一致，共用同一套逻辑。
 ///
 /// 有 tty 时用 OSC 7 精确匹配；无 tty 时降级为 cwd 子串匹配（同 cwd 多 session 不精确）。
-fn focus_ghostty(cwd: &str, tty: &Option<String>) -> bool {
+fn focus_via_cwd(app_name: &str, cwd: &str, tty: &Option<String>) -> bool {
     if cwd.is_empty() {
         return false;
     }
@@ -193,32 +199,32 @@ fn focus_ghostty(cwd: &str, tty: &Option<String>) -> bool {
     // 有 TTY：OSC 7 marker 精确匹配
     if let Some(tty_dev) = tty {
         if !tty_dev.is_empty() {
-            return focus_ghostty_osc7(tty_dev, cwd);
+            return focus_via_osc7(app_name, tty_dev, cwd);
         }
     }
 
     // 无 TTY：降级 cwd 子串匹配
     let escaped_cwd = cwd.replace('\\', "\\\\").replace('"', "\\\"");
     let script = format!(
-        r#"tell application "Ghostty"
+        r#"tell application "{}"
     set matches to every terminal whose working directory contains "{}"
     if (count of matches) > 0 then
         focus (item 1 of matches)
     end if
 end tell"#,
-        escaped_cwd
+        app_name, escaped_cwd
     );
-    run_osascript(&script, "focus_ghostty_cwd")
+    run_osascript(&script, &format!("focus_via_cwd_{}", app_name))
 }
 
-/// OSC 7 marker 精确匹配 Ghostty terminal。
-/// 1. 往 TTY 写唯一标记 OSC 7 → Ghostty 更新 working directory
+/// OSC 7 marker 精确匹配 terminal（Ghostty / cmux）。
+/// 1. 往 TTY 写唯一标记 OSC 7 → 更新 working directory
 /// 2. AppleScript 匹配标记 → focus
 /// 3. 写回原始 cwd OSC 7 恢复
 ///
 /// OSC 7 格式：`ESC]7;file://<hostname>/<path> BEL`
-/// Ghostty 要求带 hostname（file:///path 空 hostname 不生效）。
-fn focus_ghostty_osc7(tty_dev: &str, cwd: &str) -> bool {
+/// Ghostty / cmux 要求带 hostname（file:///path 空 hostname 不生效）。
+fn focus_via_osc7(app_name: &str, tty_dev: &str, cwd: &str) -> bool {
     // 获取 hostname（OSC 7 必须带）
     let hostname = Command::new("hostname")
         .output()
@@ -238,24 +244,28 @@ fn focus_ghostty_osc7(tty_dev: &str, cwd: &str) -> bool {
     // 1. 写标记 OSC 7（file://<hostname>/<marker> → working directory 变为 /<marker>）
     let osc7_marker = format!("\x1b]7;file://{}/{}\x07", hostname, marker);
     if std::fs::write(tty_dev, osc7_marker.as_bytes()).is_err() {
-        log::debug!("focus_ghostty_osc7: failed to write marker to {}", tty_dev);
+        log::debug!(
+            "focus_via_osc7_{}: failed to write marker to {}",
+            app_name,
+            tty_dev
+        );
         return false;
     }
 
-    // 2. 等 Ghostty 处理 OSC 7（它异步解析 escape sequence）
+    // 2. 等 app 处理 OSC 7（异步解析 escape sequence）
     std::thread::sleep(std::time::Duration::from_millis(80));
 
     // 3. AppleScript 匹配标记 → focus
     let script = format!(
-        r#"tell application "Ghostty"
+        r#"tell application "{}"
     set matches to every terminal whose working directory contains "{}"
     if (count of matches) > 0 then
         focus (item 1 of matches)
     end if
 end tell"#,
-        marker
+        app_name, marker
     );
-    let ok = run_osascript(&script, "focus_ghostty_osc7");
+    let ok = run_osascript(&script, &format!("focus_via_osc7_{}", app_name));
 
     // 4. 写回原始 cwd OSC 7 恢复（无论 step 3 成功与否都恢复）
     // cwd 已是绝对路径（/Users/...），file://<hostname><cwd> 直接拼

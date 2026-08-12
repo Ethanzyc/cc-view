@@ -14,7 +14,7 @@ When running multiple Claude Code terminal sessions in parallel, their status is
 
 cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiting · M working", turns orange + red badge when intervention needed) + **⌥Space command panel** (search / focus terminal / snooze / archive / copy ID, collapses on blur) + **always-on compact panel** (desktop-anchored, status color flash alerts) + **⌘, Preferences** (VSCode style) + system notifications — master all sessions without switching windows, jump to the one that needs attention.
 
-**Click a session to jump directly to the correct terminal tab** — not just app-level activate (iTerm2 / Terminal / Otty match by TTY for precise tab targeting, Ghostty by cwd).
+**Click a session to jump directly to the correct terminal tab** — not just app-level activate (iTerm2 / Terminal / Otty match by TTY for precise tab targeting, Ghostty / cmux by cwd).
 
 **Dual-source auto-update fallback** — GitHub primary, Gitee for China network fallback, auto-switches when GitHub is unreachable.
 
@@ -46,7 +46,7 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 ### 🎯 Precise Terminal Tab Switching
 - Click a session row to jump directly to the **correct terminal tab/window**, not just app-level activate
 - **iTerm2 / Terminal.app / Otty**: TTY matching (`ps` to get controlling TTY → AppleScript traverse tabs/sessions for match)
-- **Ghostty ≥ 1.3.0**: OSC 7 marker precise match (write unique cwd marker to TTY → AppleScript match → restore)
+- **Ghostty ≥ 1.3.0 / cmux**: OSC 7 marker precise match (write unique cwd marker to TTY → AppleScript match → restore). cmux is built on libghostty and inherits Ghostty's AppleScript model
 - **Other terminals** (Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty): app-level activate (no programmable API or extra config needed)
 - Fullscreen Space switching: unified Dock icon click (only reliable method)
 
@@ -147,7 +147,7 @@ npm run tauri build   # produces .app / dmg / updater artifacts
 
 - **DMG install triggers Gatekeeper**: cc-view is not Apple notarized (personal project, notarization requires $99/year Apple Developer Program). First DMG install will prompt "Apple cannot verify…", need to click "Open Anyway" in Privacy & Security. App auto-removes quarantine on launch (v0.5.4+), subsequent launches won't prompt. **Auto-update is not affected** — updater-downloaded apps have no quarantine, launch directly. Full resolution requires Apple notarization.
 - **Resident drag requires click first**: the resident panel is a nonActivating panel (desktop-anchored, no focus stealing), dragging after blur requires clicking the panel first to regain focus — a trade-off between input availability (becomesKeyOnlyIfNeeded) and drag convenience that can't be eliminated without breaking terminal input.
-- **Precise tab switching coverage**: iTerm2 / Terminal / Otty (TTY matching) and Ghostty (OSC 7 marker) are precise to tab/terminal; Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty remain app-level activate due to no programmable API or needing extra config (imprecise for multiple windows of the same app).
+- **Precise tab switching coverage**: iTerm2 / Terminal / Otty (TTY matching) and Ghostty / cmux (OSC 7 marker) are precise to tab/terminal; Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty remain app-level activate due to no programmable API or needing extra config (imprecise for multiple windows of the same app).
 - **Compacting detection is post-compact**: the detail panel uses context-drop heuristics (doesn't depend on `compact_boundary`, adapts to new claude-code); the state machine's "compacting" state still uses `compact_boundary`, so ~2min during active compaction can't be detected in real-time.
 - **Intel build not tested on real hardware**: x86_64 packages are cross-compiled from Apple Silicon (pure Rust + system framework dependencies, theoretically usable), not verified on a real Intel Mac; please [report issues](https://github.com/Ethanzyc/cc-view/issues) if encountered.
 
@@ -155,6 +155,7 @@ npm run tauri build   # produces .app / dmg / updater artifacts
 
 - [ ] Apple notarization (eliminate Gatekeeper warnings, requires $99/year Developer Program)
 - [ ] Kitty remote control precise switching (requires user to enable `allow_remote_control`)
+- [ ] WezTerm `wezterm cli focus-pane` precise switching
 - [ ] VSCode / IntelliJ open project window enhancement
 - [ ] Further adjustable transparency / vibrancy effects
 

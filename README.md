@@ -14,7 +14,7 @@
 
 cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我 · M 工作」，需介入时染橙 + 红圆 badge）+ **⌥Space 命令面板**（搜索 / focus 跳终端 / 搁置 / 归档 / 复制 ID，失焦收起）+ **常驻精简面板**（贴桌面、状态色闪动提醒）+ **⌘, 偏好设置**（VSCode 风格）+ 系统通知——不用切窗口就能掌握全部会话、快速跳到要处理的那个。
 
-**点会话直接跳到正确的终端 tab**——不再是 app 级 activate（iTerm2 / Terminal / Otty 按 TTY 精确到 tab，Ghostty 按 cwd 精确到 terminal）。
+**点会话直接跳到正确的终端 tab**——不再是 app 级 activate（iTerm2 / Terminal / Otty 按 TTY 精确到 tab，Ghostty / cmux 按 cwd 精确到 terminal）。
 
 **自动更新双源兜底**——GitHub 为主，Gitee 为国内网络兜底，GitHub 不可达时自动切换。
 
@@ -46,7 +46,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 ### 🎯 精确切终端 tab
 - 点会话行直接跳到**正确的终端 tab/window**，不再是 app 级 activate
 - **iTerm2 / Terminal.app / Otty**：TTY 匹配（`ps` 取控制 TTY → AppleScript 遍历 tab/session 找匹配）
-- **Ghostty ≥ 1.3.0**：OSC 7 marker 精确匹配（往 TTY 写唯一 cwd 标记 → AppleScript 匹配 → 恢复）
+- **Ghostty ≥ 1.3.0 / cmux**：OSC 7 marker 精确匹配（往 TTY 写唯一 cwd 标记 → AppleScript 匹配 → 恢复）。cmux 基于 libghostty，继承了 Ghostty 的 AppleScript 模型
 - **其余终端**（Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty）：app 级 activate（无可编程 API 或需额外配置）
 - 全屏 Space 切换：统一 click Dock 图标（唯一可靠方式）
 
@@ -147,7 +147,7 @@ npm run tauri build   # 产出 .app / dmg / updater artifacts
 
 - **DMG 安装触发 Gatekeeper**：cc-view 未做 Apple 公证（个人项目，公证需 $99/年 Apple Developer Program）。DMG 安装后首次打开会提示「Apple 无法验证…」，需在隐私与安全性里点「仍要打开」。app 启动后自动清除 quarantine（v0.5.4+），后续启动不再弹。**自动更新不受影响**——更新器下载的 app 不带 quarantine，直接启动。彻底消除需 Apple 公证。
 - **常驻拖动需先点击**：常驻面板是 nonActivating panel（贴桌面不抢焦点），失焦后再拖动需先点一下面板回归焦点才能拖——输入可用性（becomesKeyOnlyIfNeeded）与拖动便利的折衷，无法在不破坏终端输入的前提下消除。
-- **精确切 tab 覆盖范围**：iTerm2 / Terminal / Otty（TTY 匹配）和 Ghostty（OSC 7 marker）已精确到 tab/terminal；Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty 因无可编程 API 或需额外配置，仍为 app 级 activate（同 app 多窗口不精确）。
+- **精确切 tab 覆盖范围**：iTerm2 / Terminal / Otty（TTY 匹配）和 Ghostty / cmux（OSC 7 marker）已精确到 tab/terminal；Warp / VSCode / IntelliJ / WezTerm / Alacritty / Kitty 因无可编程 API 或需额外配置，仍为 app 级 activate（同 app 多窗口不精确）。
 - **Compacting 检测为 post-compact**：详情面板用上下文跳降启发式（不依赖 `compact_boundary`，适配新版 claude-code）；状态机的"压缩中"判定仍用 `compact_boundary`，compaction 进行中的 ~2min 内无法实时检测。
 - **Intel 版未经实机测试**：x86_64 包由 Apple Silicon 交叉编译产出（纯 Rust + 系统框架依赖，理论可用），未在真实 Intel Mac 上验证运行；遇到问题请[提 issue](https://github.com/Ethanzyc/cc-view/issues)。
 
@@ -155,6 +155,7 @@ npm run tauri build   # 产出 .app / dmg / updater artifacts
 
 - [ ] Apple 公证（消除 Gatekeeper 警告，需 $99/年 Developer Program）
 - [ ] Kitty remote control 精确切换（需用户开 `allow_remote_control`）
+- [ ] WezTerm `wezterm cli focus-pane` 精确切换
 - [ ] VSCode / IntelliJ 打开项目窗口增强
 - [ ] 透明度 / 毛玻璃效果进一步可调
 
