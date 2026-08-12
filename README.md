@@ -24,13 +24,13 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ![搜索 + 跳终端](doc/screenshots/demo-search.gif)
 
-**任务完成提醒 → 点击跳转**
-
-![任务完成提醒](doc/screenshots/demo-notify.gif)
-
 **常驻面板（贴桌面 · 展开收起）**
 
 ![常驻面板](doc/screenshots/demo-resident.gif)
+
+**任务完成提醒 → 点击跳转**
+
+![任务完成提醒](doc/screenshots/demo-notify.gif)
 
 ---
 

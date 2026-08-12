@@ -24,13 +24,13 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 
 ![Search + Focus](doc/screenshots/demo-search.gif)
 
-**Task Done Notification → Click to Jump**
-
-![Notification](doc/screenshots/demo-notify.gif)
-
 **Resident Panel (desktop-anchored · expand/collapse)**
 
 ![Resident Panel](doc/screenshots/demo-resident.gif)
+
+**Task Done Notification → Click to Jump**
+
+![Notification](doc/screenshots/demo-notify.gif)
 
 ---
 
