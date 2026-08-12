@@ -17,7 +17,7 @@ import DetailPanel from './DetailPanel.vue';
 import { statusLabel, statusRank, projShort, agoF, isFresh, isStaleInput, hlParts, fmtTok } from '../utils/session';
 import { processUnread, clearUnread, unread } from '../utils/unread';
 
-const { t } = useI18n();
+const { t } = useI18n({ useScope: 'global' });
 
 const all = ref<Session[]>([]);
 // 详情子状态：selectedDetail 非空时切到 DetailPanel（不动全局 mode/窗口）。
