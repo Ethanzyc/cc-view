@@ -19,7 +19,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
 GITEE_OWNER="Ethanzyc"
-GITEE_TOKEN=$(grep 'gitee.com' ~/.git-credentials | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
+GITEE_TOKEN=$(grep "://${GITEE_OWNER}:.*@gitee\.com" ~/.git-credentials | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
 if [ -z "$GITEE_TOKEN" ]; then
   echo "ERROR: 无法从 ~/.git-credentials 提取 Gitee token"
   exit 1
