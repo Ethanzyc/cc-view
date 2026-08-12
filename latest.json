@@ -1,15 +1,15 @@
 {
-  "version": "0.7.0",
-  "notes": "v0.7.0",
-  "pub_date": "2026-08-12T01:03:05Z",
+  "version": "0.7.1",
+  "notes": "v0.7.1",
+  "pub_date": "2026-08-12T01:27:16Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkN2VDVlSm5PdkQ2cVk1Szh0c1QxVkFYMTJUS0JheHFtZ1drb0ZHZUkrN0VIa1hJVmg4WjVncEJReVJKN3BtamRZcDZsZFdkRXQ0a201MUdFOGlLWUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NDk2NTQ1CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6Ckc1ZlBxejV2L1lkL3ZrSlF3UVp6Z0lJVWRGT0JuWUhWK2F3UXIrSFRtdFVmdDhyRWhmZmVMZnpGTkNKQksxV2VPajcwN3ZBSmFqRjVaUncxNjl5bEJ3PT0K",
-      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.7.0/cc-view_aarch64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkNzbzdpVWt6UWk3NjcyWUVEQUNPaTRKVnd6bWZZWXNISnV2RVRRMGpoR1NHWC8veGpxaGdleUM0TjlQaDQ0VHA1ckFmVmxVaDU1OHVlUjBIWnkvVlEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NDk3OTk2CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CnFuR2gxeDhhTFpMSHNQb1REMWl3QmlRakpSa2Vqa3YzNVUxcWFXYjRhUmZCaUdXT2ZCWnk3dXB5bm5ranF5NGVHV0lnK1cxZjVtZ29KWjhadEljUUJnPT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.7.1/cc-view_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkFsbm8weUxtWGhoa3NoOFBZQmEza2F6MzhndUpwMnRuNFlYQW13R0J4VnMxK3BhU2Jvb0lJUC9vbFA1L1FieFRhcXdwbHh2alU2MnVFcWlBZmJBYkFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NDk2NTQ2CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CjlpR21ibTJpNG5OSDNreVI5djFETlhyQkYzd3F2UjJFVjdrOFpsTEJpcnhER1M0U3RJUmh6NjZNS1cvV2oxcGZSQXJKM1VUVjJJVlZyYVNRYldkd0RnPT0K",
-      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.7.0/cc-view_x86_64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTktadWJENWxnRStDSjVUK2VVRUVBUVZ6dU9WSDFGOElnVit4b0srNU1DK3dyWVlNNUlVYXg4OWdGNUpyTHI5QXcyYUlNbXVoN3NDVnplUm5oa0FkbWdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NDk3OTk4CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CmVoK1NqRGExWkJsMDdxakNxNng2cTlZdTVmaDE0YnE0OVR5a3BOaFIxaSsya1Nyc0oyc2pSMnRxbkIzaTdUdUgvcGNrN1IvVFRRa3JIbXNnQUJjaUR3PT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.7.1/cc-view_x86_64.app.tar.gz"
     }
   }
 }
