@@ -78,7 +78,8 @@ pub fn collect(home: &Path) -> Vec<Session> {
     }
     let Some(rows) = query(&db, SESSIONS_SQL).map(parse_rows::<ZcSessionRow>) else {
         return vec![];
-    };    let running: HashSet<String> = query(&db, RUNNING_SQL)
+    };
+    let running: HashSet<String> = query(&db, RUNNING_SQL)
         .map(|txt| {
             parse_rows::<ZcRunningRow>(txt)
                 .into_iter()
@@ -101,7 +102,9 @@ fn build_session(r: ZcSessionRow, running: &HashSet<String>, now_ms: i64) -> Opt
     let name = if !r.title.trim().is_empty() {
         r.title
     } else {
-        r.slug.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| project.clone())
+        r.slug
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| project.clone())
     };
     let alive = is_running || now_ms - r.time_updated <= ALIVE_WINDOW_MS;
     let status = if is_running {
@@ -185,16 +188,14 @@ pub fn detail(home: &Path, session_id: &str) -> Option<SessionDetail> {
     }
     // 详情接口是 on-demand 单次调用，三个查询各一次 spawn 可接受
     let sid = quote_js(session_id);
-    let turns =
-        parse_rows::<ZcTurnRow>(query(&db, &with_sid(TURN_USAGE_SQL_TPL, &sid))?);
+    let turns = parse_rows::<ZcTurnRow>(query(&db, &with_sid(TURN_USAGE_SQL_TPL, &sid))?);
     // 无任何回合记录 = 该 id 在 zcode 库中没有数据（或已被清理），按缺失处理
     if turns.is_empty() {
         return None;
     }
-    let summary =
-        parse_rows::<ZcSummaryRow>(query(&db, &with_sid(SUMMARY_SQL_TPL, &sid))?)
-            .into_iter()
-            .next()?;
+    let summary = parse_rows::<ZcSummaryRow>(query(&db, &with_sid(SUMMARY_SQL_TPL, &sid))?)
+        .into_iter()
+        .next()?;
     let model =
         parse_rows::<ZcModelRow>(query(
             &db,
@@ -344,7 +345,10 @@ fn parse_rows<T: for<'de> Deserialize<'de>>(out: String) -> Vec<T> {
 
 /// id 只允许出现在 zcode db 里的字符；防拼接注入（fail fast）。
 fn safe_id(id: &str) -> bool {
-    !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// 单引号翻倍兜底（与 safe_id 双保险）。
@@ -358,7 +362,10 @@ fn with_sid(tpl: &str, sid: &str) -> String {
 }
 
 fn basename(path: &str) -> String {
-    path.rsplit('/').find(|s| !s.is_empty()).unwrap_or(path).to_string()
+    path.rsplit('/')
+        .find(|s| !s.is_empty())
+        .unwrap_or(path)
+        .to_string()
 }
 
 fn nonempty(s: Option<String>) -> Option<String> {
@@ -430,8 +437,16 @@ INSERT INTO part VALUES
  ('pa2', 'msg_u1', 'sess_aaa', '{"type":"text","text":"补充信息"}', 1),
  ('pb1', 'msg_u2', 'sess_aaa', '{"type":"text","text":"继续,谢谢"}', 0);
 "#;
-        let out = Command::new(SQLITE3).arg(&db).arg(ddl).output().expect("run sqlite3 ddl");
-        assert!(out.status.success(), "fixture ddl failed: {}", String::from_utf8_lossy(&out.stderr));
+        let out = Command::new(SQLITE3)
+            .arg(&db)
+            .arg(ddl)
+            .output()
+            .expect("run sqlite3 ddl");
+        assert!(
+            out.status.success(),
+            "fixture ddl failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         db
     }
 
@@ -489,7 +504,7 @@ INSERT INTO part VALUES
         assert_eq!(d.model, "GLM-5.3"); // 最新一条 model_usage
         assert_eq!(d.context_peak, 400);
         assert_eq!(d.context_current, 400); // 最后一个 turn 的 input
-        // 回合按 started_at 排序；prompt 取该 user message 首个 text part
+                                            // 回合按 started_at 排序；prompt 取该 user message 首个 text part
         let t1 = &d.turns[0];
         assert_eq!(t1.idx, 1);
         assert_eq!(t1.prompt, "帮我修复登录页的白屏问题");
@@ -529,8 +544,14 @@ INSERT INTO part VALUES
         assert_eq!(first.focus_hint.host, Host::ZcodeApp);
         // 详情链路：拿列表里第一个能出详情的会话
         let with_detail = sessions.iter().find_map(|s| detail(&home, &s.id));
-        assert!(with_detail.is_some(), "expected at least one session with turns");
+        assert!(
+            with_detail.is_some(),
+            "expected at least one session with turns"
+        );
         let d = with_detail.unwrap();
-        eprintln!("detail => model={} turns={} tool_calls={}", d.model, d.turn_count, d.tool_calls);
+        eprintln!(
+            "detail => model={} turns={} tool_calls={}",
+            d.model, d.turn_count, d.tool_calls
+        );
     }
 }

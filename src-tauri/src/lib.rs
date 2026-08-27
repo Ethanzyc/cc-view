@@ -305,9 +305,7 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         // urgent_count 防抖：仅在必须响应计数（权限+回答）变化时重画 badge
         let mut last_urgent_count: usize = 0;
         loop {
-            let prefs_ref = handle
-                .try_state::<Mutex<prefs::Prefs>>()
-                .map(|s| s.inner());
+            let prefs_ref = handle.try_state::<Mutex<prefs::Prefs>>().map(|s| s.inner());
             let sessions = collect_all(prefs_ref);
             let merged = reducer::reduce(sessions);
 
