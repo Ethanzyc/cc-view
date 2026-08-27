@@ -4,7 +4,10 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## [Unreleased]
+## [0.8.1] - 2026-08-27
+
+### Removed
+- 全局 ⌘, 打开偏好设置——该组合键注册为系统级热键后会抢占其他 App 的 ⌘,（各 App 的偏好快捷键本应只在自己前台时生效）。偏好设置改由 menubar 图标菜单打开
 
 ## [0.4.1] - 2026-08-10
 
