@@ -135,6 +135,9 @@ pub struct Prefs {
     /// 显示操作按钮（仅面板模式）。默认 true。
     #[serde(default = "default_true")]
     pub show_actions: bool,
+    /// 是否采集 ZCode 桌面 App 的会话（~/.zcode/cli/db/db.sqlite）。默认 false。
+    #[serde(default)]
+    pub enable_zcode: bool,
     /// 更新源偏好。auto = GitHub 优先 → Gitee 兜底；gitee = Gitee 优先 → GitHub 兜底。
     #[serde(default = "default_update_source")]
     pub update_source: UpdateSource,
@@ -161,6 +164,7 @@ impl Default for Prefs {
             show_host: false,
             show_tokens: true,
             show_actions: true,
+            enable_zcode: false,
             update_source: default_update_source(),
             locale: default_locale(),
         }
@@ -261,6 +265,7 @@ mod tests {
             show_host: true,
             show_tokens: false,
             show_actions: false,
+            enable_zcode: true,
             update_source: UpdateSource::Gitee,
             locale: Locale::En,
         };

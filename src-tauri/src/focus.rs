@@ -64,12 +64,15 @@ pub fn activate_host(host: &Host, tty: &Option<String>, cwd: &str) {
         Host::WezTerm => "WezTerm",
         Host::Alacritty => "Alacritty",
         Host::Terminal => "Terminal",
-        Host::Unknown => return, // 未知 host 不动作
+        Host::ZcodeApp => "ZCode", // ZCode.app（GUI 内嵌会话，无终端宿主）
+        Host::Unknown => return,   // 未知 host 不动作
     };
 
     // 先尝试精确切换（AppleScript / kitten），失败则走 app 级 activate。
     // 精确切换成功时 open -a + click Dock 仍执行（切 Space 需要），
     // AppleScript 已选定正确 tab，activate 不会改变选中状态。
+    // ZCode 不做精确切换：官方唯一入口 `zcode://workspace/open` 每次都弹
+    // 「是否打开此文件夹」确认且不记忆授权（实测二次触发仍弹），故退化为纯 App 级激活。
     let _precise_ok = match host {
         Host::ITerm2 => focus_via_tty("iTerm", tty),
         Host::Terminal => focus_via_tty("Terminal", tty),

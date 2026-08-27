@@ -50,6 +50,8 @@ export interface Prefs {
   show_host: boolean;
   show_tokens: boolean;
   show_actions: boolean;
+  // 数据源
+  enable_zcode: boolean;
   update_source: UpdateSource;
   locale: Locale;
 }
@@ -69,6 +71,7 @@ const HOST_LABELS: Record<string, string> = {
   warp: 'Warp',
   wezTerm: 'WezTerm',
   alacritty: 'Alacritty',
+  zcodeApp: 'ZCode',
 };
 export function hostLabel(host: string): string {
   return HOST_LABELS[host] ?? '';

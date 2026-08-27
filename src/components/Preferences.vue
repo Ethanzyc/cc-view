@@ -33,6 +33,7 @@ const residentWidth = ref<number>(285);
 const showHost = ref(false);
 const showTokens = ref(true);
 const showActions = ref(true);
+const enableZcode = ref(false);
 const updateSourcePref = ref<UpdateSource>('auto');
 const localePref = ref<Locale>('auto');
 const saving = ref<string | null>(null);
@@ -78,6 +79,7 @@ onMounted(async () => {
     showHost.value = p.show_host;
     showTokens.value = p.show_tokens;
     showActions.value = p.show_actions;
+    enableZcode.value = p.enable_zcode;
     updateSourcePref.value = p.update_source;
     localePref.value = p.locale;
   } catch (e) {
@@ -135,6 +137,8 @@ const onTokenUnit = (v: TokenUnit) => wrap('tokenUnit', async () => { await invo
 const onShowHost = (v: boolean) => wrap('showHost', async () => { await invoke('set_show_host', { show: v }); showHost.value = v; });
 const onShowTokens = (v: boolean) => wrap('showTokens', async () => { await invoke('set_show_tokens', { show: v }); showTokens.value = v; });
 const onShowActions = (v: boolean) => wrap('showActions', async () => { await invoke('set_show_actions', { show: v }); showActions.value = v; });
+// 开关立即落盘；会话列表由 poll_loop（≤3s）下一轮按新开关采集后推送
+const onEnableZcode = (v: boolean) => wrap('enableZcode', async () => { await invoke('set_enable_zcode', { enable: v }); enableZcode.value = v; });
 const onUpdateSource = (v: UpdateSource) => wrap('updateSource', async () => { await invoke('set_update_source', { source: v }); updateSourcePref.value = v; });
 const onLocale = (v: Locale) => wrap('locale', async () => { await invoke('set_locale', { locale: v }); localePref.value = v; applyPrefsLocale(v); });
 
@@ -302,6 +306,10 @@ const installLabel = computed(() => {
           <div class="row">
             <div class="txt"><div class="t">{{ t('prefs.notify') }}</div><div class="d">{{ t('prefs.notifyDesc') }}</div></div>
             <div class="ctl"><button class="toggle" :class="{ on: notify }" :disabled="saving === 'notify'" @click="onNotify(!notify)"><span class="switch-knob"></span></button></div>
+          </div>
+          <div class="row">
+            <div class="txt"><div class="t">{{ t('prefs.enableZcode') }}</div><div class="d">{{ t('prefs.enableZcodeDesc') }}</div></div>
+            <div class="ctl"><button class="toggle" :class="{ on: enableZcode }" :disabled="saving === 'enableZcode'" @click="onEnableZcode(!enableZcode)"><span class="switch-knob"></span></button></div>
           </div>
           <div class="row">
             <div class="txt"><div class="t">{{ t('prefs.language') }}</div><div class="d">{{ t('prefs.languageDesc') }}</div></div>

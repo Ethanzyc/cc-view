@@ -79,6 +79,8 @@ export default {
     autostartDesc: '登录 macOS 时自动启动 cc-view',
     notify: '通知',
     notifyDesc: '会话进入待介入时弹系统通知',
+    enableZcode: '启用 ZCode 会话',
+    enableZcodeDesc: '同时采集 ZCode 桌面 App 中的会话。点击会话仅切换到 ZCode 应用（不定位到具体会话）——ZCode 的深度链接每次都会弹窗确认打开文件夹，故不做自动跳转',
     language: '语言',
     languageDesc: '界面显示语言',
     langAuto: '跟随系统',

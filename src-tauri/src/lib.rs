@@ -14,6 +14,7 @@ mod prefs;
 mod reducer;
 mod snoozed;
 mod statemachine;
+mod zcode;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -304,7 +305,10 @@ fn start_poll_loop(handle: tauri::AppHandle) {
         // urgent_count 防抖：仅在必须响应计数（权限+回答）变化时重画 badge
         let mut last_urgent_count: usize = 0;
         loop {
-            let sessions = collector::collect_sessions();
+            let prefs_ref = handle
+                .try_state::<Mutex<prefs::Prefs>>()
+                .map(|s| s.inner());
+            let sessions = collect_all(prefs_ref);
             let merged = reducer::reduce(sessions);
 
             // derived snoozed：每轮基于 SnoozeMap 算，随 Session emit。
@@ -525,6 +529,22 @@ fn list_snoozed(
     })
 }
 
+/// 全源采集：Claude（sessions/roster/agents）+ 可选的 ZCode（prefs.enable_zcode）。
+/// 两边 id 体系不同（claude uuid 无前缀 / zcode 带 sess_ 前缀），reducer 去重无碰撞。
+fn collect_all(prefs_state: Option<&Mutex<prefs::Prefs>>) -> Vec<models::Session> {
+    let mut all = collector::collect_sessions();
+    let zcode_on = prefs_state
+        .and_then(|s| s.lock().ok())
+        .map(|p| p.enable_zcode)
+        .unwrap_or(false);
+    if zcode_on {
+        if let Some(home) = dirs::home_dir() {
+            all.extend(zcode::collect(&home));
+        }
+    }
+    all
+}
+
 /// 立即采集并返回当前所有会话（供前端打开时拉初始数据 / 手动刷新）。
 /// 不依赖 poll loop 的 3s 节拍与 hash 去重——调用即拿实时结果。
 /// 同时算 derived snoozed，避免首次打开到 poll_loop emit 之间显示不准。
@@ -533,8 +553,9 @@ fn list_snoozed(
 fn get_sessions(
     cache: tauri::State<'_, Mutex<Vec<models::Session>>>,
     snoozed: tauri::State<'_, Mutex<snoozed::SnoozeMap>>,
+    prefs: tauri::State<'_, Mutex<prefs::Prefs>>,
 ) -> Vec<models::Session> {
-    let merged = reducer::reduce(collector::collect_sessions());
+    let merged = reducer::reduce(collect_all(Some(prefs.inner())));
     let derived = apply_snoozed(&merged, Some(snoozed.inner()));
     match cache.lock() {
         Ok(mut c) => *c = derived.clone(),
@@ -544,17 +565,18 @@ fn get_sessions(
 }
 
 /// 返回某会话的 token 消耗详情（汇总 + 按回合）。on-demand：点详情才扫描。
-/// 从 sessions cache 按 id 查 cwd 定位 JSONL；找不到 id 或文件缺失返回 None。
+/// 从 sessions cache 按 id 查 cwd 定位 JSONL；ZCode 会话改走其 db 查询；
+/// 找不到 id 或数据缺失返回 None。
 #[tauri::command]
 fn get_session_detail(
     id: String,
     cache: tauri::State<'_, Mutex<Vec<models::Session>>>,
 ) -> Option<models::SessionDetail> {
-    let cwd = cache
-        .lock()
-        .ok()
-        .and_then(|s| s.iter().find(|s| s.id == id).map(|s| s.cwd.clone()))?;
-    collector::scan_session_detail(&id, &cwd)
+    let found = cache.lock().ok()?.iter().find(|s| s.id == id).cloned()?;
+    if found.source == models::Source::Zcode {
+        return zcode::detail(&dirs::home_dir()?, &id);
+    }
+    collector::scan_session_detail(&id, &found.cwd)
 }
 
 /// 按 session id 激活对应终端。未授辅助功能权限时弹系统授权窗 + 返回 Err("accessibility")
@@ -852,6 +874,20 @@ fn set_token_unit(
 fn set_show_host(show: bool, state: tauri::State<'_, Mutex<prefs::Prefs>>, app: tauri::AppHandle) {
     if let Ok(mut p) = state.lock() {
         p.show_host = show;
+        p.save();
+    }
+    let _ = app.emit("prefs_changed", ());
+}
+
+/// 设置是否采集 ZCode 会话：存 prefs + emit prefs_changed（下一轮 poll 生效）。
+#[tauri::command]
+fn set_enable_zcode(
+    enable: bool,
+    state: tauri::State<'_, Mutex<prefs::Prefs>>,
+    app: tauri::AppHandle,
+) {
+    if let Ok(mut p) = state.lock() {
+        p.enable_zcode = enable;
         p.save();
     }
     let _ = app.emit("prefs_changed", ());
@@ -1482,6 +1518,7 @@ pub fn run() {
             set_theme,
             set_token_unit,
             set_show_host,
+            set_enable_zcode,
             set_show_tokens,
             set_show_actions,
             set_mode,

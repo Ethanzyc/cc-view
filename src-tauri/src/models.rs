@@ -21,6 +21,8 @@ pub enum Source {
     Interactive,
     Fleet,
     Slash,
+    /// ZCode 桌面 App 的会话（数据来自 ~/.zcode/cli/db/db.sqlite）。
+    Zcode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -40,6 +42,8 @@ pub enum Host {
     Warp,
     WezTerm,
     Alacritty,
+    /// ZCode 桌面 App：无终端宿主，跳转为 App 级激活（不做会话级导航，见 focus.rs）。
+    ZcodeApp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

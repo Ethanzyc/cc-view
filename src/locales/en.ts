@@ -71,6 +71,8 @@ export default {
     autostartDesc: 'Automatically launch cc-view when you log in',
     notify: 'Notifications',
     notifyDesc: 'Get notified when a session needs attention',
+    enableZcode: 'Enable ZCode sessions',
+    enableZcodeDesc: 'Also collect sessions from the ZCode desktop app. Clicking a session switches to the ZCode app only (no per-session navigation) — ZCode shows a confirmation dialog for every deep link, so automatic navigation is skipped',
     language: 'Language',
     languageDesc: 'Interface display language',
     langAuto: 'Follow system',
