@@ -1,15 +1,15 @@
 {
-  "version": "0.8.1",
-  "notes": "### Removed\n- 全局 ⌘, 打开偏好设置——该组合键注册为系统级热键后会抢占其他 App 的 ⌘,（各 App 的偏好快捷键本应只在自己前台时生效）。偏好设置改由 menubar 图标菜单打开\n\n> ⚠️ 首次打开提示「已损坏」？终端跑：`xattr -dr com.apple.quarantine /Applications/cc-view.app`",
-  "pub_date": "2026-08-27T07:22:26Z",
+  "version": "0.9.0",
+  "notes": "\n### Added\n- 支持 ZCode 桌面 App——偏好设置开启「启用 ZCode 会话」后,ZCode 会话与 Claude Code 会话同面板管理:实时状态、token 用量、回合消耗明细(只读采集 ~/.zcode 本地数据库,默认关闭)\n- 点击 ZCode 会话一键切换到 ZCode 应用(应用级激活)\n\n> ⚠️ 首次打开提示「已损坏」？终端跑：`xattr -dr com.apple.quarantine /Applications/cc-view.app`",
+  "pub_date": "2026-08-27T12:00:12Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkJ1VWZleUpORU0rSTZqZ3JTdk0vZUF1OFVDTHJ5SzhBOW9BeG96V3RjdWQrTnR0dnQwbjQwcm5CNDlZdzRjaDAyVDlYKzkyanNjTXViT29OU2E0cFFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODE1MzA2CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CnVZR3VhbWhTdmh1SjRZM0VJMFNNNlhYU1c1OTY3eHl4N1QyT1c1T0ZCOFQvOEh5Mi9VVVhPRnhaYWlKN0JVZWd6UVc3aTRGNGtVUVpjZk5uSVAvUURnPT0K",
-      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.8.1/cc-view_aarch64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkZLbHZ3VzMwMUdORElSclptQ0xEbjNuWk5GL3FjZnRNQ0FiejhYVERYQkc1eVFjMFFnQ3FmMDBITDR6WVYxbzQvN1hGYU92dXc3MTZGWlkrZUpMSnc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODMxOTUxCWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CmNzNHhwWUcrc1NSWmRMYW8vN2UreGJHa1JtRDBPdWZoMjRDRm44U21IcGVzZE56VlJDMzFza3hqdFloR1ZaNGx5TVJSQlhpbEtEWDRDKzJNbEw1WEJBPT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.9.0/cc-view_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTklpR0UzVWMyRnA0Rk9LVEE0Ti9nK3kzTHJJM1dhTmdYOGozTUs1Y2Z1eEc0Yis5RUcyVTlwS1pUbFdhaDdYQlkxN2hHMmRSQS9FQVpxR0ZiTkJBVmdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODE1MzA3CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CkZIekJPcDA3M1BpTFU2WWlWS0tpYzFIUE9hbXg0YlZwTUR2SVdjOXRPZzJIaXEyYWRYTytKLy9va1ZzTnV0Qmw0YjVTVnRINUc4S3pNTmNxVDdPV0F3PT0K",
-      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.8.1/cc-view_x86_64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTk1hRFV5OXMxSGhnaVVCK2FZTUtUaG1qNTBpU205K1p5eGJNam90UW5zZU4zZVEyZUc3Nk1ZZTJ3endYbExGNEJBeVgyZmd3a0RQZC9HMjBoNThkMmdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODMxOTUyCWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CmdTNE5ZTnJiYzhheUs2UGdJd0NPVUZtdVE0VEVaTWpiUGd6aTFPSUhpd29tWklNZ0plRXVBZjdDNGMzbUhPZFN4ajY5ODJ4anFpckJtOE1YNWxtYUJ3PT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.9.0/cc-view_x86_64.app.tar.gz"
     }
   }
 }
