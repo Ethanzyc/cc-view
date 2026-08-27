@@ -1,15 +1,15 @@
 {
-  "version": "0.8.0",
-  "notes": "- release: v0.8.0 版本号 bump\n- feat: cmux 精确切 tab（OSC 7 marker，复用 Ghostty AppleScript 模型）\n- docs: add contact email to CODE_OF_CONDUCT\n- docs: add community files + gitignore maintainer-only paths\n- release: v0.7.1 更新 Gitee updater latest.json\n- fix: v0.7.1 语言切换不生效（prefs_changed 未注册 + useI18n scope）\n- release: v0.7.0 更新 Gitee updater latest.json\n- feat: v0.7.0 国际化（中英双语 + 自动检测系统语言）\n- release: v0.6.0 更新 Gitee latest.json\n- feat: v0.6.0 更新源可选 + 去掉 banner\n- release: v0.5.9 更新 Gitee latest.json\n- release: v0.5.9\n- release: v0.5.8 更新 Gitee latest.json\n- fix: cargo fmt\n- feat: 更新后首次打开弹通知 + 更新内容 banner\n- release: v0.5.7 更新 Gitee latest.json\n- feat: 更新下载进度条——下载百分比 + 分阶段状态（下载中/安装中/重启中）\n- release: v0.5.6 更新 Gitee latest.json\n- feat: 偏好设置底部加 Gitee 链接 + v0.5.6 bump\n- release: v0.5.5 更新 Gitee latest.json\n- release: v0.5.5 偏好设置优化 + 品牌名 CC View\n- feat: 偏好设置优化——检查更新定位 tab / 品牌名 / 更新日志 / 去 double header\n- docs: README 更新——Gatekeeper 说明 / 去版本标签 / 双源兜底\n- release: v0.5.4 更新 Gitee latest.json\n- feat: 启动时自动清除 quarantine——DMG 安装后不再每次弹 Gatekeeper\n- fix: resign.sh 清除 env 避免签名冲突 + v0.5.3 latest.json\n- fix: updater downloadAndInstall \"Cannot read private member\" 错误\n- release: v0.5.2 更新 Gitee latest.json + 修复 resign/publish 脚本\n- release: v0.5.2 稳定代码签名——解决更新后辅助功能失效\n- release: v0.5.1 更新 Gitee updater latest.json\n- release: v0.5.1 版本号 bump\n- docs: 双平台发布流程 + publish.sh 一键脚本\n- chore: 添加 Gitee updater latest.json 到仓库根目录\n- feat: Gitee updater 兜底——raw/main/latest.json + 双 endpoint\n- feat: Gitee 镜像 + updater 双 endpoint 兜底\n\n> ⚠️ 首次打开提示「已损坏」？终端跑：`xattr -dr com.apple.quarantine /Applications/cc-view.app`",
-  "pub_date": "2026-08-12T02:52:06Z",
+  "version": "0.8.1",
+  "notes": "### Removed\n- 全局 ⌘, 打开偏好设置——该组合键注册为系统级热键后会抢占其他 App 的 ⌘,（各 App 的偏好快捷键本应只在自己前台时生效）。偏好设置改由 menubar 图标菜单打开\n\n> ⚠️ 首次打开提示「已损坏」？终端跑：`xattr -dr com.apple.quarantine /Applications/cc-view.app`",
+  "pub_date": "2026-08-27T07:22:26Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkJGRUNyL3pqd0RZQklmaXQzQW85VTJ3MmMrRnRscWhkTnllclo2VzVESHpYUnNaUXRCRWs3dGxabm1JaW9DM3dsOHg0OGtaWVZMUmxZSDBuMjVnT2dJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTAzMDc1CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CmhiNlhzQjMzWUVyNXlvZzh4cFQ4SXhvTHhRTlU1UC8vM0EydEN5dmFiSjEvb2RPakcxMTMxZ0xDV1RaRlFFQXhJc2hIRDVyRkZmRSt2aG82cXlFbUJ3PT0K",
-      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.8.0/cc-view_aarch64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkJ1VWZleUpORU0rSTZqZ3JTdk0vZUF1OFVDTHJ5SzhBOW9BeG96V3RjdWQrTnR0dnQwbjQwcm5CNDlZdzRjaDAyVDlYKzkyanNjTXViT29OU2E0cFFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODE1MzA2CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CnVZR3VhbWhTdmh1SjRZM0VJMFNNNlhYU1c1OTY3eHl4N1QyT1c1T0ZCOFQvOEh5Mi9VVVhPRnhaYWlKN0JVZWd6UVc3aTRGNGtVUVpjZk5uSVAvUURnPT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.8.1/cc-view_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTkFIVDVzSG56SWJGK1d6YXRTYnRCZ3pybzR5UTBna3RPejRZYUh6aUF5UHRXZnZ6WXhQVnJUQnMwSzMyWW9wSXlSYzVaYWZwNFkwM3Z0b3psSmxFZmdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTAzMDc2CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CjEzSWRKTXBDaHh5NjJZQ1dnZVN5SmtmWUN2Ym1CWEQ0am1IRTB4RTIrM3hPbkVGRm5iN2JFZEpEQkVmLzlQRXdzN01NTk93dkRDVkFlWi9HQi8yWEN3PT0K",
-      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.8.0/cc-view_x86_64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSdVpZUklyNndJTklpR0UzVWMyRnA0Rk9LVEE0Ti9nK3kzTHJJM1dhTmdYOGozTUs1Y2Z1eEc0Yis5RUcyVTlwS1pUbFdhaDdYQlkxN2hHMmRSQS9FQVpxR0ZiTkJBVmdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODE1MzA3CWZpbGU6Y2Mtdmlldy5hcHAudGFyLmd6CkZIekJPcDA3M1BpTFU2WWlWS0tpYzFIUE9hbXg0YlZwTUR2SVdjOXRPZzJIaXEyYWRYTytKLy9va1ZzTnV0Qmw0YjVTVnRINUc4S3pNTmNxVDdPV0F3PT0K",
+      "url": "https://gitee.com/Ethanzyc/cc-view/releases/download/v0.8.1/cc-view_x86_64.app.tar.gz"
     }
   }
 }
