@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 偏好设置（VSCode Settings 风格：左 nav 分类 + 右设置项行）。
-// 分类：通用 / 显示 / 更新。⌘, 全局快捷键打开（lib.rs 注册）。
+// 分类：通用 / 显示 / 更新。经 menubar 图标菜单打开。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';

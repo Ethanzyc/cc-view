@@ -77,7 +77,7 @@ export default {
     langZh: '简体中文',
     langEn: 'English',
     shortcut: 'Global Shortcut',
-    shortcutDesc: 'Toggle the command panel (⌘, for preferences is separate)',
+    shortcutDesc: 'Toggle the command panel',
     shortcutDefault: '⌥Space (default)',
     shortcutOff: 'Disabled',
     interval: 'Polling Interval',

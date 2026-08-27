@@ -12,7 +12,7 @@ English · [简体中文](README.md)
 
 When running multiple Claude Code terminal sessions in parallel, their status is scattered across tabs and windows — which one is working, which one is waiting for your reply / permission, which one is idle. You have to switch windows one by one. It's easy to miss a blockage: a Claude waiting 10 minutes for permission confirmation that you didn't notice just sits idle.
 
-cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiting · M working", turns orange + red badge when intervention needed) + **⌥Space command panel** (search / focus terminal / snooze / archive / copy ID, collapses on blur) + **always-on compact panel** (desktop-anchored, status color flash alerts) + **⌘, Preferences** (VSCode style) + system notifications — master all sessions without switching windows, jump to the one that needs attention.
+cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiting · M working", turns orange + red badge when intervention needed) + **⌥Space command panel** (search / focus terminal / snooze / archive / copy ID, collapses on blur) + **always-on compact panel** (desktop-anchored, status color flash alerts) + system notifications — master all sessions without switching windows, jump to the one that needs attention.
 
 **Click a session to jump directly to the correct terminal tab** — not just app-level activate (iTerm2 / Terminal / Otty match by TTY for precise tab targeting, Ghostty / cmux by cwd).
 
@@ -46,7 +46,7 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 
 ![Resident](doc/screenshots/resident.png)
 
-**Preferences (⌘, · VSCode style · toggle switches)**
+**Preferences (VSCode style · toggle switches)**
 
 ![Preferences](doc/screenshots/preferences.png)
 
@@ -93,7 +93,7 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 - Waiting for input over 30min auto-grays out + marks "Idle", all-idle projects sink to bottom; stale waiting-for-reply also grays out — don't steal attention
 
 ### ⚙️ Preferences & Auto-Update
-- **VSCode style**: left category nav (General / Display / Update) + right setting rows, `⌘,` global shortcut to open
+- **VSCode style**: left category nav (General / Display / Update) + right setting rows, open from the menubar icon menu
 - **Display** category: theme / token unit / **show terminal name** / **show token usage** / **show action buttons** / resident layout / snoozed / idle / opacity / panel width
 - Unified **macOS toggle switches**; snooze / idle items with descriptions (snooze = manual pause, no nagging or notifications; idle = auto-degrade after 30min no input)
 - Auto-check + download + install + restart via [tauri-plugin-updater](https://v2.tauri.app/plugin/updater/)
@@ -109,7 +109,6 @@ cc-view aggregates all sessions into **one menubar icon** (hover to see "N waiti
 | Shortcut | Action | Configurable |
 | --- | --- | :---: |
 | `⌥Space` | Toggle command panel | ✅ Changeable to `⌘⌥Space` / `⌃Space` / Disabled |
-| `⌘,` | Open Preferences | — |
 | `Enter` (in panel) | Focus selected session (jump to terminal) | — |
 | Click / Enter session row | Focus that session | — |
 

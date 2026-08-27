@@ -12,7 +12,7 @@
 
 并行开多个 Claude Code 终端会话时，状态散落在各 tab / 窗口——哪个在干活、哪个等你回复 / 权限、哪个已经 idle，得逐个切窗口看。容易漏掉阻塞：一个 claude 等你确认权限 10 分钟你没注意，它就干等。
 
-cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我 · M 工作」，需介入时染橙 + 红圆 badge）+ **⌥Space 命令面板**（搜索 / focus 跳终端 / 搁置 / 归档 / 复制 ID，失焦收起）+ **常驻精简面板**（贴桌面、状态色闪动提醒）+ **⌘, 偏好设置**（VSCode 风格）+ 系统通知——不用切窗口就能掌握全部会话、快速跳到要处理的那个。
+cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我 · M 工作」，需介入时染橙 + 红圆 badge）+ **⌥Space 命令面板**（搜索 / focus 跳终端 / 搁置 / 归档 / 复制 ID，失焦收起）+ **常驻精简面板**（贴桌面、状态色闪动提醒）+ 系统通知——不用切窗口就能掌握全部会话、快速跳到要处理的那个。
 
 **点会话直接跳到正确的终端 tab**——不再是 app 级 activate（iTerm2 / Terminal / Otty 按 TTY 精确到 tab，Ghostty / cmux 按 cwd 精确到 terminal）。
 
@@ -46,7 +46,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 
 ![常驻](doc/screenshots/resident.png)
 
-**偏好设置（⌘, · VSCode 风格 · toggle switch）**
+**偏好设置（VSCode 风格 · toggle switch）**
 
 ![偏好设置](doc/screenshots/preferences.png)
 
@@ -93,7 +93,7 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 - 等输入超 30min 自动灰显 + 标「闲置」，全闲置项目整组下沉；超时等回答同样灰显——不抢注意力
 
 ### ⚙️ 偏好设置 & 自动更新
-- **VSCode 风格**：左侧分类导航（通用 / 显示 / 更新）+ 右侧设置项行，`⌘,` 全局快捷键打开
+- **VSCode 风格**：左侧分类导航（通用 / 显示 / 更新）+ 右侧设置项行，经 menubar 图标菜单打开
 - **显示**分类：主题 / token 单位 / **显示终端名** / **显示 token 用量** / **显示操作按钮** / 常驻布局 / 搁置 / 闲置 / 透明度 / 面板宽度
 - 开关统一 **macOS toggle switch**；搁置 / 闲置分项带说明（搁置＝手动暂停不催促不通知；闲置＝等输入超 30min 自动降级）
 - 基于 [tauri-plugin-updater](https://v2.tauri.app/plugin/updater/) 的自动检查 + 下载安装 + 重启
@@ -109,7 +109,6 @@ cc-view 把所有会话聚合到 **menubar 一个图标**（hover 看「N 等我
 | 快捷键 | 作用 | 可配置 |
 | --- | --- | :---: |
 | `⌥Space` | 呼出 / 收起命令面板 | ✅ 可改 `⌘⌥Space` / `⌃Space` / 禁用 |
-| `⌘,` | 打开偏好设置 | — |
 | `Enter`（面板内） | 聚焦选中会话（跳终端） | — |
 | 点击 / 回车 会话行 | 聚焦该会话 | — |
 

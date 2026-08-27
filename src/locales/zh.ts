@@ -85,7 +85,7 @@ export default {
     langZh: '简体中文',
     langEn: 'English',
     shortcut: '全局快捷键',
-    shortcutDesc: '呼出 / 收起命令面板（⌘, 开偏好已独立注册）',
+    shortcutDesc: '呼出 / 收起命令面板',
     shortcutDefault: '⌥Space（默认）',
     shortcutOff: '禁用',
     interval: '轮询间隔',
