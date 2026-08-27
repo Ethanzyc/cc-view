@@ -1,6 +1,6 @@
 [package]
 name = "cc-view"
-version = "0.8.1"
+version = "0.9.0"
 description = "Cross-terminal Claude Code session monitor for macOS menubar"
 authors = ["zhuyuchen"]
 edition = "2021"

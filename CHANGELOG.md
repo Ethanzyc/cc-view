@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [0.9.0] - 2026-08-27
+
+### Added
+- 支持 ZCode 桌面 App——偏好设置开启「启用 ZCode 会话」后,ZCode 会话与 Claude Code 会话同面板管理:实时状态、token 用量、回合消耗明细(只读采集 ~/.zcode 本地数据库,默认关闭)
+- 点击 ZCode 会话一键切换到 ZCode 应用(应用级激活)
+
 ## [0.8.1] - 2026-08-27
 
 ### Removed
